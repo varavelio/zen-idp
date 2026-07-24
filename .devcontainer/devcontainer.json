@@ -14,7 +14,9 @@
     "vscode": {
       "extensions": [
         "dprint.dprint",
-        "rust-lang.rust-analyzer"
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "vadimcn.vscode-lldb"
       ],
       "settings": {
         "editor.formatOnSave": true,
