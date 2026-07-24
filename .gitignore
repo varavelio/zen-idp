@@ -1,1 +1,11 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Temporary
+/tmp
+/temp
+
+# Rust
 /target
