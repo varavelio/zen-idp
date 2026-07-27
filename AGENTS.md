@@ -25,3 +25,10 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 - Write high-value tests, focus on critical logic and relevant edge cases. Quality beats quantity; don't write tests just to inflate coverage; make sure every test adds real value.
 - Treat tests as our primary tool to catch regressions. Write every test to guarantee long-term stability, correctness, functionality, and maintainability as the codebase evolves.
 - Group test cases with subtests (Go): Keep all test cases for a given function inside a single top-level Test function using subtests (t.Run). This maintains a clean structure and avoids file clutter when testing multiple functions in the same file.
+
+## Project structure
+
+This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
+
+- cmd/zen-idp: The entry point of the program
+- internal/crypto: Provides cryptographic primitives and utilities
