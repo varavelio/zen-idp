@@ -14,11 +14,11 @@ umask 000
 
 EOF
 
-# Ensure correct permissions for cargo directory/volume
-chown -R root:root /usr/local/cargo
-
 # Configure file permissions for the /workspaces directory
 chmod -R 777 /workspaces
 
 # Configure git
 git config core.fileMode false
+
+# Install project dependencies
+task deps

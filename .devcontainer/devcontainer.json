@@ -4,7 +4,6 @@
   },
   "remoteUser": "root",
   "mounts": [
-    "source=cargo-cache,target=/usr/local/cargo/registry,type=volume",
     "source=${localEnv:HOME}/.claude,target=/root/.claude,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.config/opencode,target=/root/.config/opencode,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.local/share/opencode,target=/root/.local/share/opencode,type=bind,consistency=cached"
@@ -13,19 +12,38 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        "golang.go",
         "dprint.dprint",
-        "rust-lang.rust-analyzer",
-        "tamasfe.even-better-toml",
-        "vadimcn.vscode-lldb"
+        "bradlc.vscode-tailwindcss"
       ],
       "settings": {
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "dprint.dprint",
 
-        "rust-analyzer.check.command": "clippy",
-        "[rust]": {
-          "editor.defaultFormatter": "rust-lang.rust-analyzer"
-        }
+        "files.associations": {
+          "*.css": "tailwindcss"
+        },
+
+        "[go]": {
+          "editor.defaultFormatter": "golang.go"
+        },
+        "go.useLanguageServer": true,
+        "go.testFlags": ["-v"],
+
+        // https://golangci-lint.run/docs/welcome/integrations/#visual-studio-code
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": [
+          "--path-mode=abs",
+          "--fast-only"
+        ],
+        "go.formatTool": "custom",
+        "go.alternateTools": {
+          "customFormatter": "golangci-lint"
+        },
+        "go.formatFlags": [
+          "fmt",
+          "--stdin"
+        ]
       }
     }
   }
