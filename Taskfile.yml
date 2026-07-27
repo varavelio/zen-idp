@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+tasks:
+  default:
+    desc: List all available commands
+    cmd: task --list-all
+
+  ci:
+    desc: Run full CI pipeline (deps, format, build, test, lint)
+    cmds:
+      - task: deps
+      - task: format
+      - task: build
+      - task: test
+      - task: lint
+
+  deps:
+    desc: Install dependencies for the project
+    cmd: go mod download
+
+  run:
+    desc: Build and run the project
+    deps:
+      - build
+    cmd: ./dist/zen-idp
+
+  build:
+    desc: Build the project
+    cmd: go build -o ./dist/zen-idp ./cmd/zen-idp/.
+
+  format:
+    desc: Format all code
+    cmds:
+      - dprint fmt --config ./dprint.json --log-level warn
+      - golangci-lint fmt ./...
+
+  lint:
+    desc: Lint all code
+    cmds:
+      - dprint check --config ./dprint.json --log-level warn
+      - golangci-lint run ./...
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
+      - go test -race ./...
