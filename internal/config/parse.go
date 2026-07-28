@@ -50,7 +50,7 @@ var reservedProtocolClaims = map[string]struct{}{
 // normalized user values are resolved.
 type configurationDocument struct {
 	Settings settingsDocument `yaml:"config"`
-	Clients  []Client         `yaml:"clients"`
+	Clients  []clientDocument `yaml:"clients"`
 	Users    []userDocument   `yaml:"users"`
 }
 
@@ -66,6 +66,14 @@ type uiDocument struct {
 	Name       string `yaml:"name"`
 	LogoURL    string `yaml:"logo_url"`
 	FaviconURL string `yaml:"favicon_url"`
+}
+
+// clientDocument contains one confidential OIDC client from YAML.
+type clientDocument struct {
+	ID           string   `yaml:"id"`
+	Name         string   `yaml:"name"`
+	SecretHash   string   `yaml:"secret_hash"`
+	RedirectURIs []string `yaml:"redirect_uris"`
 }
 
 // securityDocument contains unresolved security settings from YAML.
@@ -105,7 +113,7 @@ type enrollmentDocument struct {
 // integers instead of accepting lossy numeric conversions.
 type strictInt int
 
-// userDocument decodes both supported YAML user declaration forms.
+// userDocument decodes a structured YAML user declaration.
 type userDocument struct {
 	User User
 }
@@ -134,31 +142,10 @@ func Parse(contents []byte) (*Configuration, error) {
 	return configuration, nil
 }
 
-// UnmarshalYAML normalizes shorthand and long-form YAML user declarations.
+// UnmarshalYAML decodes one structured YAML user declaration.
 func (document *userDocument) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind == yaml.ScalarNode {
-		if node.Tag != "!!str" {
-			return fmt.Errorf(
-				"decode shorthand user at line %d: subject must be a string",
-				node.Line,
-			)
-		}
-		var subject string
-		if err := node.Decode(&subject); err != nil {
-			return fmt.Errorf("decode shorthand user: %w", err)
-		}
-		document.User = User{
-			Subject: subject,
-			Login:   subject,
-			Claims:  make(map[string]any),
-		}
-		return nil
-	}
 	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf(
-			"decode user at line %d: declaration must be a string or mapping",
-			node.Line,
-		)
+		return fmt.Errorf("decode user at line %d: declaration must be a mapping", node.Line)
 	}
 
 	user := User{Claims: make(map[string]any)}
@@ -314,8 +301,16 @@ func resolve(document configurationDocument) *Configuration {
 			},
 			TrustedProxies: append([]string{}, settings.Security.TrustedProxies...),
 		},
-		Clients: append([]Client{}, document.Clients...),
+		Clients: make([]Client, 0, len(document.Clients)),
 		Users:   make([]User, 0, len(document.Users)),
+	}
+	for _, client := range document.Clients {
+		configuration.Clients = append(configuration.Clients, Client{
+			ID:           client.ID,
+			Name:         client.Name,
+			SecretHash:   client.SecretHash,
+			RedirectURIs: append([]string{}, client.RedirectURIs...),
+		})
 	}
 	for _, user := range document.Users {
 		configuration.Users = append(configuration.Users, user.User)

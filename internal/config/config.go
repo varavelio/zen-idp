@@ -79,17 +79,16 @@ type Enrollment struct {
 // Client is a configured confidential OIDC client.
 type Client struct {
 	// ID is the unique protocol identifier presented by the client.
-	ID string `yaml:"id"`
+	ID string
 	// Name is the optional human-readable client name.
-	Name string `yaml:"name"`
+	Name string
 	// SecretHash is the Argon2id hash of the client secret.
-	SecretHash string `yaml:"secret_hash"`
+	SecretHash string
 	// RedirectURIs contains the exact callback URIs accepted for the client.
-	RedirectURIs []string `yaml:"redirect_uris"`
+	RedirectURIs []string
 }
 
-// User is a normalized human identity declaration. Both shorthand and long
-// YAML declarations produce this same representation.
+// User is a normalized human identity declaration.
 type User struct {
 	// Subject is the stable, case-sensitive OIDC subject identifier.
 	Subject string

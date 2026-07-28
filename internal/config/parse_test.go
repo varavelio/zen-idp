@@ -37,7 +37,7 @@ clients:
     secret_hash: client-hash
     redirect_uris: [https://grafana.example.com/callback]
 users:
-  - auditor@example.com
+  - sub: auditor@example.com
   - sub: employee-42
     idp_login: employee@example.com
     idp_totp_rev: 2
@@ -175,6 +175,16 @@ users:
 		require.Equal(t, "same-identifier", configuration.Users[0].Subject)
 		require.Equal(t, "same-identifier", configuration.Users[0].Login)
 	})
+
+	t.Run("rejects shorthand user declarations", func(t *testing.T) {
+		configuration, err := Parse(validConfigurationYAML(`
+users:
+  - auditor@example.com
+`))
+
+		require.Nil(t, configuration)
+		require.ErrorContains(t, err, "declaration must be a mapping")
+	})
 }
 
 func TestParseErrors(t *testing.T) {
@@ -307,7 +317,11 @@ users:
 			errorText: `user login "shared" conflicts`,
 		},
 		"duplicate user subjects": {
-			contents:  validConfigurationYAML("users: [duplicate, duplicate]\n"),
+			contents: validConfigurationYAML(`
+users:
+  - sub: duplicate
+  - sub: duplicate
+`),
 			errorText: `user identifier "duplicate" conflicts`,
 		},
 		"duplicate client IDs": {
