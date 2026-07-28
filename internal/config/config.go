@@ -79,7 +79,7 @@ type Enrollment struct {
 // Client is a configured confidential OIDC client.
 type Client struct {
 	// ID is the unique protocol identifier presented by the client.
-	ID string `yaml:"client_id"`
+	ID string `yaml:"id"`
 	// Name is the optional human-readable client name.
 	Name string `yaml:"name"`
 	// SecretHash is the Argon2id hash of the client secret.

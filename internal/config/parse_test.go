@@ -32,7 +32,7 @@ config:
       link_max_age_seconds: 90
     trusted_proxies: [10.0.0.0/8]
 clients:
-  - client_id: grafana
+  - id: grafana
     name: Grafana
     secret_hash: client-hash
     redirect_uris: [https://grafana.example.com/callback]
@@ -163,6 +163,18 @@ users:
 
 		require.Equal(t, "retained", configuration.Users[0].Claims["zi_legacy"])
 	})
+
+	t.Run("allows one user to use its subject as its explicit login", func(t *testing.T) {
+		configuration, err := Parse(validConfigurationYAML(`
+users:
+  - sub: same-identifier
+    idp_login: same-identifier
+`))
+		require.NoError(t, err)
+
+		require.Equal(t, "same-identifier", configuration.Users[0].Subject)
+		require.Equal(t, "same-identifier", configuration.Users[0].Login)
+	})
 }
 
 func TestParseErrors(t *testing.T) {
@@ -275,6 +287,25 @@ users:
 `),
 			errorText: `user identifier "second" conflicts`,
 		},
+		"login collides with an earlier subject": {
+			contents: validConfigurationYAML(`
+users:
+  - sub: shared
+  - sub: second
+    idp_login: shared
+`),
+			errorText: `user login "shared" conflicts`,
+		},
+		"duplicate explicit logins": {
+			contents: validConfigurationYAML(`
+users:
+  - sub: first
+    idp_login: shared
+  - sub: second
+    idp_login: shared
+`),
+			errorText: `user login "shared" conflicts`,
+		},
 		"duplicate user subjects": {
 			contents:  validConfigurationYAML("users: [duplicate, duplicate]\n"),
 			errorText: `user identifier "duplicate" conflicts`,
@@ -282,19 +313,28 @@ users:
 		"duplicate client IDs": {
 			contents: validConfigurationYAML(`
 clients:
-  - client_id: duplicate
+  - id: duplicate
     secret_hash: first
     redirect_uris: [https://first.example.com/callback]
-  - client_id: duplicate
+  - id: duplicate
     secret_hash: second
     redirect_uris: [https://second.example.com/callback]
 `),
-			errorText: `client_id "duplicate" duplicates`,
+			errorText: `client id "duplicate" duplicates`,
+		},
+		"legacy client ID field": {
+			contents: validConfigurationYAML(`
+clients:
+  - client_id: grafana
+    secret_hash: client-hash
+    redirect_uris: [https://grafana.example.com/callback]
+`),
+			errorText: "field client_id not found",
 		},
 		"client without redirect URI": {
 			contents: validConfigurationYAML(`
 clients:
-  - client_id: grafana
+  - id: grafana
     secret_hash: client-hash
 `),
 			errorText: "requires at least one redirect_uri",

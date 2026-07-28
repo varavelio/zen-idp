@@ -385,11 +385,11 @@ func validateClients(clients []Client) error {
 	identifiers := make(map[string]int, len(clients))
 	for index, client := range clients {
 		if client.ID == "" {
-			return fmt.Errorf("validate configuration: clients[%d].client_id is required", index)
+			return fmt.Errorf("validate configuration: clients[%d].id is required", index)
 		}
 		if first, exists := identifiers[client.ID]; exists {
 			return fmt.Errorf(
-				"validate configuration: client_id %q duplicates clients[%d]",
+				"validate configuration: client id %q duplicates clients[%d]",
 				client.ID,
 				first,
 			)
@@ -433,6 +433,8 @@ func validateUsers(users []User) error {
 			)
 		}
 
+		// One user may use the same value for both roles; only another owner is a
+		// namespace collision.
 		if first, exists := identifiers[user.Subject]; exists && first != index {
 			return fmt.Errorf(
 				"validate configuration: user identifier %q conflicts with users[%d]",
