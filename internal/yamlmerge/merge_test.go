@@ -29,7 +29,7 @@ config:
 users:
   - second
 clients:
-  - client_id: grafana
+  - id: grafana
 `),
 			[]byte(`
 config:
@@ -45,7 +45,7 @@ users:
 		var document map[string]any
 		require.NoError(t, yaml.Unmarshal(merged, &document))
 		require.Equal(t, []any{"first", "second", "third"}, document["users"])
-		require.Equal(t, []any{map[string]any{"client_id": "grafana"}}, document["clients"])
+		require.Equal(t, []any{map[string]any{"id": "grafana"}}, document["clients"])
 
 		configuration := document["config"].(map[string]any)
 		require.Equal(t, "https://auth.example.com", configuration["issuer"])
@@ -88,7 +88,7 @@ config:
 users:
   - second
 clients:
-  - client_id: grafana
+  - id: grafana
 `),
 			[]byte(`
 config:
@@ -102,7 +102,7 @@ users:
 		require.NoError(t, err)
 
 		require.Equal(t, `clients:
-    - client_id: grafana
+    - id: grafana
 config:
     issuer: https://auth.example.com
     security:
