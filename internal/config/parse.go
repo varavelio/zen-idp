@@ -119,7 +119,7 @@ type userDocument struct {
 }
 
 // Parse decodes, defaults, and validates one Zen IdP YAML document.
-func Parse(contents []byte) (*Configuration, error) {
+func Parse(contents []byte) (*Config, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(contents))
 	decoder.KnownFields(true)
 	var document configurationDocument
@@ -246,9 +246,9 @@ func (value *strictInt) UnmarshalYAML(node *yaml.Node) error {
 
 // resolve converts the YAML document into the public runtime model and applies
 // defaults to every omitted setting.
-func resolve(document configurationDocument) *Configuration {
+func resolve(document configurationDocument) *Config {
 	settings := document.Settings
-	configuration := &Configuration{
+	configuration := &Config{
 		Issuer: settings.Issuer,
 		UI: UI{
 			Name:       settings.UI.Name,
@@ -337,7 +337,7 @@ func durationValue(value *strictInt, defaultValue, unit time.Duration) time.Dura
 }
 
 // validate checks invariants required by consumers of the resolved model.
-func validate(configuration *Configuration) error {
+func validate(configuration *Config) error {
 	if configuration.Issuer == "" {
 		return fmt.Errorf("validate configuration: config.issuer is required")
 	}

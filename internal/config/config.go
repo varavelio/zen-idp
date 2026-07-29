@@ -2,10 +2,10 @@ package config
 
 import "time"
 
-// Configuration is the fully parsed and resolved Zen IdP configuration.
+// Config is the fully parsed and resolved Zen IdP configuration.
 // Fields nested below the YAML config key are promoted here so consumers do not
 // need to know about the configuration file's composition envelope.
-type Configuration struct {
+type Config struct {
 	// Issuer is the externally visible OIDC issuer URL.
 	Issuer string
 	// UI contains the authentication interface presentation settings.
