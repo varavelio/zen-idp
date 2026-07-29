@@ -2,7 +2,7 @@ package crypto
 
 import (
 	"bytes"
-	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"io"
 	"strings"
@@ -16,11 +16,10 @@ func TestGenerateRootSecret(t *testing.T) {
 		secret, err := GenerateRootSecret()
 		require.NoError(t, err)
 
-		decoded, err := base64.RawURLEncoding.DecodeString(secret)
+		decoded, err := hex.DecodeString(secret)
 		require.NoError(t, err)
 		require.Len(t, decoded, rootSecretLength)
-		require.NotContains(t, secret, "=")
-		require.Len(t, secret, base64.RawURLEncoding.EncodedLen(rootSecretLength))
+		require.Len(t, secret, hex.EncodedLen(rootSecretLength))
 	})
 
 	t.Run("encodes every byte from the randomness source", func(t *testing.T) {
@@ -29,10 +28,10 @@ func TestGenerateRootSecret(t *testing.T) {
 		secret, err := generateRootSecret(bytes.NewReader(randomBytes))
 		require.NoError(t, err)
 
-		decoded, err := base64.RawURLEncoding.DecodeString(secret)
+		decoded, err := hex.DecodeString(secret)
 		require.NoError(t, err)
 		require.Equal(t, randomBytes, decoded)
-		require.NotContains(t, secret, "=")
+		require.Equal(t, strings.Repeat("ff", rootSecretLength), secret)
 	})
 
 	t.Run("propagates a randomness source error", func(t *testing.T) {
