@@ -30,7 +30,7 @@ type RuntimeConfig struct {
 // environment contains the raw values read from environment variables.
 type environment struct {
 	Secret      string `env:"ZEN_IDP_SECRET,required,notEmpty"`
-	StateDBPath string `env:"ZEN_IDP_STATE_DB_PATH,required,notEmpty"`
+	StateDBPath string `env:"ZEN_IDP_DB_PATH,required,notEmpty"`
 }
 
 // Load reads an optional .env file, parses the process environment, and returns
@@ -62,13 +62,13 @@ func parseEnvironment(values map[string]string) (RuntimeConfig, error) {
 
 	if strings.TrimSpace(loaded.StateDBPath) == "" {
 		return RuntimeConfig{}, errors.New(
-			"validate environment: ZEN_IDP_STATE_DB_PATH must not be blank",
+			"validate environment: ZEN_IDP_DB_PATH must not be blank",
 		)
 	}
 
 	if strings.ContainsRune(loaded.StateDBPath, '\x00') {
 		return RuntimeConfig{}, errors.New(
-			"validate environment: ZEN_IDP_STATE_DB_PATH must not contain null bytes",
+			"validate environment: ZEN_IDP_DB_PATH must not contain null bytes",
 		)
 	}
 
