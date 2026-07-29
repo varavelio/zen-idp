@@ -33,5 +33,6 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - cmd/zen-idp: The entry point of the program
 - internal/config: Parses, defaults, and validates a unified YAML document into typed configuration
 - internal/crypto: Provides cryptographic primitives and utilities
+- internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including optional dotenv values
 - internal/yamlmerge: Merges YAML documents into one unified document
 - internal/yamlsource: Discovers and reads YAML files from filesystem paths, directories, and glob patterns
