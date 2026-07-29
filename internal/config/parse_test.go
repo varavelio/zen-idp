@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,9 @@ func TestParse(t *testing.T) {
 		contents := []byte(`
 config:
   issuer: https://auth.example.com
+  server:
+    host: 0.0.0.0
+    port: 9090
   ui:
     name: Example Auth
     logo_url: https://example.com/logo.png
@@ -28,9 +32,6 @@ config:
       authorization_code_max_age_seconds: 60
       id_token_max_age_seconds: 600
       access_token_max_age_seconds: 300
-    enrollment:
-      link_max_age_seconds: 90
-    trusted_proxies: [10.0.0.0/8]
 clients:
   - id: grafana
     name: Grafana
@@ -52,6 +53,7 @@ users:
 		require.NoError(t, err)
 
 		require.Equal(t, "https://auth.example.com", configuration.Issuer)
+		require.Equal(t, Server{Host: "0.0.0.0", Port: 9090}, configuration.Server)
 		require.Equal(t, UI{
 			Name:       "Example Auth",
 			LogoURL:    "https://example.com/logo.png",
@@ -67,8 +69,6 @@ users:
 		require.Equal(t, time.Minute, configuration.Security.OIDC.AuthorizationCodeMaxAge)
 		require.Equal(t, 10*time.Minute, configuration.Security.OIDC.IDTokenMaxAge)
 		require.Equal(t, 5*time.Minute, configuration.Security.OIDC.AccessTokenMaxAge)
-		require.Equal(t, 90*time.Second, configuration.Security.Enrollment.LinkMaxAge)
-		require.Equal(t, []string{"10.0.0.0/8"}, configuration.Security.TrustedProxies)
 		require.Equal(t, []Client{{
 			ID:           "grafana",
 			Name:         "Grafana",
@@ -119,10 +119,35 @@ users:
 		)
 		require.Equal(t, defaultIDTokenMaxAge, configuration.Security.OIDC.IDTokenMaxAge)
 		require.Equal(t, defaultAccessTokenMaxAge, configuration.Security.OIDC.AccessTokenMaxAge)
-		require.Equal(t, defaultEnrollmentLinkMaxAge, configuration.Security.Enrollment.LinkMaxAge)
+		require.Equal(
+			t,
+			Server{Host: defaultServerHost, Port: defaultServerPort},
+			configuration.Server,
+		)
 		require.NotNil(t, configuration.Clients)
 		require.NotNil(t, configuration.Users)
-		require.NotNil(t, configuration.Security.TrustedProxies)
+	})
+
+	t.Run("resolves public client names from their IDs", func(t *testing.T) {
+		configuration, err := Parse(validConfigurationYAML(`
+clients:
+  - id: mobile-app
+    redirect_uris: [com.example.app:/oauth/callback]
+  - id: browser-app
+    name: ""
+    redirect_uris: [https://app.example.com/callback]
+`))
+		require.NoError(t, err)
+
+		require.Equal(t, []Client{{
+			ID:           "mobile-app",
+			Name:         "mobile-app",
+			RedirectURIs: []string{"com.example.app:/oauth/callback"},
+		}, {
+			ID:           "browser-app",
+			Name:         "browser-app",
+			RedirectURIs: []string{"https://app.example.com/callback"},
+		}}, configuration.Clients)
 	})
 
 	t.Run("does not replace an explicit insecure zero with a default", func(t *testing.T) {
@@ -187,6 +212,15 @@ users:
 	})
 }
 
+func TestParseExampleConfiguration(t *testing.T) {
+	contents, err := os.ReadFile("../../config.example.yaml")
+	require.NoError(t, err)
+
+	configuration, err := Parse(contents)
+	require.NoError(t, err)
+	require.Equal(t, Server{Host: defaultServerHost, Port: defaultServerPort}, configuration.Server)
+}
+
 func TestParseErrors(t *testing.T) {
 	tests := map[string]struct {
 		contents  []byte
@@ -217,6 +251,63 @@ config:
     admin_password_hash: admin-hash
 `),
 			errorText: "config.issuer is required",
+		},
+		"empty server host": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  server:
+    host: ""
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "config.server.host must not be empty",
+		},
+		"zero server port": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  server:
+    port: 0
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "config.server.port must be between 1 and 65535",
+		},
+		"invalid server port": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  server:
+    host: 127.0.0.1
+    port: 65536
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "config.server.port must be between 1 and 65535",
+		},
+		"fractional server port": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  server:
+    host: 127.0.0.1
+    port: 8080.5
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "must be an integer",
+		},
+		"legacy server interface field": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  server:
+    interface: 127.0.0.1
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "field interface not found",
 		},
 		"missing administrator hash": {
 			contents: []byte(`
@@ -257,6 +348,33 @@ config:
     admin_password_hash: admin-hash
 `),
 			errorText: "field support_email not found",
+		},
+		"removed trusted proxies field": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  server:
+    host: 127.0.0.1
+    port: 8080
+  security:
+    admin_password_hash: admin-hash
+    trusted_proxies: []
+`),
+			errorText: "field trusted_proxies not found",
+		},
+		"removed enrollment settings": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  server:
+    host: 127.0.0.1
+    port: 8080
+  security:
+    admin_password_hash: admin-hash
+    enrollment:
+      link_max_age_seconds: 300
+`),
+			errorText: "field enrollment not found",
 		},
 		"fractional TOTP revision": {
 			contents:  validConfigurationYAML("users:\n  - sub: user\n    idp_totp_rev: 1.5\n"),
@@ -352,6 +470,15 @@ clients:
     secret_hash: client-hash
 `),
 			errorText: "requires at least one redirect_uri",
+		},
+		"client with empty secret hash": {
+			contents: validConfigurationYAML(`
+clients:
+  - id: browser-app
+    secret_hash: ""
+    redirect_uris: [https://app.example.com/callback]
+`),
+			errorText: "secret_hash must not be empty when provided",
 		},
 	}
 

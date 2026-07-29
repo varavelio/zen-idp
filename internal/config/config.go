@@ -8,6 +8,8 @@ import "time"
 type Config struct {
 	// Issuer is the externally visible OIDC issuer URL.
 	Issuer string
+	// Server contains the HTTP listener settings.
+	Server Server
 	// UI contains the authentication interface presentation settings.
 	UI UI
 	// Security contains authentication and artifact lifetime settings.
@@ -16,6 +18,14 @@ type Config struct {
 	Clients []Client
 	// Users contains every normalized user from the composed source.
 	Users []User
+}
+
+// Server contains the HTTP listener settings managed by Zen IdP.
+type Server struct {
+	// Host is the network host or address on which the server listens.
+	Host string
+	// Port is the TCP port on which the server listens.
+	Port int
 }
 
 // UI contains presentation settings that do not affect identity semantics.
@@ -38,10 +48,6 @@ type Security struct {
 	Session Session
 	// OIDC contains authorization code and token lifetime settings.
 	OIDC OIDC
-	// Enrollment contains enrollment link lifetime settings.
-	Enrollment Enrollment
-	// TrustedProxies lists proxies whose forwarded client addresses may be trusted.
-	TrustedProxies []string
 }
 
 // RateLimits contains resolved user login rate-limit settings.
@@ -70,19 +76,14 @@ type OIDC struct {
 	AccessTokenMaxAge time.Duration
 }
 
-// Enrollment contains resolved enrollment workflow settings.
-type Enrollment struct {
-	// LinkMaxAge is the maximum lifetime of an enrollment link.
-	LinkMaxAge time.Duration
-}
-
-// Client is a configured confidential OIDC client.
+// Client is a configured OIDC client.
 type Client struct {
 	// ID is the unique protocol identifier presented by the client.
 	ID string
-	// Name is the optional human-readable client name.
+	// Name is the human-readable client name, defaulting to ID.
 	Name string
-	// SecretHash is the Argon2id hash of the client secret.
+	// SecretHash is the Argon2id hash of the client secret. An empty value marks
+	// the client as public.
 	SecretHash string
 	// RedirectURIs contains the exact callback URIs accepted for the client.
 	RedirectURIs []string

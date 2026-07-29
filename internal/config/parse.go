@@ -14,13 +14,14 @@ import (
 )
 
 const (
+	defaultServerHost              = "127.0.0.1"
+	defaultServerPort              = 8080
 	defaultMaxUserLoginAttempts    = 5
 	defaultUserLoginAttemptsWindow = 5 * time.Minute
 	defaultSessionMaxAge           = 72 * time.Hour
 	defaultAuthorizationCodeMaxAge = 5 * time.Minute
 	defaultIDTokenMaxAge           = 15 * time.Minute
 	defaultAccessTokenMaxAge       = 15 * time.Minute
-	defaultEnrollmentLinkMaxAge    = 5 * time.Minute
 	maximumSubjectLength           = 255
 )
 
@@ -57,8 +58,15 @@ type configurationDocument struct {
 // settingsDocument represents values nested below the YAML config field.
 type settingsDocument struct {
 	Issuer   string           `yaml:"issuer"`
+	Server   serverDocument   `yaml:"server"`
 	UI       uiDocument       `yaml:"ui"`
 	Security securityDocument `yaml:"security"`
+}
+
+// serverDocument contains HTTP listener settings from YAML.
+type serverDocument struct {
+	Host *string    `yaml:"host"`
+	Port *strictInt `yaml:"port"`
 }
 
 // uiDocument contains presentation settings from YAML.
@@ -68,11 +76,11 @@ type uiDocument struct {
 	FaviconURL string `yaml:"favicon_url"`
 }
 
-// clientDocument contains one confidential OIDC client from YAML.
+// clientDocument contains one OIDC client from YAML.
 type clientDocument struct {
 	ID           string   `yaml:"id"`
 	Name         string   `yaml:"name"`
-	SecretHash   string   `yaml:"secret_hash"`
+	SecretHash   *string  `yaml:"secret_hash"`
 	RedirectURIs []string `yaml:"redirect_uris"`
 }
 
@@ -82,8 +90,6 @@ type securityDocument struct {
 	RateLimits        rateLimitsDocument `yaml:"rate_limits"`
 	Session           sessionDocument    `yaml:"session"`
 	OIDC              oidcDocument       `yaml:"oidc"`
-	Enrollment        enrollmentDocument `yaml:"enrollment"`
-	TrustedProxies    []string           `yaml:"trusted_proxies"`
 }
 
 // rateLimitsDocument preserves omitted rate-limit values for defaulting.
@@ -102,11 +108,6 @@ type oidcDocument struct {
 	AuthorizationCodeMaxAgeSeconds *strictInt `yaml:"authorization_code_max_age_seconds"`
 	IDTokenMaxAgeSeconds           *strictInt `yaml:"id_token_max_age_seconds"`
 	AccessTokenMaxAgeSeconds       *strictInt `yaml:"access_token_max_age_seconds"`
-}
-
-// enrollmentDocument preserves an omitted enrollment lifetime for defaulting.
-type enrollmentDocument struct {
-	LinkMaxAgeSeconds *strictInt `yaml:"link_max_age_seconds"`
 }
 
 // strictInt rejects YAML values that are not explicitly represented as
@@ -132,6 +133,9 @@ func Parse(contents []byte) (*Config, error) {
 			return nil, fmt.Errorf("decode configuration: %w", err)
 		}
 		return nil, errors.New("decode configuration: multiple YAML documents are not supported")
+	}
+	if err := validateClientDocuments(document.Clients); err != nil {
+		return nil, err
 	}
 
 	configuration := resolve(document)
@@ -250,6 +254,10 @@ func resolve(document configurationDocument) *Config {
 	settings := document.Settings
 	configuration := &Config{
 		Issuer: settings.Issuer,
+		Server: Server{
+			Host: stringValue(settings.Server.Host, defaultServerHost),
+			Port: intValue(settings.Server.Port, defaultServerPort),
+		},
 		UI: UI{
 			Name:       settings.UI.Name,
 			LogoURL:    settings.UI.LogoURL,
@@ -292,23 +300,19 @@ func resolve(document configurationDocument) *Config {
 					time.Second,
 				),
 			},
-			Enrollment: Enrollment{
-				LinkMaxAge: durationValue(
-					settings.Security.Enrollment.LinkMaxAgeSeconds,
-					defaultEnrollmentLinkMaxAge,
-					time.Second,
-				),
-			},
-			TrustedProxies: append([]string{}, settings.Security.TrustedProxies...),
 		},
 		Clients: make([]Client, 0, len(document.Clients)),
 		Users:   make([]User, 0, len(document.Users)),
 	}
 	for _, client := range document.Clients {
+		name := client.Name
+		if name == "" {
+			name = client.ID
+		}
 		configuration.Clients = append(configuration.Clients, Client{
 			ID:           client.ID,
-			Name:         client.Name,
-			SecretHash:   client.SecretHash,
+			Name:         name,
+			SecretHash:   stringValue(client.SecretHash, ""),
 			RedirectURIs: append([]string{}, client.RedirectURIs...),
 		})
 	}
@@ -317,6 +321,14 @@ func resolve(document configurationDocument) *Config {
 	}
 
 	return configuration
+}
+
+// stringValue returns a configured string or its default when omitted.
+func stringValue(value *string, defaultValue string) string {
+	if value == nil {
+		return defaultValue
+	}
+	return *value
 }
 
 // intValue returns a configured integer or its default when omitted.
@@ -341,6 +353,12 @@ func validate(configuration *Config) error {
 	if configuration.Issuer == "" {
 		return fmt.Errorf("validate configuration: config.issuer is required")
 	}
+	if strings.TrimSpace(configuration.Server.Host) == "" {
+		return fmt.Errorf("validate configuration: config.server.host must not be empty")
+	}
+	if configuration.Server.Port <= 0 || configuration.Server.Port > 65535 {
+		return fmt.Errorf("validate configuration: config.server.port must be between 1 and 65535")
+	}
 	if configuration.Security.AdminPasswordHash == "" {
 		return fmt.Errorf("validate configuration: config.security.admin_password_hash is required")
 	}
@@ -364,18 +382,26 @@ func validate(configuration *Config) error {
 		configuration.Security.OIDC.AccessTokenMaxAge <= 0 {
 		return fmt.Errorf("validate configuration: config.security.oidc lifetimes must be positive")
 	}
-	if configuration.Security.Enrollment.LinkMaxAge <= 0 {
-		return fmt.Errorf(
-			"validate configuration: config.security.enrollment.link_max_age_seconds must be positive",
-		)
-	}
 	if err := validateClients(configuration.Clients); err != nil {
 		return err
 	}
 	return validateUsers(configuration.Users)
 }
 
-// validateClients checks required confidential-client fields.
+// validateClientDocuments checks values whose presence affects client type.
+func validateClientDocuments(clients []clientDocument) error {
+	for index, client := range clients {
+		if client.SecretHash != nil && strings.TrimSpace(*client.SecretHash) == "" {
+			return fmt.Errorf(
+				"validate configuration: clients[%d].secret_hash must not be empty when provided",
+				index,
+			)
+		}
+	}
+	return nil
+}
+
+// validateClients checks required client fields.
 func validateClients(clients []Client) error {
 	identifiers := make(map[string]int, len(clients))
 	for index, client := range clients {
@@ -390,12 +416,6 @@ func validateClients(clients []Client) error {
 			)
 		}
 		identifiers[client.ID] = index
-		if client.SecretHash == "" {
-			return fmt.Errorf(
-				"validate configuration: client %q secret_hash is required",
-				client.ID,
-			)
-		}
 		if len(client.RedirectURIs) == 0 {
 			return fmt.Errorf(
 				"validate configuration: client %q requires at least one redirect_uri",
