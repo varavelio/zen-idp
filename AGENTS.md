@@ -31,4 +31,7 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
 
 - cmd/zen-idp: The entry point of the program
+- internal/config: Parses, defaults, and validates a unified YAML document into typed configuration
 - internal/crypto: Provides cryptographic primitives and utilities
+- internal/yamlmerge: Merges YAML documents into one unified document
+- internal/yamlsource: Discovers and reads YAML files from filesystem paths, directories, and glob patterns
