@@ -1,0 +1,123 @@
+# Zen IdP configuration example
+#
+# This file shows every supported YAML field. Copy only the settings you need:
+# optional settings use secure defaults when omitted.
+#
+# Runtime secrets and infrastructure paths do not belong in this file:
+# - ZEN_IDP_SECRET must contain a high-entropy secret of at least 32 characters.
+# - ZEN_IDP_DB_PATH must point to the SQLite state file.
+
+config:
+  # Required. Public URL used as the OIDC issuer and as the base for public URLs.
+  # Use HTTPS in production. It must match the URL exposed by your reverse proxy.
+  issuer: "https://auth.example.com"
+
+  # Optional local HTTP listener. Zen IdP does not terminate TLS; put a reverse
+  # proxy, Cloudflare, or equivalent HTTPS infrastructure in front of it.
+  server:
+    # Host or IP address to bind. Defaults to 127.0.0.1 when omitted.
+    # Use 0.0.0.0 only when the listener must be reachable from another host or
+    # container, and protect it with appropriate network controls.
+    host: "127.0.0.1"
+
+    # TCP port to bind. Defaults to 8080. Valid values are 1 through 65535.
+    port: 8080
+
+  # Optional presentation settings for login and enrollment pages.
+  ui:
+    # Product or organization name displayed to users.
+    name: "Example Company Auth"
+
+    # Optional logo URL. Prefer a trusted HTTPS URL or a locally served asset.
+    logo_url: "https://example.com/assets/logo.png"
+
+    # Optional browser favicon URL.
+    favicon_url: "https://example.com/assets/favicon.ico"
+
+  security:
+    # Required. Argon2id hash of the administrator password, never plaintext.
+    # Replace this example with a securely generated Argon2id password hash.
+    admin_password_hash: "$argon2id$v=19$m=19456,t=2,p=1$REPLACE_WITH_SALT$REPLACE_WITH_HASH"
+
+    # Optional failed-login limits. Counters are keyed by the submitted user
+    # login identifier, never by source IP. Configure IP limits at your edge.
+    rate_limits:
+      # Failed attempts allowed per login identifier. Defaults to 5.
+      max_user_login_attempts: 5
+
+      # Counting window in seconds. Defaults to 300 (5 minutes).
+      user_login_attempts_window_seconds: 300
+
+    # Optional Zen IdP browser session settings.
+    session:
+      # Absolute session lifetime in hours. Defaults to 72.
+      max_age_hours: 72
+
+    # Optional lifetimes for short-lived OIDC artifacts.
+    oidc:
+      # Authorization-code lifetime in seconds. Defaults to 300 (5 minutes).
+      authorization_code_max_age_seconds: 300
+
+      # ID-token lifetime in seconds. Defaults to 900 (15 minutes).
+      id_token_max_age_seconds: 900
+
+      # UserInfo access-token lifetime in seconds. Defaults to 900 (15 minutes).
+      access_token_max_age_seconds: 900
+
+# OIDC clients. Use one list item per application.
+clients:
+  - # Required stable client identifier sent by the application.
+    id: "grafana-prod"
+
+    # Optional human-readable name. It defaults to id when omitted.
+    name: "Grafana"
+
+    # Optional Argon2id hash of the client secret, never the plaintext secret.
+    # Providing it creates a confidential client. Omitting it creates a public
+    # client suitable for a mobile app, SPA, or another client without a safe
+    # place to store credentials. PKCE S256 is required for public clients and
+    # optional (but recommended) for confidential clients that authenticate with
+    # a secret.
+    secret_hash: "$argon2id$v=19$m=19456,t=2,p=1$REPLACE_WITH_SALT$REPLACE_WITH_HASH"
+
+    # Required list of exact callback URLs. Wildcards are not supported.
+    redirect_uris:
+      - "https://grafana.example.com/login/generic_oauth"
+
+  # Public native-app example. Both name and secret_hash are omitted, so the
+  # display name defaults to "mobile-app" and no client secret is required.
+  - id: "mobile-app"
+    redirect_uris:
+      - "com.example.app:/oauth/callback"
+
+# Human identities. Each user is a mapping and must have a unique sub value.
+users:
+  - # Required stable, case-sensitive OIDC subject. Do not reuse or rename it.
+    sub: "user-001"
+
+    # Optional login entered by the user. Defaults to sub when omitted.
+    idp_login: "alice@example.com"
+
+    # Optional non-negative TOTP credential revision. Defaults to 0.
+    # Increment it to rotate this user's deterministic TOTP secret.
+    idp_totp_rev: 0
+
+    # Optional absolute account expiration as a quoted RFC3339 timestamp.
+    # At and after this instant, the user can no longer authenticate.
+    idp_expires_at: "2030-12-31T23:59:59Z"
+
+    # Any additional JSON-compatible fields are custom OIDC claims. All clients
+    # receive them, so never place secrets here. Keys beginning with idp_ and
+    # protocol claims such as iss, aud, exp, nonce, or auth_time are reserved.
+    name: "Alice Example"
+    email: "alice@example.com"
+    groups:
+      - "engineering"
+      - "operators"
+    profile:
+      department: "Platform"
+      active: true
+
+  # The smallest valid user uses sub as its login, revision 0, no expiration,
+  # and has no custom claims.
+  - sub: "service-owner"
