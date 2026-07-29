@@ -5,6 +5,8 @@ go 1.26
 require (
 	github.com/TwiN/deepmerge v0.2.2
 	github.com/bmatcuk/doublestar/v4 v4.10.0
+	github.com/caarlos0/env/v11 v11.4.1
+	github.com/joho/godotenv v1.5.1
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 )
