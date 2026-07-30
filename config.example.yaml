@@ -6,6 +6,7 @@
 # Runtime secrets and infrastructure paths do not belong in this file:
 # - ZEN_IDP_SECRET must contain a high-entropy secret of at least 32 characters.
 # - ZEN_IDP_DB_PATH must point to the SQLite state file.
+# - ZEN_IDP_CONFIG_PATH must select this file or its containing configuration set.
 
 config:
   # Required absolute URL used as the OIDC issuer and public URL base. It must
@@ -38,7 +39,9 @@ config:
   security:
     # Required. Argon2id hash of the administrator password, never plaintext.
     # The placeholder below is intentionally invalid. Replace it with a securely
-    # generated Argon2id PHC hash before running Zen IdP.
+    # generated Argon2id PHC hash before running Zen IdP. The
+    #
+    # The `zen-idp generate-secrets` command prints a compatible plain/hash pair.
     admin_password_hash: "$argon2id$......"
 
     # Optional failed-login limits. Both identifiers (sub and idp_login) of a known
@@ -70,6 +73,8 @@ clients:
     # place to store credentials. PKCE S256 is required for public clients and
     # optional (but recommended) for confidential clients that authenticate with
     # a secret.
+    #
+    # The `zen-idp generate-secrets` command prints a compatible plain/hash pair.
     secret_hash: "$argon2id$......"
 
     # Required list of unique, exact callback URIs. Fragments and wildcards are
