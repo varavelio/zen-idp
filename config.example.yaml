@@ -8,8 +8,9 @@
 # - ZEN_IDP_DB_PATH must point to the SQLite state file.
 
 config:
-  # Required. Public URL used as the OIDC issuer and as the base for public URLs.
-  # Use HTTPS in production. It must match the URL exposed by your reverse proxy.
+  # Required absolute URL used as the OIDC issuer and public URL base. It must
+  # use HTTPS in production and must not contain userinfo, a query, or a fragment.
+  # Plain HTTP is accepted only for localhost or loopback development.
   issuer: "https://auth.example.com"
 
   # Optional local HTTP listener. Zen IdP does not terminate TLS; put a reverse
@@ -28,59 +29,49 @@ config:
     # Product or organization name displayed to users.
     name: "Example Company Auth"
 
-    # Optional logo URL. Prefer a trusted HTTPS URL or a locally served asset.
+    # Optional absolute HTTPS logo URL.
     logo_url: "https://example.com/assets/logo.png"
 
-    # Optional browser favicon URL.
+    # Optional absolute HTTPS browser favicon URL.
     favicon_url: "https://example.com/assets/favicon.ico"
 
   security:
     # Required. Argon2id hash of the administrator password, never plaintext.
-    # Replace this example with a securely generated Argon2id password hash.
-    admin_password_hash: "$argon2id$v=19$m=19456,t=2,p=1$REPLACE_WITH_SALT$REPLACE_WITH_HASH"
+    # Replace with a securely generated Argon2id hash before running Zen IdP.
+    admin_password_hash: "$argon2id$......"
 
     # Optional failed-login limits. Counters are keyed by the submitted user
     # login identifier, never by source IP. Configure IP limits at your edge.
     rate_limits:
-      # Failed attempts allowed per login identifier. Defaults to 5.
+      # Failed attempts allowed per login identifier. Range 1-100; default 5.
       max_user_login_attempts: 5
 
-      # Counting window in seconds. Defaults to 300 (5 minutes).
+      # Counting window in seconds. Range 1-86400; default 300 (5 minutes).
       user_login_attempts_window_seconds: 300
 
     # Optional Zen IdP browser session settings.
     session:
-      # Absolute session lifetime in hours. Defaults to 72.
+      # Absolute session lifetime in hours. Range 1-8760; default 72.
       max_age_hours: 72
-
-    # Optional lifetimes for short-lived OIDC artifacts.
-    oidc:
-      # Authorization-code lifetime in seconds. Defaults to 300 (5 minutes).
-      authorization_code_max_age_seconds: 300
-
-      # ID-token lifetime in seconds. Defaults to 900 (15 minutes).
-      id_token_max_age_seconds: 900
-
-      # UserInfo access-token lifetime in seconds. Defaults to 900 (15 minutes).
-      access_token_max_age_seconds: 900
 
 # OIDC clients. Use one list item per application.
 clients:
-  - # Required stable client identifier sent by the application.
+  - # Required nonblank, unique client identifier sent by the application.
     id: "grafana-prod"
 
     # Optional human-readable name. It defaults to id when omitted.
     name: "Grafana"
 
-    # Optional Argon2id hash of the client secret, never the plaintext secret.
+    # Optional Argon2id hash of the client secret, never plaintext.
     # Providing it creates a confidential client. Omitting it creates a public
     # client suitable for a mobile app, SPA, or another client without a safe
     # place to store credentials. PKCE S256 is required for public clients and
     # optional (but recommended) for confidential clients that authenticate with
     # a secret.
-    secret_hash: "$argon2id$v=19$m=19456,t=2,p=1$REPLACE_WITH_SALT$REPLACE_WITH_HASH"
+    secret_hash: "$argon2id$......"
 
-    # Required list of exact callback URLs. Wildcards are not supported.
+    # Required list of unique, exact callback URIs. Fragments and wildcards are
+    # forbidden. HTTPS is standard; local HTTP is limited to loopback hosts.
     redirect_uris:
       - "https://grafana.example.com/login/generic_oauth"
 
@@ -92,10 +83,11 @@ clients:
 
 # Human identities. Each user is a mapping and must have a unique sub value.
 users:
-  - # Required stable, case-sensitive OIDC subject. Do not reuse or rename it.
+  - # Required stable OIDC subject: 1-255 case-sensitive US-ASCII characters.
+    # Do not reuse or rename as it is the stable user identifier.
     sub: "user-001"
 
-    # Optional login entered by the user. Defaults to sub when omitted.
+    # Optional nonempty login entered by the user. Omission defaults to sub.
     idp_login: "alice@example.com"
 
     # Optional non-negative TOTP credential revision. Defaults to 0.
