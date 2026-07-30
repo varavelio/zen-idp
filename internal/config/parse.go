@@ -488,13 +488,13 @@ func validateUsers(users []User) error {
 
 		if user.Login == "" {
 			return fmt.Errorf(
-				"validate configuration: user %q has an empty effective login",
+				"validate configuration: user %q idp_login must not be empty",
 				user.Subject,
 			)
 		}
 
-		// One user may use the same value for both roles; only another owner is a
-		// namespace collision.
+		// One user may own the same value as both identifiers; only another owner
+		// creates a namespace collision.
 		if first, exists := identifiers[user.Subject]; exists && first != index {
 			return fmt.Errorf(
 				"validate configuration: user identifier %q conflicts with users[%d]",

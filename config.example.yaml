@@ -37,11 +37,13 @@ config:
 
   security:
     # Required. Argon2id hash of the administrator password, never plaintext.
-    # Replace with a securely generated Argon2id hash before running Zen IdP.
+    # The placeholder below is intentionally invalid. Replace it with a securely
+    # generated Argon2id PHC hash before running Zen IdP.
     admin_password_hash: "$argon2id$......"
 
-    # Optional failed-login limits. Counters are keyed by the submitted user
-    # login identifier, never by source IP. Configure IP limits at your edge.
+    # Optional failed-login limits. Both identifiers (sub and idp_login) of a known
+    # user share one counter keyed by sub. Unknown identifiers are bounded separately.
+    # Source IP is never used; configure IP limits at your edge (CDN, reverse proxy, etc).
     rate_limits:
       # Failed attempts allowed per login identifier. Range 1-100; default 5.
       max_user_login_attempts: 5
@@ -87,7 +89,8 @@ users:
     # Do not reuse or rename as it is the stable user identifier.
     sub: "user-001"
 
-    # Optional nonempty login entered by the user. Omission defaults to sub.
+    # Optional additional nonempty login. The user can always sign in with sub;
+    # when this field is present, either value authenticates the same identity.
     idp_login: "alice@example.com"
 
     # Optional non-negative TOTP credential revision. Defaults to 0.
@@ -110,6 +113,6 @@ users:
       department: "Platform"
       active: true
 
-  # The smallest valid user uses sub as its login, revision 0, no expiration,
-  # and has no custom claims.
+  # The smallest valid user signs in with sub, uses revision 0, has no
+  # expiration, and has no custom claims.
   - sub: "service-owner"

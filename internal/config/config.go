@@ -81,7 +81,7 @@ type Client struct {
 type User struct {
 	// Subject is the stable, case-sensitive OIDC subject identifier.
 	Subject string
-	// Login is the resolved identifier entered during authentication.
+	// Login is the optional additional login identifier, defaulting to Subject.
 	Login string
 	// TOTPRevision selects the deterministic TOTP credential revision.
 	TOTPRevision uint64
@@ -90,4 +90,9 @@ type User struct {
 	ExpiresAt time.Time
 	// Claims contains the custom JSON-compatible claims emitted for the user.
 	Claims map[string]any
+}
+
+// MatchesLoginIdentifier reports whether identifier belongs to the user.
+func (user User) MatchesLoginIdentifier(identifier string) bool {
+	return identifier == user.Subject || (user.Login != "" && identifier == user.Login)
 }

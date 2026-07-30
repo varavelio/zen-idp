@@ -220,7 +220,7 @@ func TestParseExampleConfiguration(t *testing.T) {
 	contents, err := os.ReadFile("../../config.example.yaml")
 	require.NoError(t, err)
 
-	configuration, err := Parse(contents)
+	configuration, err := Parse(withValidHashes(contents))
 	require.NoError(t, err)
 	require.Equal(t, Server{Host: defaultServerHost, Port: defaultServerPort}, configuration.Server)
 }
@@ -579,7 +579,7 @@ config:
 		},
 		"explicit login is empty": {
 			contents:  validConfigurationYAML("users:\n  - sub: user\n    idp_login: \"\"\n"),
-			errorText: "empty effective login",
+			errorText: "idp_login must not be empty",
 		},
 		"user field key is not a string": {
 			contents:  validConfigurationYAML("users:\n  - sub: user\n    1: value\n"),
@@ -837,6 +837,7 @@ func withValidHashes(contents []byte) []byte {
 	replacer := strings.NewReplacer(
 		"admin-hash", validArgon2idHash,
 		"client-hash", validArgon2idHash,
+		"$argon2id$......", validArgon2idHash,
 	)
 	return []byte(replacer.Replace(string(contents)))
 }
