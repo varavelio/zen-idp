@@ -3,7 +3,6 @@ package yamlmerge
 import (
 	"testing"
 
-	"github.com/TwiN/deepmerge"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
@@ -126,8 +125,25 @@ users:
 		)
 
 		require.Nil(t, merged)
-		require.ErrorIs(t, err, deepmerge.ErrKeyWithPrimitiveValueDefinedMoreThanOnce)
+		require.ErrorIs(t, err, ErrRepeatedPrimitive)
 		require.ErrorContains(t, err, "document 1")
+	})
+
+	t.Run("rejects incompatible value types in either order", func(t *testing.T) {
+		tests := []struct {
+			first  []byte
+			second []byte
+		}{
+			{first: []byte("config: invalid\n"), second: []byte("config:\n  issuer: value\n")},
+			{first: []byte("config:\n  issuer: value\n"), second: []byte("config: invalid\n")},
+		}
+		for _, test := range tests {
+			merged, err := Merge(test.first, test.second)
+
+			require.Nil(t, merged)
+			require.ErrorIs(t, err, ErrIncompatibleTypes)
+			require.ErrorContains(t, err, "config")
+		}
 	})
 
 	t.Run("reports the malformed document index", func(t *testing.T) {
