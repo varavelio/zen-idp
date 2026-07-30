@@ -19,9 +19,9 @@ const (
 	defaultMaxUserLoginAttempts    = 5
 	defaultUserLoginAttemptsWindow = 5 * time.Minute
 	defaultSessionMaxAge           = 72 * time.Hour
-	defaultAuthorizationCodeMaxAge = 5 * time.Minute
-	defaultIDTokenMaxAge           = 15 * time.Minute
-	defaultAccessTokenMaxAge       = 15 * time.Minute
+	maximumUserLoginAttempts       = 100
+	maximumUserLoginAttemptsWindow = 24 * time.Hour
+	maximumSessionMaxAge           = 365 * 24 * time.Hour
 	maximumSubjectLength           = 255
 )
 
@@ -57,7 +57,7 @@ type configurationDocument struct {
 
 // settingsDocument represents values nested below the YAML config field.
 type settingsDocument struct {
-	Issuer   string           `yaml:"issuer"`
+	Issuer   strictString     `yaml:"issuer"`
 	Server   serverDocument   `yaml:"server"`
 	UI       uiDocument       `yaml:"ui"`
 	Security securityDocument `yaml:"security"`
@@ -65,54 +65,62 @@ type settingsDocument struct {
 
 // serverDocument contains HTTP listener settings from YAML.
 type serverDocument struct {
-	Host *string    `yaml:"host"`
-	Port *strictInt `yaml:"port"`
+	Host optionalString `yaml:"host"`
+	Port optionalInt    `yaml:"port"`
 }
 
 // uiDocument contains presentation settings from YAML.
 type uiDocument struct {
-	Name       string `yaml:"name"`
-	LogoURL    string `yaml:"logo_url"`
-	FaviconURL string `yaml:"favicon_url"`
+	Name       optionalString `yaml:"name"`
+	LogoURL    optionalString `yaml:"logo_url"`
+	FaviconURL optionalString `yaml:"favicon_url"`
 }
 
 // clientDocument contains one OIDC client from YAML.
 type clientDocument struct {
-	ID           string   `yaml:"id"`
-	Name         string   `yaml:"name"`
-	SecretHash   *string  `yaml:"secret_hash"`
-	RedirectURIs []string `yaml:"redirect_uris"`
+	ID           strictString   `yaml:"id"`
+	Name         strictString   `yaml:"name"`
+	SecretHash   optionalString `yaml:"secret_hash"`
+	RedirectURIs []strictString `yaml:"redirect_uris"`
 }
 
 // securityDocument contains unresolved security settings from YAML.
 type securityDocument struct {
-	AdminPasswordHash string             `yaml:"admin_password_hash"`
+	AdminPasswordHash strictString       `yaml:"admin_password_hash"`
 	RateLimits        rateLimitsDocument `yaml:"rate_limits"`
 	Session           sessionDocument    `yaml:"session"`
-	OIDC              oidcDocument       `yaml:"oidc"`
 }
 
 // rateLimitsDocument preserves omitted rate-limit values for defaulting.
 type rateLimitsDocument struct {
-	MaxUserLoginAttempts           *strictInt `yaml:"max_user_login_attempts"`
-	UserLoginAttemptsWindowSeconds *strictInt `yaml:"user_login_attempts_window_seconds"`
+	MaxUserLoginAttempts           optionalInt `yaml:"max_user_login_attempts"`
+	UserLoginAttemptsWindowSeconds optionalInt `yaml:"user_login_attempts_window_seconds"`
 }
 
 // sessionDocument preserves an omitted SSO session lifetime for defaulting.
 type sessionDocument struct {
-	MaxAgeHours *strictInt `yaml:"max_age_hours"`
-}
-
-// oidcDocument preserves omitted OIDC artifact lifetimes for defaulting.
-type oidcDocument struct {
-	AuthorizationCodeMaxAgeSeconds *strictInt `yaml:"authorization_code_max_age_seconds"`
-	IDTokenMaxAgeSeconds           *strictInt `yaml:"id_token_max_age_seconds"`
-	AccessTokenMaxAgeSeconds       *strictInt `yaml:"access_token_max_age_seconds"`
+	MaxAgeHours optionalInt `yaml:"max_age_hours"`
 }
 
 // strictInt rejects YAML values that are not explicitly represented as
 // integers instead of accepting lossy numeric conversions.
 type strictInt int
+
+// strictString rejects YAML values that are not explicitly represented as
+// strings.
+type strictString string
+
+// optionalInt distinguishes an omitted integer from a present value.
+type optionalInt struct {
+	Value strictInt
+	Set   bool
+}
+
+// optionalString distinguishes an omitted string from a present value.
+type optionalString struct {
+	Value strictString
+	Set   bool
+}
 
 // userDocument decodes a structured YAML user declaration.
 type userDocument struct {
@@ -134,7 +142,10 @@ func Parse(contents []byte) (*Config, error) {
 		}
 		return nil, errors.New("decode configuration: multiple YAML documents are not supported")
 	}
-	if err := validateClientDocuments(document.Clients); err != nil {
+	if err := rejectExplicitNulls(contents); err != nil {
+		return nil, err
+	}
+	if err := validateDocument(document); err != nil {
 		return nil, err
 	}
 
@@ -154,8 +165,17 @@ func (document *userDocument) UnmarshalYAML(node *yaml.Node) error {
 
 	user := User{Claims: make(map[string]any)}
 	loginWasSet := false
+	seenFields := make(map[string]struct{}, len(node.Content)/2)
 	for index := 0; index < len(node.Content); index += 2 {
-		key := node.Content[index].Value
+		keyNode := node.Content[index]
+		if keyNode.Tag != "!!str" {
+			return fmt.Errorf("decode user field at line %d: key must be a string", keyNode.Line)
+		}
+		key := keyNode.Value
+		if _, duplicate := seenFields[key]; duplicate {
+			return fmt.Errorf("decode user at line %d: field %q is duplicated", keyNode.Line, key)
+		}
+		seenFields[key] = struct{}{}
 		value := node.Content[index+1]
 		switch key {
 		case "sub":
@@ -248,23 +268,44 @@ func (value *strictInt) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
+// UnmarshalYAML decodes only YAML string scalars into a strictString.
+func (value *strictString) UnmarshalYAML(node *yaml.Node) error {
+	if node.Tag != "!!str" {
+		return fmt.Errorf("value at line %d must be a string", node.Line)
+	}
+	*value = strictString(node.Value)
+	return nil
+}
+
+// UnmarshalYAML records and decodes one explicitly configured integer.
+func (value *optionalInt) UnmarshalYAML(node *yaml.Node) error {
+	value.Set = true
+	return value.Value.UnmarshalYAML(node)
+}
+
+// UnmarshalYAML records and decodes one explicitly configured string.
+func (value *optionalString) UnmarshalYAML(node *yaml.Node) error {
+	value.Set = true
+	return value.Value.UnmarshalYAML(node)
+}
+
 // resolve converts the YAML document into the public runtime model and applies
 // defaults to every omitted setting.
 func resolve(document configurationDocument) *Config {
 	settings := document.Settings
 	configuration := &Config{
-		Issuer: settings.Issuer,
+		Issuer: string(settings.Issuer),
 		Server: Server{
 			Host: stringValue(settings.Server.Host, defaultServerHost),
 			Port: intValue(settings.Server.Port, defaultServerPort),
 		},
 		UI: UI{
-			Name:       settings.UI.Name,
-			LogoURL:    settings.UI.LogoURL,
-			FaviconURL: settings.UI.FaviconURL,
+			Name:       stringValue(settings.UI.Name, ""),
+			LogoURL:    stringValue(settings.UI.LogoURL, ""),
+			FaviconURL: stringValue(settings.UI.FaviconURL, ""),
 		},
 		Security: Security{
-			AdminPasswordHash: settings.Security.AdminPasswordHash,
+			AdminPasswordHash: string(settings.Security.AdminPasswordHash),
 			RateLimits: RateLimits{
 				MaxUserLoginAttempts: intValue(
 					settings.Security.RateLimits.MaxUserLoginAttempts,
@@ -283,37 +324,20 @@ func resolve(document configurationDocument) *Config {
 					time.Hour,
 				),
 			},
-			OIDC: OIDC{
-				AuthorizationCodeMaxAge: durationValue(
-					settings.Security.OIDC.AuthorizationCodeMaxAgeSeconds,
-					defaultAuthorizationCodeMaxAge,
-					time.Second,
-				),
-				IDTokenMaxAge: durationValue(
-					settings.Security.OIDC.IDTokenMaxAgeSeconds,
-					defaultIDTokenMaxAge,
-					time.Second,
-				),
-				AccessTokenMaxAge: durationValue(
-					settings.Security.OIDC.AccessTokenMaxAgeSeconds,
-					defaultAccessTokenMaxAge,
-					time.Second,
-				),
-			},
 		},
 		Clients: make([]Client, 0, len(document.Clients)),
 		Users:   make([]User, 0, len(document.Users)),
 	}
 	for _, client := range document.Clients {
-		name := client.Name
+		name := string(client.Name)
 		if name == "" {
-			name = client.ID
+			name = string(client.ID)
 		}
 		configuration.Clients = append(configuration.Clients, Client{
-			ID:           client.ID,
+			ID:           string(client.ID),
 			Name:         name,
 			SecretHash:   stringValue(client.SecretHash, ""),
-			RedirectURIs: append([]string{}, client.RedirectURIs...),
+			RedirectURIs: strictStrings(client.RedirectURIs),
 		})
 	}
 	for _, user := range document.Users {
@@ -324,34 +348,46 @@ func resolve(document configurationDocument) *Config {
 }
 
 // stringValue returns a configured string or its default when omitted.
-func stringValue(value *string, defaultValue string) string {
-	if value == nil {
+func stringValue(value optionalString, defaultValue string) string {
+	if !value.Set {
 		return defaultValue
 	}
-	return *value
+	return string(value.Value)
+}
+
+// strictStrings converts parsed YAML strings into their runtime representation.
+func strictStrings(values []strictString) []string {
+	result := make([]string, len(values))
+	for index, value := range values {
+		result[index] = string(value)
+	}
+	return result
 }
 
 // intValue returns a configured integer or its default when omitted.
-func intValue(value *strictInt, defaultValue int) int {
-	if value == nil {
+func intValue(value optionalInt, defaultValue int) int {
+	if !value.Set {
 		return defaultValue
 	}
-	return int(*value)
+	return int(value.Value)
 }
 
 // durationValue converts a configured unit count to a duration or returns its
 // default when omitted.
-func durationValue(value *strictInt, defaultValue, unit time.Duration) time.Duration {
-	if value == nil {
+func durationValue(value optionalInt, defaultValue, unit time.Duration) time.Duration {
+	if !value.Set {
 		return defaultValue
 	}
-	return time.Duration(*value) * unit
+	return time.Duration(value.Value) * unit
 }
 
 // validate checks invariants required by consumers of the resolved model.
 func validate(configuration *Config) error {
 	if configuration.Issuer == "" {
 		return fmt.Errorf("validate configuration: config.issuer is required")
+	}
+	if err := validateIssuerURL(configuration.Issuer); err != nil {
+		return fmt.Errorf("validate configuration: config.issuer: %w", err)
 	}
 	if strings.TrimSpace(configuration.Server.Host) == "" {
 		return fmt.Errorf("validate configuration: config.server.host must not be empty")
@@ -362,25 +398,32 @@ func validate(configuration *Config) error {
 	if configuration.Security.AdminPasswordHash == "" {
 		return fmt.Errorf("validate configuration: config.security.admin_password_hash is required")
 	}
-	if configuration.Security.RateLimits.MaxUserLoginAttempts <= 0 {
+	if err := validateArgon2idHash(configuration.Security.AdminPasswordHash); err != nil {
 		return fmt.Errorf(
-			"validate configuration: config.security.rate_limits.max_user_login_attempts must be positive",
+			"validate configuration: config.security.admin_password_hash: %w",
+			err,
 		)
 	}
-	if configuration.Security.RateLimits.UserLoginAttemptsWindow <= 0 {
+	if err := validateUI(configuration.UI); err != nil {
+		return err
+	}
+	if configuration.Security.RateLimits.MaxUserLoginAttempts <= 0 ||
+		configuration.Security.RateLimits.MaxUserLoginAttempts > maximumUserLoginAttempts {
 		return fmt.Errorf(
-			"validate configuration: config.security.rate_limits.user_login_attempts_window_seconds must be positive",
+			"validate configuration: config.security.rate_limits.max_user_login_attempts must be between 1 and 100",
 		)
 	}
-	if configuration.Security.Session.MaxAge <= 0 {
+	if configuration.Security.RateLimits.UserLoginAttemptsWindow <= 0 ||
+		configuration.Security.RateLimits.UserLoginAttemptsWindow > maximumUserLoginAttemptsWindow {
 		return fmt.Errorf(
-			"validate configuration: config.security.session.max_age_hours must be positive",
+			"validate configuration: config.security.rate_limits.user_login_attempts_window_seconds must be between 1 and 86400",
 		)
 	}
-	if configuration.Security.OIDC.AuthorizationCodeMaxAge <= 0 ||
-		configuration.Security.OIDC.IDTokenMaxAge <= 0 ||
-		configuration.Security.OIDC.AccessTokenMaxAge <= 0 {
-		return fmt.Errorf("validate configuration: config.security.oidc lifetimes must be positive")
+	if configuration.Security.Session.MaxAge <= 0 ||
+		configuration.Security.Session.MaxAge > maximumSessionMaxAge {
+		return fmt.Errorf(
+			"validate configuration: config.security.session.max_age_hours must be between 1 and 8760",
+		)
 	}
 	if err := validateClients(configuration.Clients); err != nil {
 		return err
@@ -388,24 +431,11 @@ func validate(configuration *Config) error {
 	return validateUsers(configuration.Users)
 }
 
-// validateClientDocuments checks values whose presence affects client type.
-func validateClientDocuments(clients []clientDocument) error {
-	for index, client := range clients {
-		if client.SecretHash != nil && strings.TrimSpace(*client.SecretHash) == "" {
-			return fmt.Errorf(
-				"validate configuration: clients[%d].secret_hash must not be empty when provided",
-				index,
-			)
-		}
-	}
-	return nil
-}
-
 // validateClients checks required client fields.
 func validateClients(clients []Client) error {
 	identifiers := make(map[string]int, len(clients))
 	for index, client := range clients {
-		if client.ID == "" {
+		if strings.TrimSpace(client.ID) == "" {
 			return fmt.Errorf("validate configuration: clients[%d].id is required", index)
 		}
 		if first, exists := identifiers[client.ID]; exists {
@@ -416,11 +446,26 @@ func validateClients(clients []Client) error {
 			)
 		}
 		identifiers[client.ID] = index
+		if client.Name != "" && strings.TrimSpace(client.Name) == "" {
+			return fmt.Errorf("validate configuration: client %q name must not be blank", client.ID)
+		}
 		if len(client.RedirectURIs) == 0 {
 			return fmt.Errorf(
 				"validate configuration: client %q requires at least one redirect_uri",
 				client.ID,
 			)
+		}
+		if client.SecretHash != "" {
+			if err := validateArgon2idHash(client.SecretHash); err != nil {
+				return fmt.Errorf(
+					"validate configuration: client %q secret_hash: %w",
+					client.ID,
+					err,
+				)
+			}
+		}
+		if err := validateRedirectURIs(client); err != nil {
+			return err
 		}
 	}
 	return nil

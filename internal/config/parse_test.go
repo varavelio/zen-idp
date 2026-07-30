@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const validArgon2idHash = "$argon2id$v=19$m=19456,t=2,p=1$YWRtaW5TYWx0$MDEyMzQ1Njc4OWFiY2RlZg"
+
 func TestParse(t *testing.T) {
 	t.Run("returns a flat resolved configuration", func(t *testing.T) {
 		contents := []byte(`
@@ -28,10 +30,6 @@ config:
       user_login_attempts_window_seconds: 120
     session:
       max_age_hours: 24
-    oidc:
-      authorization_code_max_age_seconds: 60
-      id_token_max_age_seconds: 600
-      access_token_max_age_seconds: 300
 clients:
   - id: grafana
     name: Grafana
@@ -49,7 +47,7 @@ users:
       active: true
 `)
 
-		configuration, err := Parse(contents)
+		configuration, err := Parse(withValidHashes(contents))
 		require.NoError(t, err)
 
 		require.Equal(t, "https://auth.example.com", configuration.Issuer)
@@ -66,13 +64,10 @@ users:
 			configuration.Security.RateLimits.UserLoginAttemptsWindow,
 		)
 		require.Equal(t, 24*time.Hour, configuration.Security.Session.MaxAge)
-		require.Equal(t, time.Minute, configuration.Security.OIDC.AuthorizationCodeMaxAge)
-		require.Equal(t, 10*time.Minute, configuration.Security.OIDC.IDTokenMaxAge)
-		require.Equal(t, 5*time.Minute, configuration.Security.OIDC.AccessTokenMaxAge)
 		require.Equal(t, []Client{{
 			ID:           "grafana",
 			Name:         "Grafana",
-			SecretHash:   "client-hash",
+			SecretHash:   validArgon2idHash,
 			RedirectURIs: []string{"https://grafana.example.com/callback"},
 		}}, configuration.Clients)
 		require.Equal(t, User{
@@ -114,13 +109,6 @@ users:
 		require.Equal(t, defaultSessionMaxAge, configuration.Security.Session.MaxAge)
 		require.Equal(
 			t,
-			defaultAuthorizationCodeMaxAge,
-			configuration.Security.OIDC.AuthorizationCodeMaxAge,
-		)
-		require.Equal(t, defaultIDTokenMaxAge, configuration.Security.OIDC.IDTokenMaxAge)
-		require.Equal(t, defaultAccessTokenMaxAge, configuration.Security.OIDC.AccessTokenMaxAge)
-		require.Equal(
-			t,
 			Server{Host: defaultServerHost, Port: defaultServerPort},
 			configuration.Server,
 		)
@@ -151,31 +139,35 @@ clients:
 	})
 
 	t.Run("does not replace an explicit insecure zero with a default", func(t *testing.T) {
-		configuration, err := Parse([]byte(`
+		configuration, err := Parse(withValidHashes([]byte(`
 config:
   issuer: https://auth.example.com
   security:
     admin_password_hash: admin-hash
     rate_limits:
       max_user_login_attempts: 0
-`))
+`)))
 
 		require.Nil(t, configuration)
-		require.ErrorContains(t, err, "max_user_login_attempts must be positive")
+		require.ErrorContains(t, err, "max_user_login_attempts must be between 1 and 100")
 	})
 
 	t.Run("rejects a zero user login attempts window", func(t *testing.T) {
-		configuration, err := Parse([]byte(`
+		configuration, err := Parse(withValidHashes([]byte(`
 config:
   issuer: https://auth.example.com
   security:
     admin_password_hash: admin-hash
     rate_limits:
       user_login_attempts_window_seconds: 0
-`))
+`)))
 
 		require.Nil(t, configuration)
-		require.ErrorContains(t, err, "user_login_attempts_window_seconds must be positive")
+		require.ErrorContains(
+			t,
+			err,
+			"user_login_attempts_window_seconds must be between 1 and 86400",
+		)
 	})
 
 	t.Run("treats the former prefix as a custom claim", func(t *testing.T) {
@@ -199,6 +191,18 @@ users:
 
 		require.Equal(t, "same-identifier", configuration.Users[0].Subject)
 		require.Equal(t, "same-identifier", configuration.Users[0].Login)
+	})
+
+	t.Run("allows a local HTTP issuer for development", func(t *testing.T) {
+		configuration, err := Parse(validConfigurationYAML(`
+config:
+  issuer: http://127.0.0.1:8080
+  security:
+    admin_password_hash: admin-hash
+`))
+		require.NoError(t, err)
+
+		require.Equal(t, "http://127.0.0.1:8080", configuration.Issuer)
 	})
 
 	t.Run("rejects shorthand user declarations", func(t *testing.T) {
@@ -252,6 +256,42 @@ config:
 `),
 			errorText: "config.issuer is required",
 		},
+		"issuer is not a string": {
+			contents: []byte(`
+config:
+  issuer: true
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "must be a string",
+		},
+		"issuer is not an absolute URL": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: auth.example.com
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "must be an absolute URL",
+		},
+		"issuer uses external HTTP": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: http://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "must use HTTPS",
+		},
+		"issuer contains a query": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com?tenant=example
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "must not contain userinfo, a query, or a fragment",
+		},
 		"empty server host": {
 			contents: []byte(`
 config:
@@ -262,6 +302,17 @@ config:
     admin_password_hash: admin-hash
 `),
 			errorText: "config.server.host must not be empty",
+		},
+		"null server host": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  server:
+    host: null
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "must not be null",
 		},
 		"zero server port": {
 			contents: []byte(`
@@ -298,6 +349,17 @@ config:
 `),
 			errorText: "must be an integer",
 		},
+		"null server port": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  server:
+    port: null
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "must not be null",
+		},
 		"legacy server interface field": {
 			contents: []byte(`
 config:
@@ -315,6 +377,70 @@ config:
   issuer: https://auth.example.com
 `),
 			errorText: "admin_password_hash is required",
+		},
+		"invalid administrator hash": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: invalid-hash
+`),
+			errorText: "must use the Argon2id PHC format with version 19",
+		},
+		"UI name is whitespace": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  ui:
+    name: "   "
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "config.ui.name must not be blank",
+		},
+		"UI name is explicitly empty": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  ui:
+    name: ""
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "config.ui.name must not be blank",
+		},
+		"UI logo is explicitly empty": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  ui:
+    logo_url: ""
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "config.ui.logo_url must not be empty",
+		},
+		"UI logo is not HTTPS": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  ui:
+    logo_url: http://example.com/logo.png
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "config.ui.logo_url",
+		},
+		"UI name is not a string": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  ui:
+    name: 42
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "must be a string",
 		},
 		"removed primary color field": {
 			contents: []byte(`
@@ -376,6 +502,61 @@ config:
 `),
 			errorText: "field enrollment not found",
 		},
+		"removed OIDC lifetime settings": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+    oidc:
+      id_token_max_age_seconds: 900
+`),
+			errorText: "field oidc not found",
+		},
+		"excessive login attempts": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+    rate_limits:
+      max_user_login_attempts: 101
+`),
+			errorText: "must be between 1 and 100",
+		},
+		"null login attempts": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+    rate_limits:
+      max_user_login_attempts: null
+`),
+			errorText: "must not be null",
+		},
+		"excessive login window": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+    rate_limits:
+      user_login_attempts_window_seconds: 86401
+`),
+			errorText: "must be between 1 and 86400",
+		},
+		"excessive session lifetime": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+    session:
+      max_age_hours: 8761
+`),
+			errorText: "must be between 1 and 8760",
+		},
 		"fractional TOTP revision": {
 			contents:  validConfigurationYAML("users:\n  - sub: user\n    idp_totp_rev: 1.5\n"),
 			errorText: "decode user idp_totp_rev",
@@ -395,6 +576,24 @@ config:
 				"users:\n  - sub: user\n    idp_expires_at: \"2030-01-02\"\n",
 			),
 			errorText: "value must use RFC3339 format",
+		},
+		"explicit login is empty": {
+			contents:  validConfigurationYAML("users:\n  - sub: user\n    idp_login: \"\"\n"),
+			errorText: "empty effective login",
+		},
+		"user field key is not a string": {
+			contents:  validConfigurationYAML("users:\n  - sub: user\n    1: value\n"),
+			errorText: "key must be a string",
+		},
+		"duplicate user field": {
+			contents:  validConfigurationYAML("users:\n  - sub: first\n    sub: second\n"),
+			errorText: `field "sub" is duplicated`,
+		},
+		"subject exceeds OIDC limit": {
+			contents: validConfigurationYAML(
+				"users:\n  - sub: \"" + strings.Repeat("a", 256) + "\"\n",
+			),
+			errorText: "at most 255 ASCII characters",
 		},
 		"reserved protocol claim": {
 			contents:  validConfigurationYAML("users:\n  - sub: user\n    iss: attacker\n"),
@@ -446,10 +645,10 @@ users:
 			contents: validConfigurationYAML(`
 clients:
   - id: duplicate
-    secret_hash: first
+    secret_hash: client-hash
     redirect_uris: [https://first.example.com/callback]
   - id: duplicate
-    secret_hash: second
+    secret_hash: client-hash
     redirect_uris: [https://second.example.com/callback]
 `),
 			errorText: `client id "duplicate" duplicates`,
@@ -480,11 +679,113 @@ clients:
 `),
 			errorText: "secret_hash must not be empty when provided",
 		},
+		"client with null secret hash": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+clients:
+  - id: browser-app
+    secret_hash: null
+    redirect_uris: [https://app.example.com/callback]
+`),
+			errorText: "must not be null",
+		},
+		"client secret aliases null": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+users:
+  - sub: user
+    optional_claim: &nullable null
+clients:
+  - id: browser-app
+    secret_hash: *nullable
+    redirect_uris: [https://app.example.com/callback]
+`),
+			errorText: "must not be null",
+		},
+		"client with malformed secret hash": {
+			contents: validConfigurationYAML(`
+clients:
+  - id: browser-app
+    secret_hash: invalid-hash
+    redirect_uris: [https://app.example.com/callback]
+`),
+			errorText: "must use the Argon2id PHC format with version 19",
+		},
+		"client ID is whitespace": {
+			contents: validConfigurationYAML(`
+clients:
+  - id: "   "
+    redirect_uris: [https://app.example.com/callback]
+`),
+			errorText: "clients[0].id is required",
+		},
+		"client name is whitespace": {
+			contents: validConfigurationYAML(`
+clients:
+  - id: browser-app
+    name: "   "
+    redirect_uris: [https://app.example.com/callback]
+`),
+			errorText: "name must not be blank",
+		},
+		"redirect URI is not a string": {
+			contents: []byte(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+clients:
+  - id: browser-app
+    redirect_uris: [42]
+`),
+			errorText: "must be a string",
+		},
+		"duplicate redirect URI": {
+			contents: validConfigurationYAML(`
+clients:
+  - id: browser-app
+    redirect_uris:
+      - https://app.example.com/callback
+      - https://app.example.com/callback
+`),
+			errorText: "redirect URI",
+		},
+		"external HTTP redirect URI": {
+			contents: validConfigurationYAML(`
+clients:
+  - id: browser-app
+    redirect_uris: [http://app.example.com/callback]
+`),
+			errorText: "HTTP redirect URI is allowed only",
+		},
+		"confidential client private-use redirect URI": {
+			contents: validConfigurationYAML(`
+clients:
+  - id: native-app
+    secret_hash: client-hash
+    redirect_uris: [com.example.app:/oauth/callback]
+`),
+			errorText: "confidential clients must use HTTPS",
+		},
+		"public client invalid private-use scheme": {
+			contents: validConfigurationYAML(`
+clients:
+  - id: native-app
+    redirect_uris: [javascript:callback]
+`),
+			errorText: "must use reverse-domain notation",
+		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			configuration, err := Parse(test.contents)
+			configuration, err := Parse(withValidHashes(test.contents))
 
 			require.Nil(t, configuration)
 			require.ErrorContains(t, err, test.errorText)
@@ -529,5 +830,13 @@ config:
 ` + fragment
 		}
 	}
-	return []byte(base)
+	return withValidHashes([]byte(base))
+}
+
+func withValidHashes(contents []byte) []byte {
+	replacer := strings.NewReplacer(
+		"admin-hash", validArgon2idHash,
+		"client-hash", validArgon2idHash,
+	)
+	return []byte(replacer.Replace(string(contents)))
 }

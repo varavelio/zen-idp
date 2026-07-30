@@ -12,7 +12,7 @@ type Config struct {
 	Server Server
 	// UI contains the authentication interface presentation settings.
 	UI UI
-	// Security contains authentication and artifact lifetime settings.
+	// Security contains authentication and session policy settings.
 	Security Security
 	// Clients contains every OIDC client from the composed source.
 	Clients []Client
@@ -38,7 +38,7 @@ type UI struct {
 	FaviconURL string
 }
 
-// Security contains resolved security policy and lifetime settings.
+// Security contains resolved authentication and session policy settings.
 type Security struct {
 	// AdminPasswordHash is the Argon2id hash used for administrator authentication.
 	AdminPasswordHash string
@@ -46,8 +46,6 @@ type Security struct {
 	RateLimits RateLimits
 	// Session contains browser SSO session settings.
 	Session Session
-	// OIDC contains authorization code and token lifetime settings.
-	OIDC OIDC
 }
 
 // RateLimits contains resolved user login rate-limit settings.
@@ -64,16 +62,6 @@ type RateLimits struct {
 type Session struct {
 	// MaxAge is the absolute maximum lifetime of an SSO session.
 	MaxAge time.Duration
-}
-
-// OIDC contains resolved lifetimes for OIDC artifacts.
-type OIDC struct {
-	// AuthorizationCodeMaxAge is the maximum lifetime of an authorization code.
-	AuthorizationCodeMaxAge time.Duration
-	// IDTokenMaxAge is the maximum lifetime of an ID token.
-	IDTokenMaxAge time.Duration
-	// AccessTokenMaxAge is the maximum lifetime of a UserInfo access token.
-	AccessTokenMaxAge time.Duration
 }
 
 // Client is a configured OIDC client.
