@@ -20,17 +20,23 @@ tasks:
     desc: Install dependencies for the project
     cmd: go mod download
 
-  run:
-    desc: Build and run the service bootstrap with .env
+  serve:
+    desc: Build and run serve subcommand with .env
     deps:
       - build
     cmd: ./dist/zen-idp serve --env-file .env
 
   validate-config:
-    desc: Validate configuration using .env
+    desc: Build and run validate-config subcommand with .env
     deps:
       - build
     cmd: ./dist/zen-idp validate-config --env-file .env
+
+  generate-secrets:
+    desc: Build and run generate-secrets subcommand
+    deps:
+      - build
+    cmd: ./dist/zen-idp generate-secrets
 
   build:
     desc: Build the project
