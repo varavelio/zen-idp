@@ -1,177 +1,183 @@
 package yamlsource
 
 import (
-	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
-	"testing/fstest"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestDiscover(t *testing.T) {
-	filesystem := fstest.MapFS{
-		"config/zen-idp.yaml":           {Data: []byte("config: main\n")},
-		"config/users/engineering.YAML": {Data: []byte("users: [engineering]\n")},
-		"config/users/marketing.yml":    {Data: []byte("users: [marketing]\n")},
-		"config/clients/grafana.yaml":   {Data: []byte("clients: [grafana]\n")},
-		"config/clients/notes.txt":      {Data: []byte("ignored")},
-		"outside.yaml":                  {Data: []byte("outside: true\n")},
-	}
+	t.Run("reads one relative file from the working directory", func(t *testing.T) {
+		root := t.TempDir()
+		filePath := filepath.Join(root, "config", "zen-idp.yaml")
+		writeTestFile(t, filePath, "config: main\n")
+		t.Chdir(root)
 
-	t.Run("reads one literal file without its siblings", func(t *testing.T) {
-		files, err := Discover(filesystem, "config/zen-idp.yaml")
+		files, err := Discover(filepath.Join("config", "zen-idp.yaml"))
 		require.NoError(t, err)
-
-		require.Equal(t, []File{{
-			Path:    "config/zen-idp.yaml",
-			Content: []byte("config: main\n"),
-		}}, files)
+		require.Equal(t, []File{{Path: filePath, Content: []byte("config: main\n")}}, files)
 	})
 
-	t.Run("reads the immediate YAML files in a directory", func(t *testing.T) {
-		files, err := Discover(filesystem, "config/users")
-		require.NoError(t, err)
+	t.Run("reads immediate YAML files in deterministic order", func(t *testing.T) {
+		root := t.TempDir()
+		writeTestFile(t, filepath.Join(root, "marketing.yml"), "team: marketing\n")
+		writeTestFile(t, filepath.Join(root, "engineering.YAML"), "team: engineering\n")
+		writeTestFile(t, filepath.Join(root, "notes.txt"), "ignored\n")
+		writeTestFile(t, filepath.Join(root, "nested", "ignored.yaml"), "ignored: true\n")
 
+		files, err := Discover(root)
+		require.NoError(t, err)
 		require.Equal(t, []string{
-			"config/users/engineering.YAML",
-			"config/users/marketing.yml",
+			filepath.Join(root, "engineering.YAML"),
+			filepath.Join(root, "marketing.yml"),
 		}, filePaths(files))
 	})
 
-	t.Run("evaluates doublestar glob patterns", func(t *testing.T) {
-		files, err := Discover(filesystem, "config/**/m*.yml")
+	t.Run("evaluates a recursive doublestar glob", func(t *testing.T) {
+		root := t.TempDir()
+		writeTestFile(t, filepath.Join(root, "1.yaml"), "level: 1\n")
+		writeTestFile(t, filepath.Join(root, "bar", "2.yaml"), "level: 2\n")
+		writeTestFile(t, filepath.Join(root, "bar", "baz", "3.yaml"), "level: 3\n")
+
+		files, err := Discover(filepath.Join(root, "**", "*.yaml"))
 		require.NoError(t, err)
-
-		require.Equal(t, []string{"config/users/marketing.yml"}, filePaths(files))
-	})
-
-	t.Run("reads a directory matched by a glob", func(t *testing.T) {
-		files, err := Discover(filesystem, "config/u*")
-		require.NoError(t, err)
-
 		require.Equal(t, []string{
-			"config/users/engineering.YAML",
-			"config/users/marketing.yml",
+			filepath.Join(root, "1.yaml"),
+			filepath.Join(root, "bar", "2.yaml"),
+			filepath.Join(root, "bar", "baz", "3.yaml"),
 		}, filePaths(files))
 	})
 
-	t.Run("does not descend into a selected directory", func(t *testing.T) {
-		nestedFilesystem := fstest.MapFS{
-			"foo/1.yaml":         {Data: []byte("level: 1\n")},
-			"foo/bar/2.yaml":     {Data: []byte("level: 2\n")},
-			"foo/bar/baz/3.yaml": {Data: []byte("level: 3\n")},
-		}
+	t.Run("does not expand directories matched by a glob", func(t *testing.T) {
+		root := t.TempDir()
+		writeTestFile(t, filepath.Join(root, "users", "user.yaml"), "user: one\n")
 
-		files, err := Discover(nestedFilesystem, "foo")
-		require.NoError(t, err)
+		files, err := Discover(filepath.Join(root, "u*"))
 
-		require.Equal(t, []string{"foo/1.yaml"}, filePaths(files))
+		require.Nil(t, files)
+		require.ErrorContains(t, err, "no YAML files found")
 	})
 
-	t.Run("descends into directories when requested by a glob", func(t *testing.T) {
-		nestedFilesystem := fstest.MapFS{
-			"foo/1.yaml":         {Data: []byte("level: 1\n")},
-			"foo/bar/2.yaml":     {Data: []byte("level: 2\n")},
-			"foo/bar/baz/3.yaml": {Data: []byte("level: 3\n")},
-		}
+	t.Run("accepts exact and globbed symlinks to YAML files", func(t *testing.T) {
+		root := t.TempDir()
+		target := filepath.Join(root, "targets", "instance.yaml")
+		exactAlias := filepath.Join(root, "current")
+		globAlias := filepath.Join(root, "selected", "instance")
+		writeTestFile(t, target, "config: instance\n")
+		require.NoError(t, os.MkdirAll(filepath.Dir(globAlias), 0o700))
+		require.NoError(t, os.Symlink(target, exactAlias))
+		require.NoError(t, os.Symlink(target, globAlias))
 
-		files, err := Discover(nestedFilesystem, "foo/**/*.yaml")
+		exactFiles, err := Discover(exactAlias)
 		require.NoError(t, err)
+		require.Equal(t, []string{exactAlias}, filePaths(exactFiles))
 
-		require.Equal(t, []string{
-			"foo/1.yaml",
-			"foo/bar/2.yaml",
-			"foo/bar/baz/3.yaml",
-		}, filePaths(files))
+		globFiles, err := Discover(filepath.Join(root, "selected", "*"))
+		require.NoError(t, err)
+		require.Equal(t, []string{globAlias}, filePaths(globFiles))
 	})
 
-	t.Run("combines selectors without duplicate files", func(t *testing.T) {
-		files, err := Discover(
-			filesystem,
-			"config/**/*.yaml",
-			"config/users",
-			"config/zen-idp.yaml",
-		)
+	t.Run("includes symlinked regular YAML children", func(t *testing.T) {
+		root := t.TempDir()
+		target := filepath.Join(root, "targets", "source.txt")
+		alias := filepath.Join(root, "config", "source.yaml")
+		writeTestFile(t, target, "config: symlink\n")
+		require.NoError(t, os.MkdirAll(filepath.Dir(alias), 0o700))
+		require.NoError(t, os.Symlink(target, alias))
+
+		files, err := Discover(filepath.Dir(alias))
 		require.NoError(t, err)
-
-		require.Equal(t, []string{
-			"config/clients/grafana.yaml",
-			"config/users/engineering.YAML",
-			"config/users/marketing.yml",
-			"config/zen-idp.yaml",
-		}, filePaths(files))
+		require.Equal(t, []string{alias}, filePaths(files))
 	})
-}
 
-func TestDiscoverErrors(t *testing.T) {
+	t.Run("deduplicates aliases by resolved source identity", func(t *testing.T) {
+		root := t.TempDir()
+		target := filepath.Join(root, "targets", "users.yaml")
+		firstAlias := filepath.Join(root, "config", "first.yaml")
+		secondAlias := filepath.Join(root, "config", "second.yaml")
+		writeTestFile(t, target, "users: []\n")
+		require.NoError(t, os.MkdirAll(filepath.Dir(firstAlias), 0o700))
+		require.NoError(t, os.Symlink(target, firstAlias))
+		require.NoError(t, os.Symlink(target, secondAlias))
+
+		files, err := Discover(filepath.Dir(firstAlias))
+		require.NoError(t, err)
+		require.Equal(t, []string{firstAlias}, filePaths(files))
+	})
+
+	t.Run("rejects an exact YAML alias to a non-YAML target", func(t *testing.T) {
+		root := t.TempDir()
+		target := filepath.Join(root, "instance.txt")
+		alias := filepath.Join(root, "current.yaml")
+		writeTestFile(t, target, "config: instance\n")
+		require.NoError(t, os.Symlink(target, alias))
+
+		files, err := Discover(alias)
+
+		require.Nil(t, files)
+		require.ErrorContains(t, err, "no YAML files found")
+	})
+
 	tests := map[string]struct {
-		filesystem fstest.MapFS
-		selectors  []string
-		target     error
-		errorText  string
-		nilFS      bool
+		prepare   func(t *testing.T) string
+		errorText string
 	}{
-		"nil filesystem": {
-			selectors: []string{"config.yaml"},
-			errorText: "filesystem is nil",
-			nilFS:     true,
-		},
-		"no selectors": {
-			filesystem: fstest.MapFS{},
-			target:     ErrNoSelectors,
-			errorText:  "no YAML selectors provided",
-		},
 		"empty selector": {
-			filesystem: fstest.MapFS{},
-			selectors:  []string{""},
-			errorText:  "selector is empty",
+			prepare:   func(*testing.T) string { return "" },
+			errorText: "selector is empty",
 		},
-		"missing literal path": {
-			filesystem: fstest.MapFS{},
-			selectors:  []string{"missing.yaml"},
-			errorText:  "inspect YAML selector",
+		"missing exact path": {
+			prepare: func(t *testing.T) string {
+				return filepath.Join(t.TempDir(), "missing.yaml")
+			},
+			errorText: "inspect YAML selector",
 		},
 		"invalid glob": {
-			filesystem: fstest.MapFS{},
-			selectors:  []string{"config/[.yaml"},
-			errorText:  "invalid glob pattern",
+			prepare: func(t *testing.T) string {
+				return filepath.Join(t.TempDir(), "[.yaml")
+			},
+			errorText: "evaluate YAML glob",
 		},
 		"glob without matches": {
-			filesystem: fstest.MapFS{},
-			selectors:  []string{"config/**/*.yaml"},
-			target:     ErrNoFiles,
-			errorText:  "no YAML files found",
+			prepare: func(t *testing.T) string {
+				return filepath.Join(t.TempDir(), "**", "*.yaml")
+			},
+			errorText: "no YAML files found",
 		},
 		"directory without YAML files": {
-			filesystem: fstest.MapFS{"config/readme.txt": {Data: []byte("text")}},
-			selectors:  []string{"config"},
-			target:     ErrNoFiles,
-			errorText:  "no YAML files found",
+			prepare: func(t *testing.T) string {
+				root := t.TempDir()
+				writeTestFile(t, filepath.Join(root, "readme.txt"), "text\n")
+				return root
+			},
+			errorText: "no YAML files found",
 		},
-		"literal non-YAML file": {
-			filesystem: fstest.MapFS{"config.json": {Data: []byte("{}")}},
-			selectors:  []string{"config.json"},
-			target:     ErrNoFiles,
-			errorText:  "no YAML files found",
+		"exact non-YAML file": {
+			prepare: func(t *testing.T) string {
+				filePath := filepath.Join(t.TempDir(), "config.json")
+				writeTestFile(t, filePath, "{}\n")
+				return filePath
+			},
+			errorText: "no YAML files found",
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			var filesystem fs.FS = test.filesystem
-			if test.nilFS {
-				filesystem = nil
-			}
-
-			files, err := Discover(filesystem, test.selectors...)
+			files, err := Discover(test.prepare(t))
 
 			require.Nil(t, files)
 			require.ErrorContains(t, err, test.errorText)
-			if test.target != nil {
-				require.ErrorIs(t, err, test.target)
-			}
 		})
 	}
+}
+
+func writeTestFile(t *testing.T, filePath, content string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0o700))
+	require.NoError(t, os.WriteFile(filePath, []byte(content), 0o600))
 }
 
 func filePaths(files []File) []string {
