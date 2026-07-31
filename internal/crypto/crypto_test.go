@@ -2,54 +2,103 @@ package crypto
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"io"
 	"strings"
 	"testing"
 
+	"github.com/alexedwards/argon2id"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGenerateRootSecret(t *testing.T) {
-	t.Run("returns a secret from operating-system randomness", func(t *testing.T) {
-		secret, err := GenerateRootSecret()
-		require.NoError(t, err)
+func TestGenerateSecret(t *testing.T) {
+	tests := map[string]struct {
+		length        int
+		expectedValue string
+	}{
+		"administrator password": {
+			length:        administratorSecretLength,
+			expectedValue: "ZZZZZZZZZZZZZZ",
+		},
+		"machine secret": {
+			length:        machineSecretLength,
+			expectedValue: "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+		},
+	}
 
-		decoded, err := hex.DecodeString(secret)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			secret, err := generateSecret(
+				bytes.NewReader(bytes.Repeat([]byte{unbiasedByteLimit - 1}, test.length)),
+				test.length,
+			)
+			require.NoError(t, err)
+			require.Equal(t, test.expectedValue, secret)
+			for _, character := range secret {
+				require.Contains(t, base62Alphabet, string(character))
+			}
+		})
+	}
+
+	t.Run("discards bytes that would introduce modulo bias", func(t *testing.T) {
+		secret, err := generateSecret(bytes.NewReader([]byte{248, 255, 0, 249, 61}), 2)
+
 		require.NoError(t, err)
-		require.Len(t, decoded, rootSecretLength)
-		require.Len(t, secret, hex.EncodedLen(rootSecretLength))
+		require.Equal(t, "0Z", secret)
 	})
 
-	t.Run("encodes every byte from the randomness source", func(t *testing.T) {
-		randomBytes := bytes.Repeat([]byte{0xff}, rootSecretLength)
-
-		secret, err := generateRootSecret(bytes.NewReader(randomBytes))
-		require.NoError(t, err)
-
-		decoded, err := hex.DecodeString(secret)
-		require.NoError(t, err)
-		require.Equal(t, randomBytes, decoded)
-		require.Equal(t, strings.Repeat("ff", rootSecretLength), secret)
-	})
-
-	t.Run("propagates a randomness source error", func(t *testing.T) {
+	t.Run("propagates random source errors", func(t *testing.T) {
 		randomnessErr := errors.New("randomness unavailable")
 
-		secret, err := generateRootSecret(failingReader{err: randomnessErr})
+		secret, err := generateSecret(failingReader{err: randomnessErr}, 10)
 
 		require.Empty(t, secret)
 		require.ErrorIs(t, err, randomnessErr)
-		require.ErrorContains(t, err, "generate root secret: read random bytes")
 	})
 
 	t.Run("rejects insufficient randomness", func(t *testing.T) {
-		secret, err := generateRootSecret(strings.NewReader("insufficient"))
+		secret, err := generateSecret(strings.NewReader("short"), 10)
 
 		require.Empty(t, secret)
 		require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	})
+}
+
+func TestGenerateSecretBundle(t *testing.T) {
+	randomness := bytes.NewReader(bytes.Repeat(
+		[]byte{0},
+		machineSecretLength+administratorSecretLength+machineSecretLength,
+	))
+	hashCredential := func(plain string) (string, error) {
+		return "hash:" + plain, nil
+	}
+
+	bundle, err := generateSecretBundle(randomness, hashCredential)
+	require.NoError(t, err)
+
+	require.Len(t, bundle.RootSecret, machineSecretLength)
+	require.Len(t, bundle.AdministratorPlain, administratorSecretLength)
+	require.Equal(t, "hash:"+bundle.AdministratorPlain, bundle.AdministratorHash)
+	require.Len(t, bundle.OIDCClientSecretPlain, machineSecretLength)
+	require.Equal(t, "hash:"+bundle.OIDCClientSecretPlain, bundle.OIDCClientSecretHash)
+}
+
+func TestHashCredential(t *testing.T) {
+	hash, err := HashCredential("credential")
+	require.NoError(t, err)
+
+	params, salt, key, err := argon2id.DecodeHash(hash)
+	require.NoError(t, err)
+	require.Equal(t, uint32(argon2Memory), params.Memory)
+	require.Equal(t, uint32(argon2Iterations), params.Iterations)
+	require.Equal(t, uint8(argon2Parallelism), params.Parallelism)
+	require.Len(t, salt, argon2SaltLength)
+	require.Len(t, key, argon2KeyLength)
+
+	match, err := argon2id.ComparePasswordAndHash("credential", hash)
+	require.NoError(t, err)
+	require.True(t, match)
+	require.NoError(t, ValidateCredentialHash(hash))
 }
 
 type failingReader struct {
