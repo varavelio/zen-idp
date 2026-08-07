@@ -10,6 +10,9 @@ COPY --from=golangci/golangci-lint:v2.12.2 /usr/bin/golangci-lint /usr/local/bin
 # Install SQLC
 COPY --from=sqlc/sqlc:1.31.1 /workspace/sqlc /usr/local/bin/sqlc
 
+# Install Veta
+COPY --from=varavel/veta:0.1.0 /usr/local/bin/veta /usr/local/bin/veta
+
 # Set environment variables
 ENV \
   DEBIAN_FRONTEND="noninteractive" \
