@@ -385,7 +385,7 @@ config:
   security:
     admin_password_hash: invalid-hash
 `),
-			errorText: "must use the Argon2id PHC format with version 19",
+			errorText: "invalid Argon2id PHC hash",
 		},
 		"UI name is whitespace": {
 			contents: validConfigurationYAML(`
@@ -715,7 +715,7 @@ clients:
     secret_hash: invalid-hash
     redirect_uris: [https://app.example.com/callback]
 `),
-			errorText: "must use the Argon2id PHC format with version 19",
+			errorText: "invalid Argon2id PHC hash",
 		},
 		"client ID is whitespace": {
 			contents: validConfigurationYAML(`

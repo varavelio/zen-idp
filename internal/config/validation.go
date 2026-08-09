@@ -1,14 +1,13 @@
 package config
 
 import (
-	"encoding/base64"
 	"fmt"
 	"net"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
+	zencrypto "github.com/varavelio/zen-idp/internal/crypto"
 	"gopkg.in/yaml.v3"
 )
 
@@ -180,55 +179,7 @@ func validateHTTPSURL(value string) error {
 }
 
 func validateArgon2idHash(value string) error {
-	parts := strings.Split(value, "$")
-	if len(parts) != 6 || parts[0] != "" || parts[1] != "argon2id" || parts[2] != "v=19" {
-		return fmt.Errorf("must use the Argon2id PHC format with version 19")
-	}
-	if err := validateArgon2Parameters(parts[3]); err != nil {
-		return err
-	}
-	if err := validatePHCBase64("salt", parts[4], 8); err != nil {
-		return err
-	}
-	return validatePHCBase64("hash", parts[5], 16)
-}
-
-func validateArgon2Parameters(value string) error {
-	parameters := strings.Split(value, ",")
-	if len(parameters) != 3 {
-		return fmt.Errorf("must define positive m, t, and p parameters")
-	}
-
-	expectedNames := [...]string{"m", "t", "p"}
-	for index, parameter := range parameters {
-		name, rawValue, found := strings.Cut(parameter, "=")
-		if !found || name != expectedNames[index] || !isDecimal(rawValue) {
-			return fmt.Errorf("parameters must appear exactly once in m, t, p order")
-		}
-		bits := 32
-		if name == "p" {
-			bits = 8
-		}
-		parsed, err := strconv.ParseUint(rawValue, 10, bits)
-		if err != nil || parsed == 0 {
-			return fmt.Errorf("parameter %s must be a positive decimal integer", name)
-		}
-	}
-	return nil
-}
-
-func validatePHCBase64(name, value string, minimumBytes int) error {
-	if value == "" || strings.Contains(value, "=") {
-		return fmt.Errorf("%s must use unpadded PHC Base64", name)
-	}
-	decoded, err := base64.RawStdEncoding.Strict().DecodeString(value)
-	if err != nil {
-		return fmt.Errorf("%s must use unpadded PHC Base64: %w", name, err)
-	}
-	if len(decoded) < minimumBytes {
-		return fmt.Errorf("%s must decode to at least %d bytes", name, minimumBytes)
-	}
-	return nil
+	return zencrypto.ValidateCredentialHash(value)
 }
 
 func validateRedirectURIs(client Client) error {
@@ -296,16 +247,4 @@ func isLocalHost(host string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-func isDecimal(value string) bool {
-	if value == "" {
-		return false
-	}
-	for _, character := range value {
-		if character < '0' || character > '9' {
-			return false
-		}
-	}
-	return true
 }

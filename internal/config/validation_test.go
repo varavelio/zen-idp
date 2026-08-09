@@ -17,35 +17,35 @@ func TestValidateArgon2idHash(t *testing.T) {
 	}{
 		"wrong algorithm": {
 			value:     "$argon2i$v=19$m=19456,t=2,p=1$YWRtaW5TYWx0$MDEyMzQ1Njc4OWFiY2RlZg",
-			errorText: "Argon2id PHC format",
+			errorText: "invalid Argon2id PHC hash",
 		},
 		"wrong version": {
 			value:     "$argon2id$v=16$m=19456,t=2,p=1$YWRtaW5TYWx0$MDEyMzQ1Njc4OWFiY2RlZg",
-			errorText: "version 19",
+			errorText: "invalid Argon2id PHC hash",
 		},
 		"missing parameter": {
 			value:     "$argon2id$v=19$m=19456,t=2$YWRtaW5TYWx0$MDEyMzQ1Njc4OWFiY2RlZg",
-			errorText: "positive m, t, and p",
+			errorText: "invalid Argon2id PHC hash",
 		},
 		"parameters out of order": {
 			value:     "$argon2id$v=19$t=2,m=19456,p=1$YWRtaW5TYWx0$MDEyMzQ1Njc4OWFiY2RlZg",
-			errorText: "m, t, p order",
+			errorText: "invalid Argon2id PHC hash",
 		},
 		"zero parameter": {
 			value:     "$argon2id$v=19$m=19456,t=0,p=1$YWRtaW5TYWx0$MDEyMzQ1Njc4OWFiY2RlZg",
-			errorText: "parameter t must be a positive",
+			errorText: "m, t, and p parameters must be positive",
 		},
 		"padded salt": {
 			value:     "$argon2id$v=19$m=19456,t=2,p=1$YWRtaW5TYWx0==$MDEyMzQ1Njc4OWFiY2RlZg",
-			errorText: "salt must use unpadded",
+			errorText: "invalid Argon2id PHC hash",
 		},
 		"short salt": {
 			value:     "$argon2id$v=19$m=19456,t=2,p=1$c2hvcnQ$MDEyMzQ1Njc4OWFiY2RlZg",
-			errorText: "salt must decode to at least 8 bytes",
+			errorText: "salt must contain at least 8 bytes",
 		},
 		"short hash": {
 			value:     "$argon2id$v=19$m=19456,t=2,p=1$YWRtaW5TYWx0$c2hvcnQ",
-			errorText: "hash must decode to at least 16 bytes",
+			errorText: "hash must contain at least 16 bytes",
 		},
 	}
 
