@@ -472,7 +472,7 @@ func validateClients(clients []Client) error {
 }
 
 // validateUsers checks subject constraints and the shared identity/login
-// namespace required by the specification.
+// namespace.
 func validateUsers(users []User) error {
 	identifiers := make(map[string]int, len(users)*2)
 	for index, user := range users {
