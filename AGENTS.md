@@ -26,6 +26,11 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 - Treat tests as our primary tool to catch regressions. Write every test to guarantee long-term stability, correctness, functionality, and maintainability as the codebase evolves.
 - Group test cases with subtests (Go): Keep all test cases for a given function inside a single top-level Test function using subtests (t.Run). This maintains a clean structure and avoids file clutter when testing multiple functions in the same file.
 
+## Data Storage
+
+- Generated record identifiers used as SQLite primary keys MUST be RFC 9562 UUIDv7 values stored as TEXT.
+- Operator-declared natural keys, such as the YAML `sub` identifier, remain as declared and are not converted to UUIDs.
+
 ## Project structure
 
 This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
@@ -38,6 +43,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/jwt: Signs and verifies RS256 JSON Web Tokens with the deterministic signing identity
 - internal/rsakeygen: Derives the deterministic RSA-2048 signing key pair from the normalized root secret
 - internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including an explicitly selected env file
+- internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
 - internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret and verifies authenticator codes
 - internal/yamlmerge: Merges YAML documents into one unified document
 - internal/yamlsource: Discovers and reads YAML files from filesystem paths, directories, and glob patterns

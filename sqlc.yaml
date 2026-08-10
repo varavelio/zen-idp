@@ -1,0 +1,16 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    queries: "./internal/statestore/queries"
+    schema: "./internal/statestore/migrations"
+    gen:
+      go:
+        sql_package: "database/sql"
+        package: "statestore"
+        out: "./internal/statestore/"
+        output_batch_file_name: "batch.gen.go"
+        output_db_file_name: "db.gen.go"
+        output_models_file_name: "models.gen.go"
+        output_querier_file_name: "querier.gen.go"
+        output_copyfrom_file_name: "copyfrom.gen.go"
+        output_files_suffix: ".gen"

@@ -59,3 +59,11 @@ tasks:
     cmds:
       - go test ./...
       - CGO_ENABLED=1 go test -race ./...
+
+  goose:
+    desc: Run goose binary (configured for statestore)
+    cmd: goose {{.CLI_ARGS}}
+    env:
+      GOOSE_DRIVER: sqlite3
+      GOOSE_DBSTRING: ./state.db
+      GOOSE_MIGRATION_DIR: ./internal/statestore/migrations

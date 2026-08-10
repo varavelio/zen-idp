@@ -9,3 +9,8 @@
 
 # Build output
 /dist
+
+# Development DB
+*.db
+*.sqlite
+*.sqlite3
