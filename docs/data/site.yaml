@@ -1,0 +1,5 @@
+title: "Zen IdP"
+description: "A declarative, zero-maintenance OIDC Identity Provider."
+site_url: "https://zen-idp.varavel.com"
+
+docs_github_repo: "varavelio/zen-idp"
