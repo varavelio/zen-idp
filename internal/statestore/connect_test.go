@@ -19,6 +19,10 @@ func TestConnect(t *testing.T) {
 		requirePragma(t, db, "PRAGMA journal_mode", "wal")
 		requirePragma(t, db, "PRAGMA foreign_keys", "1")
 		requirePragma(t, db, "PRAGMA busy_timeout", "5000")
+		requirePragma(t, db, "PRAGMA temp_store", "2")
+		requirePragma(t, db, "PRAGMA cache_size", "-64000")
+
+		require.Equal(t, maxOpenConns, db.Stats().MaxOpenConnections)
 
 		_, err = db.ExecContext(
 			context.Background(),
