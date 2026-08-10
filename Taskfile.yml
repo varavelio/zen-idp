@@ -40,7 +40,14 @@ tasks:
 
   build:
     desc: Build the project
+    deps:
+      - codegen
     cmd: go build -o ./dist/zen-idp ./cmd/zen-idp/.
+
+  codegen:
+    desc: Run code generators
+    cmds:
+      - sqlc generate
 
   format:
     desc: Format all code
