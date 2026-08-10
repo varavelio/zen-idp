@@ -69,8 +69,19 @@ func TestParse(t *testing.T) {
 			parsed, err := Parse(test.input)
 			require.NoError(t, err)
 			require.True(t, parsed.Equal(test.expected))
+			require.Equal(t, time.UTC, parsed.Location())
 		})
 	}
+}
+
+// TestParseReturnsUTC anchors the invariant that Parse never leaks a
+// non-UTC zone to its callers, even for instants that would otherwise be
+// representable with an offset.
+func TestParseReturnsUTC(t *testing.T) {
+	parsed, err := Parse("2026-08-10T12:00:00Z")
+	require.NoError(t, err)
+	require.Equal(t, time.UTC, parsed.Location())
+	require.Equal(t, 12, parsed.Hour())
 }
 
 func TestParseRejectsNonCanonical(t *testing.T) {

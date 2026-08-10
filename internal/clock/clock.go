@@ -18,7 +18,8 @@ func Format(t time.Time) string {
 
 // Parse interprets s as a canonical UTC RFC 3339 timestamp with second
 // precision. It rejects every other layout, including offsets, fractional
-// seconds, and the SQLite space-separated format.
+// seconds, and the SQLite space-separated format. The returned time is
+// always in UTC.
 func Parse(s string) (time.Time, error) {
 	parsed, err := time.Parse(layout, s)
 	if err != nil {
@@ -29,7 +30,9 @@ func Parse(s string) (time.Time, error) {
 	if parsed.Format(layout) != s {
 		return time.Time{}, fmt.Errorf("parse timestamp %q: not in canonical format", s)
 	}
-	return parsed, nil
+	// Normalize the location so callers never observe a non-UTC zone,
+	// regardless of layout changes.
+	return parsed.UTC(), nil
 }
 
 // Now returns the current instant as a canonical UTC RFC 3339 timestamp
