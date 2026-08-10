@@ -1,12 +1,17 @@
 // Package totp derives the deterministic per-user TOTP shared secrets used by
-// Zen IdP authentication.
+// Zen IdP authentication and verifies authenticator codes against them.
 //
 // # Scope
 //
-// This package implements only the deterministic per-user shared-secret
-// derivation. It does not generate or verify TOTP codes; the derived secret
-// is a standard RFC 4648 Base32 value that any RFC 6238 authenticator
-// (HMAC-SHA-1, 30-second step, six digits) consumes directly.
+// The package implements both halves of the TOTP credential domain:
+//
+//   - DeriveSharedSecret derives the deterministic per-user shared secret
+//     from the normalized root secret, the exact sub, and the effective
+//     TOTP revision.
+//   - VerifyCode checks a submitted code against a derived secret using the
+//     RFC 6238 authenticator profile: HMAC-SHA-1, a 30-second step, six
+//     decimal digits, and at most one adjacent step in either direction
+//     for clock skew.
 //
 // # Derivation contract
 //
