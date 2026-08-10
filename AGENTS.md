@@ -32,7 +32,12 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 
 - cmd/zen-idp: The entry point of the program
 - internal/config: Parses, defaults, and validates a unified YAML document into typed configuration
+- internal/configloader: Discovers, composes, parses, and validates the configured YAML source
 - internal/crypto: Provides cryptographic primitives and utilities
-- internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including optional dotenv values
+- internal/jwk: Derives the public RSA JWK and the stable RFC 7638 key identifier of the signing identity
+- internal/jwt: Signs and verifies RS256 JSON Web Tokens with the deterministic signing identity
+- internal/rsakeygen: Derives the deterministic RSA-2048 signing key pair from the normalized root secret
+- internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including an explicitly selected env file
+- internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret and verifies authenticator codes
 - internal/yamlmerge: Merges YAML documents into one unified document
 - internal/yamlsource: Discovers and reads YAML files from filesystem paths, directories, and glob patterns
