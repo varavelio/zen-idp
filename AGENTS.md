@@ -40,6 +40,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/config: Parses, defaults, and validates a unified YAML document into typed configuration
 - internal/configloader: Discovers, composes, parses, and validates the configured YAML source
 - internal/crypto: Provides cryptographic primitives and utilities
+- internal/id: Generates prefix-less TypeID identifiers for state records
 - internal/jwk: Derives the public RSA JWK and the stable RFC 7638 key identifier of the signing identity
 - internal/jwt: Signs and verifies RS256 JSON Web Tokens with the deterministic signing identity
 - internal/rsakeygen: Derives the deterministic RSA-2048 signing key pair from the normalized root secret
