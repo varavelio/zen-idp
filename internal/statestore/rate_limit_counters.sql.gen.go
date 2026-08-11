@@ -9,30 +9,26 @@ import (
 	"context"
 )
 
-const createRateLimitCounter = `-- name: CreateRateLimitCounter :exec
-INSERT INTO rate_limit_counters (key, attempts, reset_at, updated_at)
-VALUES (?1, 1, ?2, ?3)
-ON CONFLICT (key) DO NOTHING
-`
-
-type CreateRateLimitCounterParams struct {
-	Key       string
-	ResetAt   string
-	UpdatedAt string
-}
-
-func (q *Queries) CreateRateLimitCounter(ctx context.Context, arg CreateRateLimitCounterParams) error {
-	_, err := q.db.ExecContext(ctx, createRateLimitCounter, arg.Key, arg.ResetAt, arg.UpdatedAt)
-	return err
-}
-
-const deleteExpiredRateLimitCounters = `-- name: DeleteExpiredRateLimitCounters :exec
+const deleteExpiredRateLimitCounters = `-- name: DeleteExpiredRateLimitCounters :execrows
 DELETE FROM rate_limit_counters
 WHERE reset_at < ?1
 `
 
-func (q *Queries) DeleteExpiredRateLimitCounters(ctx context.Context, now string) error {
-	_, err := q.db.ExecContext(ctx, deleteExpiredRateLimitCounters, now)
+func (q *Queries) DeleteExpiredRateLimitCounters(ctx context.Context, now string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteExpiredRateLimitCounters, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteRateLimitCounter = `-- name: DeleteRateLimitCounter :exec
+DELETE FROM rate_limit_counters
+WHERE key = ?1
+`
+
+func (q *Queries) DeleteRateLimitCounter(ctx context.Context, key string) error {
+	_, err := q.db.ExecContext(ctx, deleteRateLimitCounter, key)
 	return err
 }
 
@@ -54,19 +50,36 @@ func (q *Queries) GetRateLimitCounter(ctx context.Context, key string) (RateLimi
 	return i, err
 }
 
-const incrementRateLimitCounter = `-- name: IncrementRateLimitCounter :exec
-UPDATE rate_limit_counters
-SET attempts = attempts + 1,
-    updated_at = ?1
-WHERE key = ?2
+const recordRateLimitAttempt = `-- name: RecordRateLimitAttempt :exec
+INSERT INTO rate_limit_counters (key, attempts, reset_at, updated_at)
+VALUES (?1, 1, ?2, ?3)
+ON CONFLICT (key) DO UPDATE SET
+    attempts = CASE
+        WHEN rate_limit_counters.reset_at <= excluded.updated_at THEN 1
+        ELSE rate_limit_counters.attempts + 1
+    END,
+    reset_at = CASE
+        WHEN rate_limit_counters.reset_at <= excluded.updated_at THEN excluded.reset_at
+        ELSE rate_limit_counters.reset_at
+    END,
+    updated_at = excluded.updated_at
 `
 
-type IncrementRateLimitCounterParams struct {
-	UpdatedAt string
+type RecordRateLimitAttemptParams struct {
 	Key       string
+	ResetAt   string
+	UpdatedAt string
 }
 
-func (q *Queries) IncrementRateLimitCounter(ctx context.Context, arg IncrementRateLimitCounterParams) error {
-	_, err := q.db.ExecContext(ctx, incrementRateLimitCounter, arg.UpdatedAt, arg.Key)
+// RecordRateLimitAttempt counts one failed attempt for a key in a single
+// atomic statement. Inserting the first attempt and incrementing an existing
+// counter in one upsert prevents concurrent failures from being
+// double-counted. When the stored reset_at has already passed, the window
+// restarts: attempts resets to 1 and reset_at advances by the window.
+// updated_at carries the current instant and doubles as the comparison time;
+// canonical RFC 3339 UTC timestamps compare lexicographically, so the
+// reset_at <= excluded.updated_at test is a valid time comparison.
+func (q *Queries) RecordRateLimitAttempt(ctx context.Context, arg RecordRateLimitAttemptParams) error {
+	_, err := q.db.ExecContext(ctx, recordRateLimitAttempt, arg.Key, arg.ResetAt, arg.UpdatedAt)
 	return err
 }
