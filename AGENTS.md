@@ -36,6 +36,7 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
 
 - cmd/zen-idp: The entry point of the program
+- internal/cli: Parses Zen IdP command-line invocations into typed commands
 - internal/clock: Formats and parses the canonical UTC RFC 3339 timestamps used by the state database
 - internal/config: Parses, defaults, and validates a unified YAML document into typed configuration
 - internal/configloader: Discovers, composes, parses, and validates the configured YAML source
@@ -45,6 +46,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/jwt: Signs and verifies RS256 JSON Web Tokens with the deterministic signing identity
 - internal/rsakeygen: Derives the deterministic RSA-2048 signing key pair from the normalized root secret
 - internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including an explicitly selected env file
+- internal/server: Exposes Zen IdP's HTTP endpoints with injected dependencies and centralized error handling
 - internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
 - internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret and verifies authenticator codes
 - internal/yamlmerge: Merges YAML documents into one unified document
