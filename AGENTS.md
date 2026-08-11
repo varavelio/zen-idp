@@ -44,6 +44,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/id: Generates prefix-less TypeID identifiers for state records
 - internal/jwk: Derives the public RSA JWK and the stable RFC 7638 key identifier of the signing identity
 - internal/jwt: Signs and verifies RS256 JSON Web Tokens with the deterministic signing identity
+- internal/lock: Manages the disposable panic and administrative locks that gate login and SSO use
 - internal/rsakeygen: Derives the deterministic RSA-2048 signing key pair from the normalized root secret
 - internal/ratelimit: Enforces per-key failed-attempt limits over fixed windows with SQLite-backed atomic counters
 - internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including an explicitly selected env file
