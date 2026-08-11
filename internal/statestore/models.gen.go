@@ -22,13 +22,19 @@ type AuditRecord struct {
 }
 
 type OneUseToken struct {
-	ID         string
-	SecretHash []byte
-	Sub        string
-	TotpRev    int64
-	ExpiresAt  string
-	ConsumedAt sql.NullString
-	CreatedAt  string
+	ID            string
+	SecretHash    []byte
+	Sub           string
+	TotpRev       int64
+	ExpiresAt     string
+	ConsumedAt    sql.NullString
+	CreatedAt     string
+	ClientID      sql.NullString
+	RedirectUri   sql.NullString
+	Scope         sql.NullString
+	Nonce         sql.NullString
+	PkceChallenge sql.NullString
+	PkceMethod    sql.NullString
 }
 
 type PanicLock struct {

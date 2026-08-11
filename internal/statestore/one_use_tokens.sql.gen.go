@@ -10,7 +10,7 @@ import (
 	"database/sql"
 )
 
-const consumeOneUseToken = `-- name: ConsumeOneUseToken :exec
+const consumeOneUseToken = `-- name: ConsumeOneUseToken :execrows
 UPDATE one_use_tokens
 SET consumed_at = ?1
 WHERE id = ?2
@@ -22,9 +22,12 @@ type ConsumeOneUseTokenParams struct {
 	ID         string
 }
 
-func (q *Queries) ConsumeOneUseToken(ctx context.Context, arg ConsumeOneUseTokenParams) error {
-	_, err := q.db.ExecContext(ctx, consumeOneUseToken, arg.ConsumedAt, arg.ID)
-	return err
+func (q *Queries) ConsumeOneUseToken(ctx context.Context, arg ConsumeOneUseTokenParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, consumeOneUseToken, arg.ConsumedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const createOneUseToken = `-- name: CreateOneUseToken :exec
@@ -34,24 +37,42 @@ INSERT INTO one_use_tokens (
     sub,
     totp_rev,
     expires_at,
-    created_at
+    created_at,
+    client_id,
+    redirect_uri,
+    scope,
+    nonce,
+    pkce_challenge,
+    pkce_method
 ) VALUES (
     ?1,
     ?2,
     ?3,
     ?4,
     ?5,
-    ?6
+    ?6,
+    ?7,
+    ?8,
+    ?9,
+    ?10,
+    ?11,
+    ?12
 )
 `
 
 type CreateOneUseTokenParams struct {
-	ID         string
-	SecretHash []byte
-	Sub        string
-	TotpRev    int64
-	ExpiresAt  string
-	CreatedAt  string
+	ID            string
+	SecretHash    []byte
+	Sub           string
+	TotpRev       int64
+	ExpiresAt     string
+	CreatedAt     string
+	ClientID      sql.NullString
+	RedirectUri   sql.NullString
+	Scope         sql.NullString
+	Nonce         sql.NullString
+	PkceChallenge sql.NullString
+	PkceMethod    sql.NullString
 }
 
 func (q *Queries) CreateOneUseToken(ctx context.Context, arg CreateOneUseTokenParams) error {
@@ -62,22 +83,42 @@ func (q *Queries) CreateOneUseToken(ctx context.Context, arg CreateOneUseTokenPa
 		arg.TotpRev,
 		arg.ExpiresAt,
 		arg.CreatedAt,
+		arg.ClientID,
+		arg.RedirectUri,
+		arg.Scope,
+		arg.Nonce,
+		arg.PkceChallenge,
+		arg.PkceMethod,
 	)
 	return err
 }
 
-const deleteExpiredOneUseTokens = `-- name: DeleteExpiredOneUseTokens :exec
+const deleteExpiredOneUseTokens = `-- name: DeleteExpiredOneUseTokens :execrows
 DELETE FROM one_use_tokens
 WHERE expires_at < ?1
 `
 
-func (q *Queries) DeleteExpiredOneUseTokens(ctx context.Context, now string) error {
-	_, err := q.db.ExecContext(ctx, deleteExpiredOneUseTokens, now)
+func (q *Queries) DeleteExpiredOneUseTokens(ctx context.Context, now string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteExpiredOneUseTokens, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteOneUseToken = `-- name: DeleteOneUseToken :exec
+DELETE FROM one_use_tokens
+WHERE id = ?1
+`
+
+func (q *Queries) DeleteOneUseToken(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteOneUseToken, id)
 	return err
 }
 
 const getOneUseToken = `-- name: GetOneUseToken :one
-SELECT id, secret_hash, sub, totp_rev, expires_at, consumed_at, created_at
+SELECT id, secret_hash, sub, totp_rev, expires_at, consumed_at, created_at,
+       client_id, redirect_uri, scope, nonce, pkce_challenge, pkce_method
 FROM one_use_tokens
 WHERE id = ?1
 `
@@ -93,6 +134,12 @@ func (q *Queries) GetOneUseToken(ctx context.Context, id string) (OneUseToken, e
 		&i.ExpiresAt,
 		&i.ConsumedAt,
 		&i.CreatedAt,
+		&i.ClientID,
+		&i.RedirectUri,
+		&i.Scope,
+		&i.Nonce,
+		&i.PkceChallenge,
+		&i.PkceMethod,
 	)
 	return i, err
 }
