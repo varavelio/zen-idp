@@ -33,17 +33,18 @@ func (q *Queries) ConsumeOneUseToken(ctx context.Context, arg ConsumeOneUseToken
 const createOneUseToken = `-- name: CreateOneUseToken :exec
 INSERT INTO one_use_tokens (
     id,
+    kind,
     secret_hash,
     sub,
     totp_rev,
     expires_at,
     created_at,
-    client_id,
-    redirect_uri,
-    scope,
-    nonce,
-    pkce_challenge,
-    pkce_method
+    code_client_id,
+    code_redirect_uri,
+    code_scope,
+    code_nonce,
+    code_pkce_challenge,
+    code_pkce_method
 ) VALUES (
     ?1,
     ?2,
@@ -56,39 +57,42 @@ INSERT INTO one_use_tokens (
     ?9,
     ?10,
     ?11,
-    ?12
+    ?12,
+    ?13
 )
 `
 
 type CreateOneUseTokenParams struct {
-	ID            string
-	SecretHash    []byte
-	Sub           string
-	TotpRev       int64
-	ExpiresAt     string
-	CreatedAt     string
-	ClientID      sql.NullString
-	RedirectUri   sql.NullString
-	Scope         sql.NullString
-	Nonce         sql.NullString
-	PkceChallenge sql.NullString
-	PkceMethod    sql.NullString
+	ID                string
+	Kind              string
+	SecretHash        []byte
+	Sub               string
+	TotpRev           int64
+	ExpiresAt         string
+	CreatedAt         string
+	CodeClientID      sql.NullString
+	CodeRedirectUri   sql.NullString
+	CodeScope         sql.NullString
+	CodeNonce         sql.NullString
+	CodePkceChallenge sql.NullString
+	CodePkceMethod    sql.NullString
 }
 
 func (q *Queries) CreateOneUseToken(ctx context.Context, arg CreateOneUseTokenParams) error {
 	_, err := q.db.ExecContext(ctx, createOneUseToken,
 		arg.ID,
+		arg.Kind,
 		arg.SecretHash,
 		arg.Sub,
 		arg.TotpRev,
 		arg.ExpiresAt,
 		arg.CreatedAt,
-		arg.ClientID,
-		arg.RedirectUri,
-		arg.Scope,
-		arg.Nonce,
-		arg.PkceChallenge,
-		arg.PkceMethod,
+		arg.CodeClientID,
+		arg.CodeRedirectUri,
+		arg.CodeScope,
+		arg.CodeNonce,
+		arg.CodePkceChallenge,
+		arg.CodePkceMethod,
 	)
 	return err
 }
@@ -117,8 +121,9 @@ func (q *Queries) DeleteOneUseToken(ctx context.Context, id string) error {
 }
 
 const getOneUseToken = `-- name: GetOneUseToken :one
-SELECT id, secret_hash, sub, totp_rev, expires_at, consumed_at, created_at,
-       client_id, redirect_uri, scope, nonce, pkce_challenge, pkce_method
+SELECT id, kind, secret_hash, sub, totp_rev, expires_at, consumed_at, created_at,
+       code_client_id, code_redirect_uri, code_scope, code_nonce,
+       code_pkce_challenge, code_pkce_method
 FROM one_use_tokens
 WHERE id = ?1
 `
@@ -128,18 +133,19 @@ func (q *Queries) GetOneUseToken(ctx context.Context, id string) (OneUseToken, e
 	var i OneUseToken
 	err := row.Scan(
 		&i.ID,
+		&i.Kind,
 		&i.SecretHash,
 		&i.Sub,
 		&i.TotpRev,
 		&i.ExpiresAt,
 		&i.ConsumedAt,
 		&i.CreatedAt,
-		&i.ClientID,
-		&i.RedirectUri,
-		&i.Scope,
-		&i.Nonce,
-		&i.PkceChallenge,
-		&i.PkceMethod,
+		&i.CodeClientID,
+		&i.CodeRedirectUri,
+		&i.CodeScope,
+		&i.CodeNonce,
+		&i.CodePkceChallenge,
+		&i.CodePkceMethod,
 	)
 	return i, err
 }
