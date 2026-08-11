@@ -4,13 +4,14 @@
 // can be redeemed exactly once before its absolute expiration. It is the
 // mechanism behind enrollment tokens and OIDC authorization codes: both are
 // allowlisted records in the same one_use_tokens table, distinguished by
-// their bindings. Enrollment tokens bind a subject and TOTP revision;
+// their kind. Enrollment tokens bind a subject and TOTP revision;
 // authorization codes additionally bind a client, exact redirect URI,
 // requested scopes, optional nonce, and the PKCE challenge and method when
-// PKCE was used.
+// PKCE was used. The table enforces that a row's kind matches its bindings.
 //
 // The secret half is persisted only as an HMAC-SHA-256 digest keyed by the
-// normalized root secret with a dedicated domain-separated prefix, so a
+// normalized root secret with a dedicated domain-separated prefix that
+// includes the token kind, so each kind hashes in its own domain and a
 // stolen database is insufficient to redeem a token. Consumption is an
 // atomic SQLite update that succeeds exactly once; concurrent or repeated
 // redemption attempts fail.

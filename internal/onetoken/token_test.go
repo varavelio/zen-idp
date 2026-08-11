@@ -61,22 +61,30 @@ func TestParseToken(t *testing.T) {
 }
 
 func TestHashSecret(t *testing.T) {
-	t.Run("matches the independent reference vector", func(t *testing.T) {
-		digest := hashSecret(referenceRootSecret, referenceSecret)
+	t.Run("enrollment matches the independent reference vector", func(t *testing.T) {
+		digest := hashSecret(referenceRootSecret, kindEnrollment, referenceSecret)
 		require.Equal(t,
-			"2f5422ac377405fc25a4cbf1f5e9abbe33eccf3ca12fb797acb78f1d6d6877c1",
+			"4e275f608f0b1a186bfda6acec9f0917e26a496d74c24e5a2bd47b3e40505c01",
+			hex.EncodeToString(digest),
+		)
+	})
+
+	t.Run("code matches the independent reference vector", func(t *testing.T) {
+		digest := hashSecret(referenceRootSecret, kindCode, referenceSecret)
+		require.Equal(t,
+			"46b7b05ce9b40fa8a20a2f88581ab2deb08c60cc5c89583d10c11f11732a9180",
 			hex.EncodeToString(digest),
 		)
 	})
 
 	t.Run("is deterministic", func(t *testing.T) {
-		first := hashSecret(referenceRootSecret, referenceSecret)
-		second := hashSecret(referenceRootSecret, referenceSecret)
+		first := hashSecret(referenceRootSecret, kindCode, referenceSecret)
+		second := hashSecret(referenceRootSecret, kindCode, referenceSecret)
 		require.Equal(t, first, second)
 	})
 
 	t.Run("is domain-separated from the bare secret digest", func(t *testing.T) {
-		digest := hashSecret(referenceRootSecret, referenceSecret)
+		digest := hashSecret(referenceRootSecret, kindCode, referenceSecret)
 		require.NotEqual(t,
 			"8bce7c70eeaa85037d51114f6d9960fbee52c1a9314826709858fc51bbed43a4",
 			hex.EncodeToString(digest),
@@ -84,11 +92,17 @@ func TestHashSecret(t *testing.T) {
 	})
 
 	t.Run("is domain-separated from the session digest", func(t *testing.T) {
-		digest := hashSecret(referenceRootSecret, referenceSecret)
+		digest := hashSecret(referenceRootSecret, kindCode, referenceSecret)
 		require.NotEqual(t,
 			"8e0c69b39fec2d0aecfb6385f00042e93351b43facf25310d62d938a51c3fab5",
 			hex.EncodeToString(digest),
 		)
+	})
+
+	t.Run("differs across kinds", func(t *testing.T) {
+		enrollment := hashSecret(referenceRootSecret, kindEnrollment, referenceSecret)
+		code := hashSecret(referenceRootSecret, kindCode, referenceSecret)
+		require.NotEqual(t, enrollment, code)
 	})
 
 	t.Run("differs across root secrets and secrets", func(t *testing.T) {
@@ -96,12 +110,12 @@ func TestHashSecret(t *testing.T) {
 		otherRoot[0] = 0xff
 
 		require.NotEqual(t,
-			hashSecret(referenceRootSecret, referenceSecret),
-			hashSecret(otherRoot, referenceSecret),
+			hashSecret(referenceRootSecret, kindCode, referenceSecret),
+			hashSecret(otherRoot, kindCode, referenceSecret),
 		)
 		require.NotEqual(t,
-			hashSecret(referenceRootSecret, referenceSecret),
-			hashSecret(referenceRootSecret, referenceSecret+"x"),
+			hashSecret(referenceRootSecret, kindCode, referenceSecret),
+			hashSecret(referenceRootSecret, kindCode, referenceSecret+"x"),
 		)
 	})
 }

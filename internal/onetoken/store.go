@@ -94,6 +94,7 @@ func (store *Store) CreateEnrollment(ctx context.Context, params EnrollmentParam
 		params.TOTPRev,
 		params.ExpiresAt,
 		params.Now,
+		kindEnrollment,
 		codeBindings{},
 	)
 }
@@ -108,7 +109,7 @@ func (store *Store) ConsumeEnrollment(
 	token string,
 	now time.Time,
 ) (Enrollment, error) {
-	record, err := store.consume(ctx, token, now, false)
+	record, err := store.consume(ctx, token, now, kindEnrollment)
 	if err != nil {
 		return Enrollment{}, err
 	}
@@ -180,6 +181,7 @@ func (store *Store) CreateCode(ctx context.Context, params CodeParams) (string, 
 		params.TOTPRev,
 		params.ExpiresAt,
 		params.Now,
+		kindCode,
 		codeBindings{
 			clientID:      params.ClientID,
 			redirectURI:   params.RedirectURI,
@@ -197,7 +199,7 @@ func (store *Store) CreateCode(ctx context.Context, params CodeParams) (string, 
 // stored digest, the absolute expiration must not have passed, and the
 // record must be an authorization code rather than an enrollment token.
 func (store *Store) ConsumeCode(ctx context.Context, token string, now time.Time) (Code, error) {
-	record, err := store.consume(ctx, token, now, true)
+	record, err := store.consume(ctx, token, now, kindCode)
 	if err != nil {
 		return Code{}, err
 	}
@@ -209,12 +211,12 @@ func (store *Store) ConsumeCode(ctx context.Context, token string, now time.Time
 		ID:            record.ID,
 		Subject:       record.Sub,
 		TOTPRev:       uint64(record.TotpRev),
-		ClientID:      record.ClientID.String,
-		RedirectURI:   record.RedirectUri.String,
-		Scope:         record.Scope.String,
-		Nonce:         record.Nonce.String,
-		PKCEChallenge: record.PkceChallenge.String,
-		PKCEMethod:    record.PkceMethod.String,
+		ClientID:      record.CodeClientID.String,
+		RedirectURI:   record.CodeRedirectUri.String,
+		Scope:         record.CodeScope.String,
+		Nonce:         record.CodeNonce.String,
+		PKCEChallenge: record.CodePkceChallenge.String,
+		PKCEMethod:    record.CodePkceMethod.String,
 		ExpiresAt:     expiresAt,
 	}, nil
 }
@@ -241,13 +243,14 @@ type codeBindings struct {
 	pkceMethod    string
 }
 
-// create records a new one-use token with its bindings and returns its
-// redeemable token.
+// create records a new one-use token of the given kind with its bindings
+// and returns its redeemable token.
 func (store *Store) create(
 	ctx context.Context,
 	subject string,
 	totpRev uint64,
 	expiresAt, now time.Time,
+	kind string,
 	bindings codeBindings,
 ) (string, error) {
 	secret, err := crypto.GenerateMachineSecret()
@@ -257,18 +260,19 @@ func (store *Store) create(
 
 	id := store.ids.NewID(ctx)
 	err = store.queries.CreateOneUseToken(ctx, statestore.CreateOneUseTokenParams{
-		ID:            id,
-		SecretHash:    hashSecret(store.rootSecret, secret),
-		Sub:           subject,
-		TotpRev:       int64(totpRev),
-		ExpiresAt:     clock.Format(expiresAt),
-		CreatedAt:     clock.Format(now),
-		ClientID:      nullString(bindings.clientID),
-		RedirectUri:   nullString(bindings.redirectURI),
-		Scope:         nullString(bindings.scope),
-		Nonce:         nullString(bindings.nonce),
-		PkceChallenge: nullString(bindings.pkceChallenge),
-		PkceMethod:    nullString(bindings.pkceMethod),
+		ID:                id,
+		Kind:              kind,
+		SecretHash:        hashSecret(store.rootSecret, kind, secret),
+		Sub:               subject,
+		TotpRev:           int64(totpRev),
+		ExpiresAt:         clock.Format(expiresAt),
+		CreatedAt:         clock.Format(now),
+		CodeClientID:      nullString(bindings.clientID),
+		CodeRedirectUri:   nullString(bindings.redirectURI),
+		CodeScope:         nullString(bindings.scope),
+		CodeNonce:         nullString(bindings.nonce),
+		CodePkceChallenge: nullString(bindings.pkceChallenge),
+		CodePkceMethod:    nullString(bindings.pkceMethod),
 	})
 	if err != nil {
 		return "", fmt.Errorf("create one-use token: %w", err)
@@ -278,13 +282,14 @@ func (store *Store) create(
 }
 
 // consume authenticates a token at the given instant, atomically redeems it,
-// and returns its authoritative record. wantCode selects the expected record
-// kind: true for authorization codes, false for enrollment tokens.
+// and returns its authoritative record. wantKind selects the expected record
+// kind: kindCode for authorization codes, kindEnrollment for enrollment
+// tokens.
 func (store *Store) consume(
 	ctx context.Context,
 	token string,
 	now time.Time,
-	wantCode bool,
+	wantKind string,
 ) (statestore.OneUseToken, error) {
 	id, secret, err := parseToken(token)
 	if err != nil {
@@ -299,7 +304,7 @@ func (store *Store) consume(
 		return statestore.OneUseToken{}, fmt.Errorf("get one-use token: %w", err)
 	}
 
-	expected := hashSecret(store.rootSecret, secret)
+	expected := hashSecret(store.rootSecret, wantKind, secret)
 	if subtle.ConstantTimeCompare(expected, record.SecretHash) != 1 {
 		return statestore.OneUseToken{}, ErrInvalidToken
 	}
@@ -314,10 +319,9 @@ func (store *Store) consume(
 		return statestore.OneUseToken{}, ErrExpiredToken
 	}
 
-	// A record is an authorization code exactly when it carries client
-	// bindings; redeeming a token through the wrong flow fails without
-	// consuming it.
-	if record.ClientID.Valid != wantCode {
+	// A record's kind decides which flow may redeem it; redeeming a token
+	// through the wrong flow fails without consuming it.
+	if record.Kind != wantKind {
 		return statestore.OneUseToken{}, ErrInvalidToken
 	}
 

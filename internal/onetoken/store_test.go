@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -125,14 +126,15 @@ func TestCreateEnrollment(t *testing.T) {
 
 		record, err := queries.GetOneUseToken(context.Background(), id)
 		require.NoError(t, err)
+		require.Equal(t, kindEnrollment, record.Kind)
 		require.Equal(t, testSubject, record.Sub)
 		require.Equal(t, int64(testTOTPRev), record.TotpRev)
 		require.Equal(t, clock.Format(testNow.Add(15*time.Minute)), record.ExpiresAt)
 		require.Equal(t, clock.Format(testNow), record.CreatedAt)
 		require.False(t, record.ConsumedAt.Valid)
-		require.False(t, record.ClientID.Valid, "enrollment tokens carry no client bindings")
+		require.False(t, record.CodeClientID.Valid, "enrollment tokens carry no client bindings")
 		require.Equal(t,
-			hex.EncodeToString(hashSecret(referenceRootSecret, secret)),
+			hex.EncodeToString(hashSecret(referenceRootSecret, kindEnrollment, secret)),
 			hex.EncodeToString(record.SecretHash),
 		)
 	})
@@ -266,14 +268,15 @@ func TestCreateCode(t *testing.T) {
 
 		record, err := queries.GetOneUseToken(context.Background(), id)
 		require.NoError(t, err)
+		require.Equal(t, kindCode, record.Kind)
 		require.Equal(t, testSubject, record.Sub)
 		require.Equal(t, int64(testTOTPRev), record.TotpRev)
-		require.Equal(t, testClientID, record.ClientID.String)
-		require.Equal(t, testRedirectURI, record.RedirectUri.String)
-		require.Equal(t, testScope, record.Scope.String)
-		require.Equal(t, testNonce, record.Nonce.String)
-		require.False(t, record.PkceChallenge.Valid, "no PKCE bindings were requested")
-		require.False(t, record.PkceMethod.Valid)
+		require.Equal(t, testClientID, record.CodeClientID.String)
+		require.Equal(t, testRedirectURI, record.CodeRedirectUri.String)
+		require.Equal(t, testScope, record.CodeScope.String)
+		require.Equal(t, testNonce, record.CodeNonce.String)
+		require.False(t, record.CodePkceChallenge.Valid, "no PKCE bindings were requested")
+		require.False(t, record.CodePkceMethod.Valid)
 	})
 
 	t.Run("persists PKCE bindings when supplied", func(t *testing.T) {
@@ -288,8 +291,8 @@ func TestCreateCode(t *testing.T) {
 
 		record, err := queries.GetOneUseToken(context.Background(), id)
 		require.NoError(t, err)
-		require.Equal(t, testPKCEChallenge, record.PkceChallenge.String)
-		require.Equal(t, "S256", record.PkceMethod.String)
+		require.Equal(t, testPKCEChallenge, record.CodePkceChallenge.String)
+		require.Equal(t, "S256", record.CodePkceMethod.String)
 	})
 
 	t.Run("rejects an empty subject", func(t *testing.T) {
@@ -514,6 +517,50 @@ func TestPurgeExpired(t *testing.T) {
 
 		_, err = queries.GetOneUseToken(context.Background(), id)
 		require.NoError(t, err)
+	})
+}
+
+// TestSchemaEnforcesKindConsistency anchors the table-level CHECK that
+// guarantees every row's kind matches its bindings, the invariant the store
+// relies on when it rejects cross-flow redemption.
+func TestSchemaEnforcesKindConsistency(t *testing.T) {
+	db := newTestDB(t)
+	var sequence int
+	insert := func(kind string, clientID sql.NullString) error {
+		sequence++
+		_, err := db.ExecContext(context.Background(), `
+			INSERT INTO one_use_tokens (
+				id, kind, secret_hash, sub, totp_rev, expires_at, created_at, code_client_id
+			) VALUES (?, ?, X'00', ?, 0, ?, ?, ?)
+		`,
+			fmt.Sprintf("check-%d", sequence),
+			kind,
+			testSubject,
+			clock.Format(testNow.Add(time.Minute)),
+			clock.Format(testNow),
+			clientID,
+		)
+		return err
+	}
+
+	t.Run("rejects an enrollment token with client bindings", func(t *testing.T) {
+		err := insert(kindEnrollment, sql.NullString{String: testClientID, Valid: true})
+		require.Error(t, err)
+	})
+
+	t.Run("rejects a code without client bindings", func(t *testing.T) {
+		err := insert(kindCode, sql.NullString{})
+		require.Error(t, err)
+	})
+
+	t.Run("rejects an unknown kind", func(t *testing.T) {
+		err := insert("other", sql.NullString{})
+		require.Error(t, err)
+	})
+
+	t.Run("accepts consistent rows", func(t *testing.T) {
+		require.NoError(t, insert(kindEnrollment, sql.NullString{}))
+		require.NoError(t, insert(kindCode, sql.NullString{String: testClientID, Valid: true}))
 	})
 }
 

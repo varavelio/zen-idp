@@ -9,9 +9,18 @@ import (
 // tokenPrefix introduces every one-use token.
 const tokenPrefix = "tok_"
 
+// kindEnrollment and kindCode are the two one-use token kinds. They are the
+// values persisted in the kind column and the domain segment of the secret
+// digest, so each kind hashes in its own domain.
+const (
+	kindEnrollment = "enrollment"
+	kindCode       = "code"
+)
+
 // secretHashDomainPrefix is the exact ASCII domain-separation prefix of the
-// one-use token secret digest. It must not change within v1; changing it
-// would invalidate every outstanding token after a restart.
+// one-use token secret digest, followed by the token kind and a colon. It
+// must not change within v1; changing it would invalidate every outstanding
+// token after a restart.
 const secretHashDomainPrefix = "zen-idp:onetoken:v1:"
 
 // formatToken assembles the redeemable token from its parts.
@@ -47,10 +56,12 @@ func parseToken(token string) (id, secret string, err error) {
 }
 
 // hashSecret returns the persisted digest of a token secret: the
-// HMAC-SHA-256 of the domain-separated message zen-idp:onetoken:v1:secret
-// keyed by the normalized root secret.
-func hashSecret(rootSecret [sha256.Size]byte, secret string) []byte {
+// HMAC-SHA-256 of the domain-separated message
+// zen-idp:onetoken:v1:{kind}:{secret} keyed by the normalized root secret.
+// Each kind hashes in its own domain, so a digest computed for one kind can
+// never match a token of the other kind.
+func hashSecret(rootSecret [sha256.Size]byte, kind, secret string) []byte {
 	mac := hmac.New(sha256.New, rootSecret[:])
-	_, _ = mac.Write([]byte(secretHashDomainPrefix + secret))
+	_, _ = mac.Write([]byte(secretHashDomainPrefix + kind + ":" + secret))
 	return mac.Sum(nil)
 }
