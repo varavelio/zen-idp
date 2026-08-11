@@ -112,8 +112,9 @@ func (err *authorizeError) Error() string {
 
 // validateAuthorizeRequest enforces the OIDC wire contract on a request
 // whose client and redirect URI are already trusted: response_type must be
-// exactly "code", the scope must contain "openid", state is required, and
-// PKCE S256 is mandatory for public clients and validated whenever supplied.
+// exactly "code", the scope must contain "openid", and PKCE S256 is
+// mandatory for public clients and validated whenever supplied. The optional
+// state parameter is echoed back by error responses when present.
 func validateAuthorizeRequest(request authorizeRequest, client config.Client) error {
 	if request.responseType != "code" {
 		return &authorizeError{
@@ -125,12 +126,6 @@ func validateAuthorizeRequest(request authorizeRequest, client config.Client) er
 		return &authorizeError{
 			code:        "invalid_scope",
 			description: "the openid scope is required",
-		}
-	}
-	if request.state == "" {
-		return &authorizeError{
-			code:        "invalid_request",
-			description: "the state parameter is required",
 		}
 	}
 	if request.codeChallenge == "" {

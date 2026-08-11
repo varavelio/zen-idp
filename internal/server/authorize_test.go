@@ -203,7 +203,7 @@ func TestAuthorize(t *testing.T) {
 		requireInvalidRequestPage(t, response)
 	})
 
-	t.Run("rejects a missing state parameter", func(t *testing.T) {
+	t.Run("forwards a request without state", func(t *testing.T) {
 		params := validPublicRequest()
 		delete(params, "state")
 		request := buildAuthorizeRequest(t, params)
@@ -211,7 +211,8 @@ func TestAuthorize(t *testing.T) {
 
 		handler.ServeHTTP(response, request)
 
-		requireErrorRedirect(t, response, "invalid_request", "")
+		require.Equal(t, http.StatusFound, response.Code)
+		require.Equal(t, "/login?"+request.URL.RawQuery, response.Header().Get("Location"))
 	})
 
 	t.Run("rejects a missing openid scope", func(t *testing.T) {
@@ -310,22 +311,26 @@ func TestAuthorize(t *testing.T) {
 		}
 	})
 
-	t.Run("preserves redirect URI query parameters in error redirects", func(t *testing.T) {
-		request := buildAuthorizeRequest(t, map[string]string{
-			"client_id":     "query-app",
-			"redirect_uri":  "https://app.example.com/callback?tenant=1",
-			"response_type": "code",
-			"scope":         "openid",
-		})
-		response := httptest.NewRecorder()
+	t.Run(
+		"preserves redirect URI query parameters and omits state in error redirects",
+		func(t *testing.T) {
+			request := buildAuthorizeRequest(t, map[string]string{
+				"client_id":     "query-app",
+				"redirect_uri":  "https://app.example.com/callback?tenant=1",
+				"response_type": "code",
+				"scope":         "profile",
+			})
+			response := httptest.NewRecorder()
 
-		handler.ServeHTTP(response, request)
+			handler.ServeHTTP(response, request)
 
-		location, err := url.Parse(response.Header().Get("Location"))
-		require.NoError(t, err)
-		require.Equal(t, "1", location.Query().Get("tenant"))
-		require.Equal(t, "invalid_request", location.Query().Get("error"))
-	})
+			location, err := url.Parse(response.Header().Get("Location"))
+			require.NoError(t, err)
+			require.Equal(t, "1", location.Query().Get("tenant"))
+			require.Equal(t, "invalid_scope", location.Query().Get("error"))
+			require.Empty(t, location.Query().Get("state"))
+		},
+	)
 
 	t.Run("rejects other methods", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(
