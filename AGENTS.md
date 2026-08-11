@@ -45,8 +45,10 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/jwk: Derives the public RSA JWK and the stable RFC 7638 key identifier of the signing identity
 - internal/jwt: Signs and verifies RS256 JSON Web Tokens with the deterministic signing identity
 - internal/rsakeygen: Derives the deterministic RSA-2048 signing key pair from the normalized root secret
+- internal/ratelimit: Enforces per-key failed-attempt limits over fixed windows with SQLite-backed atomic counters
 - internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including an explicitly selected env file
 - internal/server: Exposes Zen IdP's HTTP endpoints with injected dependencies and centralized error handling
+- internal/session: Creates, validates, and revokes authoritative SQLite-backed SSO sessions from sess_{id}_{secret} browser tokens
 - internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
 - internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret and verifies authenticator codes
 - internal/yamlmerge: Merges YAML documents into one unified document
