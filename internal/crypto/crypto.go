@@ -33,6 +33,14 @@ type SecretBundle struct {
 	OIDCClientSecretHash  string
 }
 
+// GenerateMachineSecret returns a fresh 43-character base62 secret from
+// operating-system randomness, carrying approximately 256 bits of entropy.
+// It is suitable for machine-held credentials such as session secrets and
+// OIDC client secrets.
+func GenerateMachineSecret() (string, error) {
+	return generateSecret(rand.Reader, machineSecretLength)
+}
+
 // GenerateSecretBundle creates a root secret, administrator credential, and
 // OIDC client credential from operating-system randomness.
 func GenerateSecretBundle() (SecretBundle, error) {

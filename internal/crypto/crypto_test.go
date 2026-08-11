@@ -64,6 +64,19 @@ func TestGenerateSecret(t *testing.T) {
 	})
 }
 
+func TestGenerateMachineSecret(t *testing.T) {
+	secret, err := GenerateMachineSecret()
+	require.NoError(t, err)
+	require.Len(t, secret, machineSecretLength)
+	for _, character := range secret {
+		require.Contains(t, base62Alphabet, string(character))
+	}
+
+	other, err := GenerateMachineSecret()
+	require.NoError(t, err)
+	require.NotEqual(t, secret, other)
+}
+
 func TestGenerateSecretBundle(t *testing.T) {
 	randomness := bytes.NewReader(bytes.Repeat(
 		[]byte{0},
