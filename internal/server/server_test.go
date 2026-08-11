@@ -8,7 +8,7 @@ import (
 
 func TestNew(t *testing.T) {
 	t.Run("returns a handler that serves the JWKS route", func(t *testing.T) {
-		handler := New(testPublicJWK()).Handler()
+		handler := New(testPublicJWK(), nil).Handler()
 
 		require.NotNil(t, handler)
 	})

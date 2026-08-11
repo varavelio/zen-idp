@@ -71,7 +71,7 @@ func runServe(envFile string, dependencies dependencies) error {
 		slog.String("address", listener.Addr().String()),
 	)
 
-	app := server.New(publicJWK)
+	app := server.New(publicJWK, configuration.Clients)
 	httpServer := &http.Server{
 		Handler:           app.Handler(),
 		ReadHeaderTimeout: readHeaderTimeout,
