@@ -28,14 +28,15 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 
 ## Data Storage
 
-- Generated record identifiers used as SQLite primary keys MUST be RFC 9562 UUIDv7 values stored as TEXT.
-- Operator-declared natural keys, such as the YAML `sub` identifier, remain as declared and are not converted to UUIDs.
+- Generated record identifiers used as SQLite primary keys MUST be TypeID values stored as TEXT.
+- Operator-declared natural keys, such as the YAML `sub` identifier, remain as declared and are not converted to TypeIDs.
 
 ## Project structure
 
 This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
 
 - cmd/zen-idp: The entry point of the program
+- internal/clock: Formats and parses the canonical UTC RFC 3339 timestamps used by the state database
 - internal/config: Parses, defaults, and validates a unified YAML document into typed configuration
 - internal/configloader: Discovers, composes, parses, and validates the configured YAML source
 - internal/crypto: Provides cryptographic primitives and utilities
