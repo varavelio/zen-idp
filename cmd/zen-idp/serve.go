@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/varavelio/zen-idp/internal/id"
+	"github.com/varavelio/zen-idp/internal/jwt"
 	"github.com/varavelio/zen-idp/internal/lock"
 	"github.com/varavelio/zen-idp/internal/login"
 	"github.com/varavelio/zen-idp/internal/onetoken"
@@ -22,6 +23,7 @@ import (
 	"github.com/varavelio/zen-idp/internal/server"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/statestore"
+	"github.com/varavelio/zen-idp/internal/token"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
 
@@ -101,6 +103,21 @@ func runServe(envFile string, dependencies dependencies) error {
 		return fmt.Errorf("build one-use token store: %w", err)
 	}
 
+	signer, err := jwt.NewSigner(signingKey, publicJWK.Kid)
+	if err != nil {
+		return fmt.Errorf("build token signer: %w", err)
+	}
+
+	tokenIssuer, err := token.NewIssuer(
+		signer,
+		configuration.Issuer,
+		configuration.Users,
+		locks,
+	)
+	if err != nil {
+		return fmt.Errorf("build token issuer: %w", err)
+	}
+
 	logins, err := login.New(
 		configuration.Users,
 		runtime.RootSecret,
@@ -135,6 +152,11 @@ func runServe(envFile string, dependencies dependencies) error {
 		server.AuthorizeDependencies{
 			Sessions: sessionStore,
 			Codes:    codeStore,
+		},
+		server.TokenDependencies{
+			Codes:                  codeStore,
+			Issuer:                 tokenIssuer,
+			RequireClientSecretTLS: strings.HasPrefix(configuration.Issuer, "https://"),
 		},
 	)
 	httpServer := &http.Server{

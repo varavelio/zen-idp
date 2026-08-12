@@ -90,7 +90,7 @@ func testDependencies(t *testing.T) dependencies {
 			return rsa.GenerateKey(rand.Reader, 1024)
 		},
 		derivePublicJWK: func(*rsa.PublicKey) (jwk.PublicJWK, error) {
-			return jwk.PublicJWK{}, nil
+			return jwk.PublicJWK{Kid: "18o8WQf60YOSXryGuVEqiEWfO80TcNyB3FLCRWyLzsE"}, nil
 		},
 		listen: func(network, address string) (net.Listener, error) {
 			var listenConfig net.ListenConfig

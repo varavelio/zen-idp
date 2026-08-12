@@ -59,7 +59,7 @@ func TestRunServe(t *testing.T) {
 		var receivedPublicKey rsa.PublicKey
 		dependencies.derivePublicJWK = func(key *rsa.PublicKey) (jwk.PublicJWK, error) {
 			receivedPublicKey = *key
-			return jwk.PublicJWK{}, nil
+			return jwk.PublicJWK{Kid: "18o8WQf60YOSXryGuVEqiEWfO80TcNyB3FLCRWyLzsE"}, nil
 		}
 		listener := listenOnRandomPort(t)
 		defer func() { _ = listener.Close() }()
