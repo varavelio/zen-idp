@@ -5,7 +5,9 @@
   "yaml": {},
   "malva": {},
   "excludes": [
-    "dist/**/*"
+    "dist/**/*",
+    "internal/ui/static/build/**/*",
+    "internal/ui/static/vendor/**/*"
   ],
   "plugins": [
     "https://plugins.dprint.dev/typescript-0.96.1.wasm",
