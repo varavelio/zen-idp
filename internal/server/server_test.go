@@ -20,6 +20,7 @@ func TestNew(t *testing.T) {
 			LoginDependencies{},
 			AuthorizeDependencies{},
 			TokenDependencies{},
+			UserinfoDependencies{},
 		).Handler()
 
 		require.NotNil(t, handler)
@@ -40,6 +41,7 @@ func TestServeAssets(t *testing.T) {
 			LoginDependencies{},
 			AuthorizeDependencies{},
 			TokenDependencies{},
+			UserinfoDependencies{},
 		).Handler()
 	}
 
@@ -108,6 +110,7 @@ func TestServeAssets(t *testing.T) {
 			LoginDependencies{},
 			AuthorizeDependencies{},
 			TokenDependencies{},
+			UserinfoDependencies{},
 		).Handler()
 
 		response := httptest.NewRecorder()
@@ -131,6 +134,7 @@ func TestServeAssets(t *testing.T) {
 			LoginDependencies{},
 			AuthorizeDependencies{},
 			TokenDependencies{},
+			UserinfoDependencies{},
 		).Handler()
 
 		response := httptest.NewRecorder()

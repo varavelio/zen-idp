@@ -515,6 +515,7 @@ func TestToken(t *testing.T) {
 				Codes:  failingCodeConsumer{},
 				Issuer: failingTokenIssuer{},
 			},
+			UserinfoDependencies{},
 		).Handler()
 		response := tokenRequest(t, handler, validExchangeForm("anything"), "")
 
@@ -535,6 +536,7 @@ func TestToken(t *testing.T) {
 				Codes:  app.codes,
 				Issuer: failingTokenIssuer{},
 			},
+			UserinfoDependencies{},
 		).Handler()
 		response := tokenRequest(t, handler, validExchangeForm(code), "")
 

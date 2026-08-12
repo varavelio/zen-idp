@@ -30,6 +30,7 @@ import (
 	"github.com/varavelio/zen-idp/internal/token"
 	"github.com/varavelio/zen-idp/internal/totp"
 	"github.com/varavelio/zen-idp/internal/ui"
+	"github.com/varavelio/zen-idp/internal/userinfo"
 )
 
 // referenceRootSecret is the fixed normalized root secret anchored by the
@@ -78,6 +79,10 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 	require.NoError(t, err)
 	issuer, err := token.NewIssuer(signer, referenceIssuer, users, locks)
 	require.NoError(t, err)
+	verifier, err := jwt.NewVerifier(&referenceKey().PublicKey, referenceKid())
+	require.NoError(t, err)
+	userinfoService, err := userinfo.New(verifier, referenceIssuer, users, locks, store)
+	require.NoError(t, err)
 
 	server := New(
 		testPublicJWK(),
@@ -96,6 +101,9 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 		TokenDependencies{
 			Codes:  codes,
 			Issuer: issuer,
+		},
+		UserinfoDependencies{
+			Service: userinfoService,
 		},
 	)
 	return &testApp{server: server, db: db, sessions: store, codes: codes, locks: locks}

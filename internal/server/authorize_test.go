@@ -128,6 +128,7 @@ func TestAuthorize(t *testing.T) {
 		LoginDependencies{},
 		AuthorizeDependencies{},
 		TokenDependencies{},
+		UserinfoDependencies{},
 	).Handler()
 
 	t.Run("forwards a valid public client request to the login interaction", func(t *testing.T) {
