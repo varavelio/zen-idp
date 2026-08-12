@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/varavelio/zen-idp/internal/audit"
+	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/statestore"
 	"github.com/varavelio/zen-idp/internal/totp"
@@ -32,11 +33,38 @@ const (
 	adminTestWindow      = time.Hour
 )
 
+// adminCSRFToken fetches the administration landing page and returns the
+// anti-forgery token it issues, exactly as a browser would receive it.
+func adminCSRFToken(t *testing.T, app *testApp) string {
+	t.Helper()
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		adminLoginPath,
+		nil,
+	)
+	response := httptest.NewRecorder()
+	app.server.Handler().ServeHTTP(response, request)
+	require.Equal(t, http.StatusOK, response.Code)
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == CSRFCookieName {
+			return cookie.Value
+		}
+	}
+	require.FailNow(t, "no CSRF cookie in response")
+	return ""
+}
+
 // adminLoginRequest posts the given password to the administrator sign-in
-// form.
+// form, first obtaining the anti-forgery token from the landing page and
+// echoing it back exactly as a browser would.
 func adminLoginRequest(t *testing.T, app *testApp, password string) *httptest.ResponseRecorder {
 	t.Helper()
-	form := url.Values{"password": {password}}
+	token := adminCSRFToken(t, app)
+	form := url.Values{
+		"password":     {password},
+		csrf.FieldName: {token},
+	}
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
@@ -44,6 +72,7 @@ func adminLoginRequest(t *testing.T, app *testApp, password string) *httptest.Re
 		strings.NewReader(form.Encode()),
 	)
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: token})
 	response := httptest.NewRecorder()
 	app.server.Handler().ServeHTTP(response, request)
 	return response
@@ -77,7 +106,30 @@ func TestAdminForm(t *testing.T) {
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Contains(t, response.Body.String(), "Administrator sign-in")
 		require.Contains(t, response.Body.String(), `action="/admin/login"`)
+		require.Contains(t, response.Body.String(), `name="csrf_token"`)
 		require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+	})
+
+	t.Run("sets the anti-forgery cookie for anonymous visitors", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			adminLoginPath,
+			nil,
+		)
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		cookie := response.Result().Cookies()
+		require.Len(t, cookie, 1)
+		require.Equal(t, CSRFCookieName, cookie[0].Name)
+		require.NotEmpty(t, cookie[0].Value)
+		require.True(t, cookie[0].HttpOnly)
+		require.True(t, cookie[0].Secure)
+		require.Equal(t, http.SameSiteLaxMode, cookie[0].SameSite)
+		require.Equal(t, "/", cookie[0].Path)
 	})
 
 	t.Run("renders the administration home for a valid admin session", func(t *testing.T) {
@@ -100,6 +152,8 @@ func TestAdminForm(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Contains(t, response.Body.String(), "Signed in as administrator.")
+		require.Contains(t, response.Body.String(), `action="/admin/logout"`)
+		require.Contains(t, response.Body.String(), `name="csrf_token"`)
 		require.NotContains(t, response.Body.String(), "Administrator sign-in")
 	})
 
@@ -189,6 +243,51 @@ func TestProcessAdminLogin(t *testing.T) {
 		cookie := response.Result().Cookies()
 		require.Len(t, cookie, 1)
 		require.False(t, cookie[0].Secure)
+	})
+
+	t.Run("rejects a submission without a CSRF token", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{"password": {testAdminPassword}}
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			adminLoginAction,
+			strings.NewReader(form.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusForbidden, response.Code)
+		require.Contains(t, response.Body.String(), "Forbidden")
+		require.Empty(t, adminSessionCookie(t, response))
+		require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+	})
+
+	t.Run("rejects a submission with a mismatched CSRF token", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		cookieToken := adminCSRFToken(t, app)
+		fieldToken := adminCSRFToken(t, app)
+		require.NotEqual(t, cookieToken, fieldToken)
+		form := url.Values{
+			"password":     {testAdminPassword},
+			csrf.FieldName: {fieldToken},
+		}
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			adminLoginAction,
+			strings.NewReader(form.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: cookieToken})
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusForbidden, response.Code)
+		require.Empty(t, adminSessionCookie(t, response))
 	})
 
 	t.Run("rejects a wrong password with the generic message", func(t *testing.T) {
@@ -285,16 +384,20 @@ func TestAdminLogOut(t *testing.T) {
 		return token
 	}
 
-	// logOut issues a GET /admin/logout request with the given cookies and
-	// returns the response.
+	// logOut issues a POST /admin/logout request with a valid anti-forgery
+	// token and the given cookies, returning the response.
 	logOut := func(t *testing.T, app *testApp, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 		t.Helper()
+		token := adminCSRFToken(t, app)
+		form := url.Values{csrf.FieldName: {token}}
 		request := httptest.NewRequestWithContext(
 			context.Background(),
-			http.MethodGet,
+			http.MethodPost,
 			adminLogoutPath,
-			nil,
+			strings.NewReader(form.Encode()),
 		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: token})
 		for _, cookie := range cookies {
 			request.AddCookie(cookie)
 		}
@@ -381,11 +484,36 @@ func TestAdminLogOut(t *testing.T) {
 		require.Equal(t, "alice", record.Subject)
 	})
 
-	t.Run("returns 405 for non-GET methods", func(t *testing.T) {
+	t.Run("rejects a sign-out without a valid CSRF token", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
+		token := signInAndGetCookie(t, app)
+
 		request := httptest.NewRequestWithContext(
 			context.Background(),
 			http.MethodPost,
+			adminLogoutPath,
+			nil,
+		)
+		request.AddCookie(&http.Cookie{Name: adminSessionCookieName, Value: token})
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusForbidden, response.Code)
+		require.Contains(t, response.Body.String(), "Forbidden")
+
+		// The admin session survives the rejected sign-out.
+		_, err := app.sessions.ValidateAdmin(
+			context.Background(), token, time.Now().Add(time.Hour),
+		)
+		require.NoError(t, err)
+	})
+
+	t.Run("returns 405 for GET requests", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
 			adminLogoutPath,
 			nil,
 		)

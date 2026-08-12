@@ -21,6 +21,7 @@ import (
 	"github.com/varavelio/zen-idp/internal/admin"
 	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/id"
 	"github.com/varavelio/zen-idp/internal/jwt"
 	"github.com/varavelio/zen-idp/internal/lock"
@@ -93,6 +94,9 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 	adminService, err := admin.New(testAdminPasswordHash, adminLimiter, store, recorder)
 	require.NoError(t, err)
 
+	csrfGuard, err := csrf.NewGuard(CSRFCookieName, true)
+	require.NoError(t, err)
+
 	server := New(
 		testPublicJWK(),
 		referenceIssuer,
@@ -123,6 +127,7 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 		AdminDependencies{
 			Service:       adminService,
 			Sessions:      store,
+			CSRF:          csrfGuard,
 			UI:            config.UI{Name: "Example Auth"},
 			SecureCookies: true,
 			SessionMaxAge: testMaxAge,

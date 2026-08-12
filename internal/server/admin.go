@@ -10,6 +10,7 @@ import (
 
 	"github.com/varavelio/zen-idp/internal/admin"
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
@@ -18,6 +19,10 @@ import (
 // administrator session credential token, distinct from the user SSO
 // session cookie.
 const adminSessionCookieName = "zen_idp_admin_session"
+
+// CSRFCookieName is the browser cookie that carries the anti-forgery token
+// protecting the state-changing administration forms.
+const CSRFCookieName = "zen_idp_csrf"
 
 // adminLoginPath is the administration landing page that carries the
 // administrator sign-in form.
@@ -48,6 +53,13 @@ type AdminSessions interface {
 	Revoke(context.Context, string) error
 }
 
+// CSRFGuard issues and verifies the anti-forgery tokens that protect the
+// state-changing administration forms, satisfied by csrf.Guard.
+type CSRFGuard interface {
+	Token(http.ResponseWriter, *http.Request) (string, error)
+	Verify(*http.Request) error
+}
+
 // AdminDependencies carries the injected pieces of the administration
 // interaction.
 type AdminDependencies struct {
@@ -55,6 +67,9 @@ type AdminDependencies struct {
 	Service AdminService
 	// Sessions validates and revokes administrator session cookies.
 	Sessions AdminSessions
+	// CSRF protects the state-changing administration forms from
+	// cross-site request forgery.
+	CSRF CSRFGuard
 	// UI holds the presentation settings shown on administration pages.
 	UI config.UI
 	// SecureCookies marks the administrator session cookie Secure; it must
@@ -70,6 +85,10 @@ type AdminDependencies struct {
 // valid administrator session cookie. An absent, malformed, invalid, or
 // expired cookie is not an error: the sign-in form is shown instead.
 func (server *Server) adminForm(w http.ResponseWriter, r *http.Request) error {
+	token, err := server.admin.CSRF.Token(w, r)
+	if err != nil {
+		return fmt.Errorf("get CSRF token: %w", err)
+	}
 	cookie, err := r.Cookie(adminSessionCookieName)
 	if err == nil {
 		if _, err := server.admin.Sessions.ValidateAdmin(
@@ -77,7 +96,7 @@ func (server *Server) adminForm(w http.ResponseWriter, r *http.Request) error {
 			cookie.Value,
 			time.Now(),
 		); err == nil {
-			return server.renderAdminHomePage(w)
+			return server.renderAdminHomePage(w, token)
 		} else if !errors.Is(
 			err,
 			session.ErrMalformedToken,
@@ -87,22 +106,28 @@ func (server *Server) adminForm(w http.ResponseWriter, r *http.Request) error {
 			return fmt.Errorf("validate admin session cookie: %w", err)
 		}
 	}
-	return server.renderAdminLoginPage(w, "")
+	return server.renderAdminLoginPage(w, token, "")
 }
 
 // processAdminLogin handles the administrator sign-in form submission: it
-// authenticates the submitted password and, on success, issues the distinct
-// administrator session cookie and returns to the administration landing
-// page. Every denied attempt re-renders the form with the same generic
-// failure message.
+// verifies the anti-forgery token, authenticates the submitted password
+// and, on success, issues the distinct administrator session cookie and
+// returns to the administration landing page. Every denied attempt
+// re-renders the form with the same generic failure message.
 func (server *Server) processAdminLogin(w http.ResponseWriter, r *http.Request) error {
+	if err := server.admin.CSRF.Verify(r); err != nil {
+		if errors.Is(err, csrf.ErrInvalidToken) {
+			return writeForbiddenPage(w)
+		}
+		return fmt.Errorf("verify CSRF token: %w", err)
+	}
 	if err := r.ParseForm(); err != nil {
 		return fmt.Errorf("parse admin login form: %w", err)
 	}
 
 	token, err := server.admin.Service.Login(r.Context(), r.FormValue("password"), time.Now())
 	if errors.Is(err, admin.ErrDenied) {
-		return server.renderAdminLoginPage(w, adminFailureMessage)
+		return server.renderAdminLoginPage(w, "", adminFailureMessage)
 	}
 	if err != nil {
 		return fmt.Errorf("admin login: %w", err)
@@ -121,13 +146,21 @@ func (server *Server) processAdminLogin(w http.ResponseWriter, r *http.Request) 
 	return nil
 }
 
-// adminLogOut handles the administrator sign-out interaction: it revokes
-// the administrator session carried by the admin session cookie, clears the
-// cookie, and returns to the administration landing page, which shows the
-// sign-in form. An absent or malformed admin session cookie is not an error,
-// so sign-out always completes and always leaves the browser signed out as
-// administrator. The regular user SSO session cookie is never touched.
+// adminLogOut handles the administrator sign-out interaction: it verifies
+// the anti-forgery token, revokes the administrator session carried by the
+// admin session cookie, clears the cookie, and returns to the
+// administration landing page, which shows the sign-in form. An absent or
+// malformed admin session cookie is not an error, so sign-out always
+// completes and always leaves the browser signed out as administrator. The
+// regular user SSO session cookie is never touched.
 func (server *Server) adminLogOut(w http.ResponseWriter, r *http.Request) error {
+	if err := server.admin.CSRF.Verify(r); err != nil {
+		if errors.Is(err, csrf.ErrInvalidToken) {
+			return writeForbiddenPage(w)
+		}
+		return fmt.Errorf("verify CSRF token: %w", err)
+	}
+
 	cookie, err := r.Cookie(adminSessionCookieName)
 	if err == nil {
 		if err := server.admin.Sessions.Revoke(r.Context(), cookie.Value); err != nil &&
@@ -142,10 +175,13 @@ func (server *Server) adminLogOut(w http.ResponseWriter, r *http.Request) error 
 	return nil
 }
 
-// renderAdminLoginPage writes the administrator sign-in form with an
-// optional failure message.
-func (server *Server) renderAdminLoginPage(w http.ResponseWriter, failure string) error {
-	html, err := ui.AdminLoginPage(server.admin.UI, failure).RenderString()
+// renderAdminLoginPage writes the administrator sign-in form with the given
+// anti-forgery token and an optional failure message.
+func (server *Server) renderAdminLoginPage(
+	w http.ResponseWriter,
+	token, failure string,
+) error {
+	html, err := ui.AdminLoginPage(server.admin.UI, token, failure).RenderString()
 	if err != nil {
 		return fmt.Errorf("render admin login page: %w", err)
 	}
@@ -156,14 +192,29 @@ func (server *Server) renderAdminLoginPage(w http.ResponseWriter, failure string
 }
 
 // renderAdminHomePage writes the administration landing page for an
-// authenticated administrator.
-func (server *Server) renderAdminHomePage(w http.ResponseWriter) error {
-	html, err := ui.AdminHomePage(server.admin.UI).RenderString()
+// authenticated administrator, carrying the given anti-forgery token.
+func (server *Server) renderAdminHomePage(w http.ResponseWriter, token string) error {
+	html, err := ui.AdminHomePage(server.admin.UI, token).RenderString()
 	if err != nil {
 		return fmt.Errorf("render admin home page: %w", err)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	_, err = io.WriteString(w, html)
+	return err
+}
+
+// writeForbiddenPage writes the generic 403 page shown when a
+// state-changing request fails its anti-forgery check. The page is
+// stateless and must not be cached.
+func writeForbiddenPage(w http.ResponseWriter) error {
+	html, err := ui.ForbiddenPage().RenderString()
+	if err != nil {
+		return fmt.Errorf("render forbidden page: %w", err)
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusForbidden)
 	_, err = io.WriteString(w, html)
 	return err
 }
