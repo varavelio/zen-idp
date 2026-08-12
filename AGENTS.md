@@ -56,6 +56,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
 - internal/token: Issues the RS256-signed ID and access tokens of the deterministic signing identity with fixed 900-second lifetimes
 - internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret and verifies authenticator codes
+- internal/ui: Renders the HTML pages served by Zen IdP with NodX and embeds the static assets (compiled stylesheet, vendored fonts, and scripts)
 - internal/userinfo: Validates access tokens and resolves the current claims of their subject from the active configuration
 - internal/yamlmerge: Merges YAML documents into one unified document
 - internal/yamlsource: Discovers and reads YAML files from filesystem paths, directories, and glob patterns
