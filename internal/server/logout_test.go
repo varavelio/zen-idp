@@ -113,6 +113,7 @@ func TestLogout(t *testing.T) {
 			TokenDependencies{},
 			UserinfoDependencies{},
 			LogoutDependencies{Sessions: failingSessionRevoker{}},
+			AdminDependencies{},
 		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),

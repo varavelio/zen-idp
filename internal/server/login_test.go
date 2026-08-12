@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/varavelio/zen-idp/internal/admin"
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/id"
 	"github.com/varavelio/zen-idp/internal/jwt"
@@ -84,6 +86,13 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 	userinfoService, err := userinfo.New(verifier, referenceIssuer, users, locks, store)
 	require.NoError(t, err)
 
+	adminLimiter, err := ratelimit.New(queries, adminTestMaxAttempts, adminTestWindow)
+	require.NoError(t, err)
+	recorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
+	require.NoError(t, err)
+	adminService, err := admin.New(testAdminPasswordHash, adminLimiter, store, recorder)
+	require.NoError(t, err)
+
 	server := New(
 		testPublicJWK(),
 		referenceIssuer,
@@ -110,6 +119,13 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			Sessions:      store,
 			UI:            config.UI{Name: "Example Auth"},
 			SecureCookies: true,
+		},
+		AdminDependencies{
+			Service:       adminService,
+			Sessions:      store,
+			UI:            config.UI{Name: "Example Auth"},
+			SecureCookies: true,
+			SessionMaxAge: testMaxAge,
 		},
 	)
 	return &testApp{server: server, db: db, sessions: store, codes: codes, locks: locks}

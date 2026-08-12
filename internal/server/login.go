@@ -86,19 +86,23 @@ func (server *Server) processLogin(w http.ResponseWriter, r *http.Request) error
 
 	http.SetCookie(
 		w,
-		sessionCookie(token, int(server.login.SessionMaxAge.Seconds()), server.login.SecureCookies),
+		browserCookie(
+			sessionCookieName,
+			token,
+			int(server.login.SessionMaxAge.Seconds()),
+			server.login.SecureCookies,
+		),
 	)
 	http.Redirect(w, r, authorizePath+"?"+r.URL.RawQuery, http.StatusSeeOther)
 	return nil
 }
 
-// sessionCookie builds the browser cookie that carries the SSO session
-// credential token. A negative maxAge clears the cookie instead of setting
-// a token.
-func sessionCookie(token string, maxAge int, secure bool) *http.Cookie {
+// browserCookie builds the browser cookie that carries a session credential
+// token. A negative maxAge clears the cookie instead of setting a token.
+func browserCookie(name, value string, maxAge int, secure bool) *http.Cookie {
 	return &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    token,
+		Name:     name,
+		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,

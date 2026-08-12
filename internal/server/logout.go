@@ -43,7 +43,7 @@ func (server *Server) logOut(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	http.SetCookie(w, sessionCookie("", -1, server.logout.SecureCookies))
+	http.SetCookie(w, browserCookie(sessionCookieName, "", -1, server.logout.SecureCookies))
 
 	html, err := ui.SignedOutPage(server.logout.UI).RenderString()
 	if err != nil {
