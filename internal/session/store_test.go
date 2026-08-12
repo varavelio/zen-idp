@@ -238,6 +238,66 @@ func TestValidate(t *testing.T) {
 	})
 }
 
+func TestValidateID(t *testing.T) {
+	t.Run("validates an active record by its identifier", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		token := createToken(t, store)
+		idPart, _ := splitToken(t, token)
+
+		session, err := store.ValidateID(
+			context.Background(), idPart, testNow.Add(time.Hour),
+		)
+		require.NoError(t, err)
+		require.Equal(t, idPart, session.ID)
+		require.Equal(t, testSubject, session.Subject)
+		require.Equal(t, testTOTPRev, session.TOTPRev)
+		require.Equal(t, testNow, session.CreatedAt)
+		require.Equal(t, testNow.Add(testMaxAge), session.ExpiresAt)
+	})
+
+	t.Run("accepts one second before expiration", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		token := createToken(t, store)
+		idPart, _ := splitToken(t, token)
+
+		_, err := store.ValidateID(
+			context.Background(), idPart, testNow.Add(testMaxAge-time.Second),
+		)
+		require.NoError(t, err)
+	})
+
+	t.Run("rejects at the expiration instant and deletes the row", func(t *testing.T) {
+		store, queries := newTestStore(t, testMaxAge)
+		token := createToken(t, store)
+		idPart, _ := splitToken(t, token)
+
+		_, err := store.ValidateID(context.Background(), idPart, testNow.Add(testMaxAge))
+		require.ErrorIs(t, err, ErrExpiredSession)
+
+		_, err = store.ValidateID(context.Background(), idPart, testNow.Add(testMaxAge))
+		require.ErrorIs(t, err, ErrInvalidSession)
+
+		_, err = queries.GetSession(context.Background(), idPart)
+		require.ErrorIs(t, err, sql.ErrNoRows)
+	})
+
+	t.Run("rejects an unknown identifier", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+
+		_, err := store.ValidateID(
+			context.Background(), "01h2v8d9q3m5t7w0x2y4a6c8e", testNow.Add(time.Hour),
+		)
+		require.ErrorIs(t, err, ErrInvalidSession)
+	})
+
+	t.Run("rejects an empty identifier", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+
+		_, err := store.ValidateID(context.Background(), "", testNow.Add(time.Hour))
+		require.EqualError(t, err, "session id must not be empty")
+	})
+}
+
 func TestRevoke(t *testing.T) {
 	t.Run("invalidates the revoked token", func(t *testing.T) {
 		store, _ := newTestStore(t, testMaxAge)

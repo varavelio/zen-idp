@@ -30,8 +30,8 @@ type idGenerator interface {
 	NewID(context.Context) string
 }
 
-// Store owns the session lifecycle: creation after authentication, token
-// validation, and revocation.
+// Store owns the session lifecycle: creation after authentication, browser
+// token validation, record validation by identifier, and revocation.
 type Store struct {
 	queries    sessionQueries
 	ids        idGenerator
@@ -135,6 +135,51 @@ func (store *Store) Validate(ctx context.Context, token string, now time.Time) (
 	expected := hashSecret(store.rootSecret, secret)
 	if subtle.ConstantTimeCompare(expected, record.SecretHash) != 1 {
 		return Session{}, ErrInvalidSession
+	}
+
+	expiresAt, err := clock.Parse(record.ExpiresAt)
+	if err != nil {
+		return Session{}, fmt.Errorf("parse session expiration: %w", err)
+	}
+	if !now.Before(expiresAt) {
+		// The row can never become valid again; delete it opportunistically.
+		_ = store.queries.RevokeSession(ctx, id)
+		return Session{}, ErrExpiredSession
+	}
+
+	createdAt, err := clock.Parse(record.CreatedAt)
+	if err != nil {
+		return Session{}, fmt.Errorf("parse session creation: %w", err)
+	}
+
+	return Session{
+		ID:        record.ID,
+		Subject:   record.Sub,
+		TOTPRev:   uint64(record.TotpRev),
+		CreatedAt: createdAt,
+		ExpiresAt: expiresAt,
+	}, nil
+}
+
+// ValidateID validates the active session record identified by id at the
+// given instant and returns it. Unlike Validate it does not authenticate a
+// browser credential: it is the record-side check for callers that only
+// hold the session identifier, such as the jti binding of an access token.
+//
+// The record must exist and its absolute expiration must not have passed.
+// A missing record maps to ErrInvalidSession, and an expired record is
+// deleted opportunistically and maps to ErrExpiredSession.
+func (store *Store) ValidateID(ctx context.Context, id string, now time.Time) (Session, error) {
+	if id == "" {
+		return Session{}, errors.New("session id must not be empty")
+	}
+
+	record, err := store.queries.GetSession(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Session{}, ErrInvalidSession
+	}
+	if err != nil {
+		return Session{}, fmt.Errorf("get session: %w", err)
 	}
 
 	expiresAt, err := clock.Parse(record.ExpiresAt)
