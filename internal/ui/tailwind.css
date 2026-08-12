@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+/* Scan NodX Go sources for class candidates. */
+@source "./**/*.go";
+
+/* Enable dark mode with either .dark or [data-theme="dark"]. */
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+/* Bundled Geist fonts (self-hosted inside this package). */
+@font-face {
+  font-family: "Geist Sans";
+  src: url("/vendor/fonts/Geist-Variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/vendor/fonts/GeistMono-Variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@theme {
+  /* Single-breakpoint responsive model */
+  --breakpoint-*: initial;
+  --breakpoint-desk: 64rem;
+
+  /* Typography families. */
+  --font-sans:
+    "Geist Sans",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  --font-mono:
+    "Geist Mono",
+    ui-monospace,
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+
+  /* Restrict font utilities to approved weights only. */
+  --font-weight-*: initial;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* Strict Radius scale. */
+  --radius-*: initial;
+  --radius-none: 0;
+  --radius-sm: 0.25rem; /* 4px: Nested elements / Badges */
+  --radius-md: 0.5rem; /* 8px: Buttons / Inputs / Dropdowns */
+  --radius-lg: 1rem; /* 16px: Main Cards / Modals / Surfaces */
+  --radius-full: 9999px; /* Pills / Avatars */
+
+  /* Base layer architecture. */
+  --color-base-100: var(--color-white);
+  --color-base-200: var(--color-neutral-100);
+  --color-base-300: var(--color-neutral-200);
+  --color-base-400: var(--color-neutral-300);
+
+  /* Content colors (text/icons). */
+  --color-content: var(--color-neutral-950);
+  --color-content-muted: var(--color-neutral-500);
+
+  /* Semantic colors from the spec. */
+  --color-info: var(--color-blue-500);
+  --color-success: var(--color-emerald-500);
+  --color-warning: var(--color-orange-500);
+  --color-error: var(--color-red-500);
+}
+
+:root {
+  color-scheme: light;
+}
+
+/* Dark mode token overrides. */
+:where(.dark, [data-theme="dark"]) {
+  color-scheme: dark;
+
+  --color-base-100: var(--color-black);
+  --color-base-200: var(--color-neutral-900);
+  --color-base-300: var(--color-neutral-800);
+  --color-base-400: var(--color-neutral-700);
+
+  --color-content: var(--color-neutral-50);
+  --color-content-muted: var(--color-neutral-400);
+}
+
+@layer base {
+  /* Structural borders for all elements. */
+  *,
+  ::before,
+  ::after {
+    @apply border-base-400;
+  }
+
+  /* Scrollbar styling. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-base-400) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--color-base-400);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-content-muted);
+  }
+
+  /* Monochromatic text selection that inverts with theme tokens. */
+  ::selection {
+    @apply bg-content text-base-100;
+  }
+
+  /* Document behavior. */
+  body {
+    @apply font-sans bg-base-100 text-content antialiased;
+  }
+
+  /* Font for code elements. */
+  code,
+  kbd,
+  pre,
+  samp {
+    @apply font-mono;
+  }
+}
