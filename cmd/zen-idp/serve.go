@@ -158,6 +158,7 @@ func runServe(envFile string, dependencies dependencies) error {
 
 	app := server.New(
 		publicJWK,
+		configuration.Issuer,
 		configuration.Clients,
 		ui.Assets(),
 		server.LoginDependencies{
