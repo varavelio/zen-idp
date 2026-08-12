@@ -36,6 +36,7 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
 
 - cmd/zen-idp: The entry point of the program
+- internal/admin: Authenticates the administrator and creates the distinct administrator sessions that gate the administrative interfaces
 - internal/audit: Records security-relevant operational events as disposable SQLite-backed audit records
 - internal/cli: Parses Zen IdP command-line invocations into typed commands
 - internal/clock: Formats and parses the canonical UTC RFC 3339 timestamps used by the state database
@@ -52,7 +53,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/ratelimit: Enforces per-key failed-attempt limits over fixed windows with SQLite-backed atomic counters
 - internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including an explicitly selected env file
 - internal/server: Exposes Zen IdP's HTTP endpoints with injected dependencies and centralized error handling
-- internal/session: Creates, validates, and revokes authoritative SQLite-backed SSO sessions from sess_{id}_{secret} browser tokens
+- internal/session: Creates, validates, and revokes authoritative SQLite-backed SSO sessions and distinct administrator sessions from sess_{id}_{secret} browser tokens, with per-kind domain-separated secret digests
 - internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
 - internal/token: Issues the RS256-signed ID and access tokens of the deterministic signing identity with fixed 900-second lifetimes
 - internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret and verifies authenticator codes
