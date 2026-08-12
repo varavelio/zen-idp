@@ -61,22 +61,36 @@ func TestParseToken(t *testing.T) {
 }
 
 func TestHashSecret(t *testing.T) {
-	t.Run("matches the independent reference vector", func(t *testing.T) {
-		digest := hashSecret(referenceRootSecret, referenceSecret)
+	t.Run("matches the independent user-domain reference vector", func(t *testing.T) {
+		digest := hashSecret(referenceRootSecret, referenceSecret, KindUser)
 		require.Equal(t,
-			"8e0c69b39fec2d0aecfb6385f00042e93351b43facf25310d62d938a51c3fab5",
+			"00bdbc48767de02964c7412758a2ebb2b7865aed2fff92d72942934ee27aed32",
+			hex.EncodeToString(digest),
+		)
+	})
+
+	t.Run("matches the independent admin-domain reference vector", func(t *testing.T) {
+		digest := hashSecret(referenceRootSecret, referenceSecret, KindAdmin)
+		require.Equal(t,
+			"4695b7b6afcdeb1033af3723a59dd5e8fa1a651482ec38743884d749f892abed",
 			hex.EncodeToString(digest),
 		)
 	})
 
 	t.Run("is deterministic", func(t *testing.T) {
-		first := hashSecret(referenceRootSecret, referenceSecret)
-		second := hashSecret(referenceRootSecret, referenceSecret)
+		first := hashSecret(referenceRootSecret, referenceSecret, KindUser)
+		second := hashSecret(referenceRootSecret, referenceSecret, KindUser)
 		require.Equal(t, first, second)
 	})
 
+	t.Run("separates the two session kinds", func(t *testing.T) {
+		user := hashSecret(referenceRootSecret, referenceSecret, KindUser)
+		admin := hashSecret(referenceRootSecret, referenceSecret, KindAdmin)
+		require.NotEqual(t, user, admin)
+	})
+
 	t.Run("is domain-separated from the bare secret digest", func(t *testing.T) {
-		digest := hashSecret(referenceRootSecret, referenceSecret)
+		digest := hashSecret(referenceRootSecret, referenceSecret, KindUser)
 		require.NotEqual(t,
 			"8bce7c70eeaa85037d51114f6d9960fbee52c1a9314826709858fc51bbed43a4",
 			hex.EncodeToString(digest),
@@ -88,12 +102,12 @@ func TestHashSecret(t *testing.T) {
 		otherRoot[0] = 0xff
 
 		require.NotEqual(t,
-			hashSecret(referenceRootSecret, referenceSecret),
-			hashSecret(otherRoot, referenceSecret),
+			hashSecret(referenceRootSecret, referenceSecret, KindUser),
+			hashSecret(otherRoot, referenceSecret, KindUser),
 		)
 		require.NotEqual(t,
-			hashSecret(referenceRootSecret, referenceSecret),
-			hashSecret(referenceRootSecret, referenceSecret+"x"),
+			hashSecret(referenceRootSecret, referenceSecret, KindUser),
+			hashSecret(referenceRootSecret, referenceSecret+"x", KindUser),
 		)
 	})
 }

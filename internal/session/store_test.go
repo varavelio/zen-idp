@@ -115,6 +115,7 @@ func TestCreate(t *testing.T) {
 
 		record, err := queries.GetSession(context.Background(), idPart)
 		require.NoError(t, err)
+		require.Equal(t, string(KindUser), record.Kind)
 		require.Equal(t, testSubject, record.Sub)
 		require.Equal(t, int64(testTOTPRev), record.TotpRev)
 		require.Equal(t, clock.Format(testNow), record.CreatedAt)
@@ -131,7 +132,10 @@ func TestCreate(t *testing.T) {
 		record, err := queries.GetSession(context.Background(), idPart)
 		require.NoError(t, err)
 		require.NotEqual(t, []byte(secretPart), record.SecretHash)
-		require.Equal(t, hashSecret(referenceRootSecret, secretPart), record.SecretHash)
+		require.Equal(t,
+			hashSecret(referenceRootSecret, secretPart, KindUser),
+			record.SecretHash,
+		)
 	})
 
 	t.Run("records client context when provided", func(t *testing.T) {
@@ -179,10 +183,20 @@ func TestValidate(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Equal(t, idPart, session.ID)
+		require.Equal(t, KindUser, session.Kind)
 		require.Equal(t, testSubject, session.Subject)
 		require.Equal(t, testTOTPRev, session.TOTPRev)
 		require.Equal(t, testNow, session.CreatedAt)
 		require.Equal(t, testNow.Add(testMaxAge), session.ExpiresAt)
+	})
+
+	t.Run("rejects an administrator token", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		adminToken, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+
+		_, err = store.Validate(context.Background(), adminToken, testNow.Add(time.Hour))
+		require.ErrorIs(t, err, ErrInvalidSession)
 	})
 
 	t.Run("accepts one second before expiration", func(t *testing.T) {
@@ -238,6 +252,146 @@ func TestValidate(t *testing.T) {
 	})
 }
 
+func TestCreateAdmin(t *testing.T) {
+	t.Run("returns a sess_{id}_{secret} token", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		token, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+		splitToken(t, token)
+	})
+
+	t.Run("persists an admin-kind record with the reserved subject", func(t *testing.T) {
+		store, queries := newTestStore(t, testMaxAge)
+		token, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+		idPart, _ := splitToken(t, token)
+
+		record, err := queries.GetSession(context.Background(), idPart)
+		require.NoError(t, err)
+		require.Equal(t, string(KindAdmin), record.Kind)
+		require.Equal(t, adminSubject, record.Sub)
+		require.Zero(t, record.TotpRev)
+		require.Equal(t, clock.Format(testNow), record.CreatedAt)
+		require.Equal(t, clock.Format(testNow.Add(testMaxAge)), record.ExpiresAt)
+	})
+
+	t.Run("stores only the admin-domain secret digest", func(t *testing.T) {
+		store, queries := newTestStore(t, testMaxAge)
+		token, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+		idPart, secretPart := splitToken(t, token)
+
+		record, err := queries.GetSession(context.Background(), idPart)
+		require.NoError(t, err)
+		require.NotEqual(t, []byte(secretPart), record.SecretHash)
+		require.Equal(t,
+			hashSecret(referenceRootSecret, secretPart, KindAdmin),
+			record.SecretHash,
+		)
+	})
+
+	t.Run("records client context when provided", func(t *testing.T) {
+		store, queries := newTestStore(t, testMaxAge)
+		token, err := store.CreateAdmin(context.Background(), AdminParams{
+			IPAddress: "192.0.2.10",
+			UserAgent: "curl/8.0",
+			Now:       testNow,
+		})
+		require.NoError(t, err)
+		idPart, _ := splitToken(t, token)
+
+		record, err := queries.GetSession(context.Background(), idPart)
+		require.NoError(t, err)
+		require.Equal(t, "192.0.2.10", record.IpAddress.String)
+		require.True(t, record.IpAddress.Valid)
+		require.Equal(t, "curl/8.0", record.UserAgent.String)
+		require.True(t, record.UserAgent.Valid)
+	})
+
+	t.Run("creates distinct tokens per session", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		first, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+		second, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+		require.NotEqual(t, first, second)
+	})
+}
+
+func TestValidateAdmin(t *testing.T) {
+	t.Run("authenticates a fresh administrator token", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		token, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+		idPart, _ := splitToken(t, token)
+
+		session, err := store.ValidateAdmin(
+			context.Background(), token, testNow.Add(time.Hour),
+		)
+		require.NoError(t, err)
+		require.Equal(t, idPart, session.ID)
+		require.Equal(t, KindAdmin, session.Kind)
+		require.Equal(t, adminSubject, session.Subject)
+		require.Zero(t, session.TOTPRev)
+		require.Equal(t, testNow, session.CreatedAt)
+		require.Equal(t, testNow.Add(testMaxAge), session.ExpiresAt)
+	})
+
+	t.Run("rejects a regular user token", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		userToken := createToken(t, store)
+
+		_, err := store.ValidateAdmin(
+			context.Background(), userToken, testNow.Add(time.Hour),
+		)
+		require.ErrorIs(t, err, ErrInvalidSession)
+	})
+
+	t.Run("rejects at the expiration instant and deletes the row", func(t *testing.T) {
+		store, queries := newTestStore(t, testMaxAge)
+		token, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+		idPart, _ := splitToken(t, token)
+
+		_, err = store.ValidateAdmin(context.Background(), token, testNow.Add(testMaxAge))
+		require.ErrorIs(t, err, ErrExpiredSession)
+
+		_, err = store.ValidateAdmin(context.Background(), token, testNow.Add(testMaxAge))
+		require.ErrorIs(t, err, ErrInvalidSession)
+
+		_, err = queries.GetSession(context.Background(), idPart)
+		require.ErrorIs(t, err, sql.ErrNoRows)
+	})
+
+	t.Run("rejects a wrong secret", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		token, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+		idPart, _ := splitToken(t, token)
+
+		forged := formatToken(idPart, "F0rg3dS3cr3tF0rg3dS3cr3tF0rg3dS3cr3tF0rg3d")
+		_, err = store.ValidateAdmin(context.Background(), forged, testNow.Add(time.Hour))
+		require.ErrorIs(t, err, ErrInvalidSession)
+	})
+
+	t.Run("rejects an unknown identifier", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		unknown := formatToken(
+			"01h2v8d9q3m5t7w0x2y4a6c8e",
+			"F0rg3dS3cr3tF0rg3dS3cr3tF0rg3dS3cr3tF0rg3d",
+		)
+
+		_, err := store.ValidateAdmin(context.Background(), unknown, testNow.Add(time.Hour))
+		require.ErrorIs(t, err, ErrInvalidSession)
+	})
+
+	t.Run("rejects a malformed token", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		_, err := store.ValidateAdmin(context.Background(), "not-a-token", testNow)
+		require.ErrorIs(t, err, ErrMalformedToken)
+	})
+}
+
 func TestValidateID(t *testing.T) {
 	t.Run("validates an active record by its identifier", func(t *testing.T) {
 		store, _ := newTestStore(t, testMaxAge)
@@ -287,6 +441,16 @@ func TestValidateID(t *testing.T) {
 		_, err := store.ValidateID(
 			context.Background(), "01h2v8d9q3m5t7w0x2y4a6c8e", testNow.Add(time.Hour),
 		)
+		require.ErrorIs(t, err, ErrInvalidSession)
+	})
+
+	t.Run("rejects an administrator record", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		adminToken, err := store.CreateAdmin(context.Background(), AdminParams{Now: testNow})
+		require.NoError(t, err)
+		idPart, _ := splitToken(t, adminToken)
+
+		_, err = store.ValidateID(context.Background(), idPart, testNow.Add(time.Hour))
 		require.ErrorIs(t, err, ErrInvalidSession)
 	})
 

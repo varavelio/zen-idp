@@ -9,10 +9,18 @@ import (
 // tokenPrefix introduces every browser session token.
 const tokenPrefix = "sess_"
 
-// secretHashDomainPrefix is the exact ASCII domain-separation prefix of the
-// session secret digest. It must not change within v1; changing it would
-// invalidate every outstanding session after a restart.
+// secretHashDomainPrefix is the shared ASCII domain-separation prefix of the
+// session secret digests. Each session kind appends its own label after it,
+// so a secret digested for one kind can never validate as the other. The
+// prefixes must not change within v1; changing them would invalidate every
+// outstanding session after a restart.
 const secretHashDomainPrefix = "zen-idp:session:v1:"
+
+// userHashDomainPrefix digests regular SSO session secrets.
+const userHashDomainPrefix = secretHashDomainPrefix + "user:"
+
+// adminHashDomainPrefix digests administrator session secrets.
+const adminHashDomainPrefix = secretHashDomainPrefix + "admin:"
 
 // formatToken assembles the browser credential token from its parts.
 func formatToken(id, secret string) string {
@@ -47,10 +55,14 @@ func parseToken(token string) (id, secret string, err error) {
 }
 
 // hashSecret returns the persisted digest of a session secret: the
-// HMAC-SHA-256 of the domain-separated message zen-idp:session:v1:secret
+// HMAC-SHA-256 of the domain-separated message zen-idp:session:v1:{kind}:secret
 // keyed by the normalized root secret.
-func hashSecret(rootSecret [sha256.Size]byte, secret string) []byte {
+func hashSecret(rootSecret [sha256.Size]byte, secret string, kind Kind) []byte {
+	domain := userHashDomainPrefix
+	if kind == KindAdmin {
+		domain = adminHashDomainPrefix
+	}
 	mac := hmac.New(sha256.New, rootSecret[:])
-	_, _ = mac.Write([]byte(secretHashDomainPrefix + secret))
+	_, _ = mac.Write([]byte(domain + secret))
 	return mac.Sum(nil)
 }
