@@ -12,6 +12,7 @@ type discoveryDocument struct {
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
 	TokenEndpoint                     string   `json:"token_endpoint"`
 	UserinfoEndpoint                  string   `json:"userinfo_endpoint"`
+	EndSessionEndpoint                string   `json:"end_session_endpoint"`
 	JWKSURI                           string   `json:"jwks_uri"`
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	SubjectTypesSupported             []string `json:"subject_types_supported"`
@@ -34,6 +35,7 @@ func (server *Server) discovery(w http.ResponseWriter, _ *http.Request) error {
 		AuthorizationEndpoint:             origin + "/authorize",
 		TokenEndpoint:                     origin + "/token",
 		UserinfoEndpoint:                  origin + "/userinfo",
+		EndSessionEndpoint:                origin + "/logout",
 		JWKSURI:                           origin + "/.well-known/jwks.json",
 		ResponseTypesSupported:            []string{"code"},
 		SubjectTypesSupported:             []string{"public"},

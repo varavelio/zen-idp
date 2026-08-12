@@ -18,14 +18,15 @@ type Server struct {
 	authorization AuthorizeDependencies
 	tokens        TokenDependencies
 	userinfo      UserinfoDependencies
+	logout        LogoutDependencies
 }
 
 // New returns a server that publishes the given public signing identity and
 // OIDC issuer, serves the declared OIDC clients, serves the given embedded
 // static asset tree at literal paths under /build/ and /vendor/, and runs the
 // discovery metadata, the login interaction, the authorization continuation,
-// the token exchange, and the /userinfo resolution with the given injected
-// dependencies.
+// the token exchange, the /userinfo resolution, and the local logout
+// interaction with the given injected dependencies.
 func New(
 	publicJWK jwk.PublicJWK,
 	issuer string,
@@ -35,6 +36,7 @@ func New(
 	authorize AuthorizeDependencies,
 	tokens TokenDependencies,
 	userinfo UserinfoDependencies,
+	logout LogoutDependencies,
 ) *Server {
 	return &Server{
 		publicJWK:     publicJWK,
@@ -45,6 +47,7 @@ func New(
 		authorization: authorize,
 		tokens:        tokens,
 		userinfo:      userinfo,
+		logout:        logout,
 	}
 }
 
@@ -64,6 +67,7 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("GET /authorize", handle(server.authorize))
 	mux.Handle("POST /token", handle(server.token))
 	mux.Handle("GET /userinfo", handle(server.userInfo))
+	mux.Handle("GET /logout", handle(server.logOut))
 
 	return securityHeaders(mux)
 }

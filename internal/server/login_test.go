@@ -106,6 +106,11 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 		UserinfoDependencies{
 			Service: userinfoService,
 		},
+		LogoutDependencies{
+			Sessions:      store,
+			UI:            config.UI{Name: "Example Auth"},
+			SecureCookies: true,
+		},
 	)
 	return &testApp{server: server, db: db, sessions: store, codes: codes, locks: locks}
 }

@@ -241,6 +241,7 @@ func TestUserInfo(t *testing.T) {
 			AuthorizeDependencies{},
 			TokenDependencies{},
 			UserinfoDependencies{Service: failingUserinfoService{}},
+			LogoutDependencies{},
 		).Handler()
 		response := userinfoRequest(t, handler, "Bearer anything")
 

@@ -84,17 +84,27 @@ func (server *Server) processLogin(w http.ResponseWriter, r *http.Request) error
 		return fmt.Errorf("login: %w", err)
 	}
 
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(
+		w,
+		sessionCookie(token, int(server.login.SessionMaxAge.Seconds()), server.login.SecureCookies),
+	)
+	http.Redirect(w, r, authorizePath+"?"+r.URL.RawQuery, http.StatusSeeOther)
+	return nil
+}
+
+// sessionCookie builds the browser cookie that carries the SSO session
+// credential token. A negative maxAge clears the cookie instead of setting
+// a token.
+func sessionCookie(token string, maxAge int, secure bool) *http.Cookie {
+	return &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   server.login.SecureCookies,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(server.login.SessionMaxAge.Seconds()),
-	})
-	http.Redirect(w, r, authorizePath+"?"+r.URL.RawQuery, http.StatusSeeOther)
-	return nil
+		MaxAge:   maxAge,
+	}
 }
 
 // renderLoginPage writes the login form for the pending authorization request

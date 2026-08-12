@@ -517,6 +517,7 @@ func TestToken(t *testing.T) {
 				Issuer: failingTokenIssuer{},
 			},
 			UserinfoDependencies{},
+			LogoutDependencies{},
 		).Handler()
 		response := tokenRequest(t, handler, validExchangeForm("anything"), "")
 
@@ -539,6 +540,7 @@ func TestToken(t *testing.T) {
 				Issuer: failingTokenIssuer{},
 			},
 			UserinfoDependencies{},
+			LogoutDependencies{},
 		).Handler()
 		response := tokenRequest(t, handler, validExchangeForm(code), "")
 

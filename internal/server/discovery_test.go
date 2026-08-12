@@ -17,6 +17,7 @@ const referenceDiscoveryDocument = `{
 	"authorization_endpoint": "https://auth.example.com/authorize",
 	"token_endpoint": "https://auth.example.com/token",
 	"userinfo_endpoint": "https://auth.example.com/userinfo",
+	"end_session_endpoint": "https://auth.example.com/logout",
 	"jwks_uri": "https://auth.example.com/.well-known/jwks.json",
 	"response_types_supported": ["code"],
 	"subject_types_supported": ["public"],
@@ -39,6 +40,7 @@ func TestDiscovery(t *testing.T) {
 			AuthorizeDependencies{},
 			TokenDependencies{},
 			UserinfoDependencies{},
+			LogoutDependencies{},
 		).Handler()
 	}
 
@@ -75,6 +77,7 @@ func TestDiscovery(t *testing.T) {
 			"authorization_endpoint": "https://auth.example.com/authorize",
 			"token_endpoint": "https://auth.example.com/token",
 			"userinfo_endpoint": "https://auth.example.com/userinfo",
+			"end_session_endpoint": "https://auth.example.com/logout",
 			"jwks_uri": "https://auth.example.com/.well-known/jwks.json",
 			"response_types_supported": ["code"],
 			"subject_types_supported": ["public"],
@@ -112,7 +115,6 @@ func TestDiscovery(t *testing.T) {
 
 		newHandler(referenceIssuer).ServeHTTP(response, request)
 
-		require.NotContains(t, response.Body.String(), "end_session_endpoint")
 		require.NotContains(t, response.Body.String(), "implicit")
 		require.NotContains(t, response.Body.String(), "client_secret_post")
 		require.NotContains(t, response.Body.String(), "plain")
