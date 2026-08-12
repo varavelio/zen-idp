@@ -18,7 +18,10 @@ tasks:
 
   deps:
     desc: Install dependencies for the project
-    cmd: go mod download
+    cmds:
+      - go mod download
+      - bash scripts/download-fonts.sh
+      - bash scripts/download-alpine.sh
 
   serve:
     desc: Build and run serve subcommand with .env
@@ -45,9 +48,10 @@ tasks:
     cmd: go build -o ./dist/zen-idp ./cmd/zen-idp/.
 
   codegen:
-    desc: Run code generators
+    desc: Run code generators (SQLC, TailwindCSS)
     cmds:
       - sqlc generate
+      - tailwindcss -i internal/ui/tailwind.css -o internal/ui/static/build/app.css --silent --minify
 
   format:
     desc: Format all code
