@@ -16,6 +16,7 @@ import (
 
 	"github.com/varavelio/zen-idp/internal/admin"
 	"github.com/varavelio/zen-idp/internal/audit"
+	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/id"
 	"github.com/varavelio/zen-idp/internal/jwt"
 	"github.com/varavelio/zen-idp/internal/lock"
@@ -172,6 +173,14 @@ func runServe(envFile string, dependencies dependencies) error {
 		return fmt.Errorf("build admin service: %w", err)
 	}
 
+	csrfGuard, err := csrf.NewGuard(
+		server.CSRFCookieName,
+		strings.HasPrefix(configuration.Issuer, "https://"),
+	)
+	if err != nil {
+		return fmt.Errorf("build CSRF guard: %w", err)
+	}
+
 	address := net.JoinHostPort(configuration.Server.Host, strconv.Itoa(configuration.Server.Port))
 	listener, err := dependencies.listen("tcp", address)
 	if err != nil {
@@ -213,6 +222,7 @@ func runServe(envFile string, dependencies dependencies) error {
 		server.AdminDependencies{
 			Service:       adminService,
 			Sessions:      sessionStore,
+			CSRF:          csrfGuard,
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
 			SessionMaxAge: configuration.Security.Session.MaxAge,
