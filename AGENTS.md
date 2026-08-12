@@ -53,6 +53,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/server: Exposes Zen IdP's HTTP endpoints with injected dependencies and centralized error handling
 - internal/session: Creates, validates, and revokes authoritative SQLite-backed SSO sessions from sess_{id}_{secret} browser tokens
 - internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
+- internal/token: Issues the RS256-signed ID and access tokens of the deterministic signing identity with fixed 900-second lifetimes
 - internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret and verifies authenticator codes
 - internal/yamlmerge: Merges YAML documents into one unified document
 - internal/yamlsource: Discovers and reads YAML files from filesystem paths, directories, and glob patterns
