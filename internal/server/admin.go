@@ -26,6 +26,9 @@ const adminLoginPath = "/admin"
 // adminLoginAction is the form target of the administrator sign-in form.
 const adminLoginAction = "/admin/login"
 
+// adminLogoutPath is the administrator sign-out endpoint.
+const adminLogoutPath = "/admin/logout"
+
 // adminFailureMessage is the single, indistinguishable failure message shown
 // for every denied administrator sign-in attempt, matching the denial
 // contract of the admin service.
@@ -37,10 +40,12 @@ type AdminService interface {
 	Login(context.Context, string, time.Time) (string, error)
 }
 
-// AdminSessionValidator authenticates an administrator session browser
-// token, satisfied by session.Store.
-type AdminSessionValidator interface {
+// AdminSessions owns the administrator session lifecycle the administration
+// interaction needs: validation of administrator browser tokens and
+// revocation, satisfied by session.Store.
+type AdminSessions interface {
 	ValidateAdmin(context.Context, string, time.Time) (session.Session, error)
+	Revoke(context.Context, string) error
 }
 
 // AdminDependencies carries the injected pieces of the administration
@@ -48,8 +53,8 @@ type AdminSessionValidator interface {
 type AdminDependencies struct {
 	// Service authenticates the administrator and creates their session.
 	Service AdminService
-	// Sessions validates administrator session cookies.
-	Sessions AdminSessionValidator
+	// Sessions validates and revokes administrator session cookies.
+	Sessions AdminSessions
 	// UI holds the presentation settings shown on administration pages.
 	UI config.UI
 	// SecureCookies marks the administrator session cookie Secure; it must
@@ -112,6 +117,27 @@ func (server *Server) processAdminLogin(w http.ResponseWriter, r *http.Request) 
 			server.admin.SecureCookies,
 		),
 	)
+	http.Redirect(w, r, adminLoginPath, http.StatusSeeOther)
+	return nil
+}
+
+// adminLogOut handles the administrator sign-out interaction: it revokes
+// the administrator session carried by the admin session cookie, clears the
+// cookie, and returns to the administration landing page, which shows the
+// sign-in form. An absent or malformed admin session cookie is not an error,
+// so sign-out always completes and always leaves the browser signed out as
+// administrator. The regular user SSO session cookie is never touched.
+func (server *Server) adminLogOut(w http.ResponseWriter, r *http.Request) error {
+	cookie, err := r.Cookie(adminSessionCookieName)
+	if err == nil {
+		if err := server.admin.Sessions.Revoke(r.Context(), cookie.Value); err != nil &&
+			!errors.Is(err, session.ErrMalformedToken) {
+			return fmt.Errorf("revoke admin session: %w", err)
+		}
+	}
+
+	http.SetCookie(w, browserCookie(adminSessionCookieName, "", -1, server.admin.SecureCookies))
+	w.Header().Set("Cache-Control", "no-store")
 	http.Redirect(w, r, adminLoginPath, http.StatusSeeOther)
 	return nil
 }

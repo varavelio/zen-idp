@@ -253,7 +253,7 @@ func TestAdminInfrastructureErrors(t *testing.T) {
 
 	t.Run("failing admin session validation returns 500", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
-		app.server.admin.Sessions = failingAdminValidator{err: errors.New("boom")}
+		app.server.admin.Sessions = failingAdminSessions{err: errors.New("boom")}
 
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -268,6 +268,143 @@ func TestAdminInfrastructureErrors(t *testing.T) {
 		response := httptest.NewRecorder()
 
 		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusInternalServerError, response.Code)
+	})
+}
+
+// TestAdminLogOut covers the administrator sign-out interaction.
+func TestAdminLogOut(t *testing.T) {
+	// signInAndGetCookie performs an administrator sign-in and returns the
+	// issued admin session cookie value.
+	signInAndGetCookie := func(t *testing.T, app *testApp) string {
+		t.Helper()
+		response := adminLoginRequest(t, app, testAdminPassword)
+		token := adminSessionCookie(t, response)
+		require.NotEmpty(t, token)
+		return token
+	}
+
+	// logOut issues a GET /admin/logout request with the given cookies and
+	// returns the response.
+	logOut := func(t *testing.T, app *testApp, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			adminLogoutPath,
+			nil,
+		)
+		for _, cookie := range cookies {
+			request.AddCookie(cookie)
+		}
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+		return response
+	}
+
+	t.Run("revokes the admin session and returns to the sign-in form", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := signInAndGetCookie(t, app)
+
+		response := logOut(t, app, &http.Cookie{Name: adminSessionCookieName, Value: token})
+
+		require.Equal(t, http.StatusSeeOther, response.Code)
+		require.Equal(t, adminLoginPath, response.Header().Get("Location"))
+		require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+
+		_, err := app.sessions.ValidateAdmin(
+			context.Background(), token, time.Now().Add(time.Hour),
+		)
+		require.ErrorIs(t, err, session.ErrInvalidSession)
+	})
+
+	t.Run("clears the admin session cookie", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := signInAndGetCookie(t, app)
+
+		response := logOut(t, app, &http.Cookie{Name: adminSessionCookieName, Value: token})
+
+		cookie := response.Result().Cookies()
+		require.Len(t, cookie, 1)
+		require.Equal(t, adminSessionCookieName, cookie[0].Name)
+		require.Empty(t, cookie[0].Value)
+		require.Equal(t, -1, cookie[0].MaxAge)
+		require.True(t, cookie[0].HttpOnly)
+	})
+
+	t.Run("succeeds without an admin session cookie", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		response := logOut(t, app)
+
+		require.Equal(t, http.StatusSeeOther, response.Code)
+		require.Equal(t, adminLoginPath, response.Header().Get("Location"))
+		cookie := response.Result().Cookies()
+		require.Len(t, cookie, 1)
+		require.Empty(t, cookie[0].Value)
+	})
+
+	t.Run("ignores a malformed admin session cookie", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		response := logOut(t, app, &http.Cookie{Name: adminSessionCookieName, Value: "garbage"})
+
+		require.Equal(t, http.StatusSeeOther, response.Code)
+		require.Equal(t, adminLoginPath, response.Header().Get("Location"))
+	})
+
+	t.Run("leaves the user SSO session untouched", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		adminToken := signInAndGetCookie(t, app)
+
+		userToken, err := app.sessions.Create(context.Background(), session.CreateParams{
+			Subject: "alice",
+			Now:     time.Now(),
+		})
+		require.NoError(t, err)
+
+		response := logOut(
+			t,
+			app,
+			&http.Cookie{Name: adminSessionCookieName, Value: adminToken},
+			&http.Cookie{Name: sessionCookieName, Value: userToken},
+		)
+
+		require.Equal(t, http.StatusSeeOther, response.Code)
+		require.Len(t, response.Result().Cookies(), 1)
+		require.Equal(t, adminSessionCookieName, response.Result().Cookies()[0].Name)
+
+		// The user session is still active after the admin sign-out.
+		record, err := app.sessions.Validate(
+			context.Background(), userToken, time.Now().Add(time.Hour),
+		)
+		require.NoError(t, err)
+		require.Equal(t, "alice", record.Subject)
+	})
+
+	t.Run("returns 405 for non-GET methods", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			adminLogoutPath,
+			nil,
+		)
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusMethodNotAllowed, response.Code)
+	})
+
+	t.Run("propagates revocation failures", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.admin.Sessions = failingAdminSessions{err: errors.New("boom")}
+
+		response := logOut(
+			t,
+			app,
+			&http.Cookie{Name: adminSessionCookieName, Value: "sess_someid_somesecret"},
+		)
 
 		require.Equal(t, http.StatusInternalServerError, response.Code)
 	})
@@ -377,7 +514,7 @@ func TestAdminAndUserCookiesCoexist(t *testing.T) {
 	require.Contains(t, location.Query(), "code")
 }
 
-// failingAdminService and failingAdminValidator are stub implementations
+// failingAdminService and failingAdminSessions are stub implementations
 // that always return the configured error.
 type failingAdminService struct{ err error }
 
@@ -385,12 +522,16 @@ func (stub failingAdminService) Login(context.Context, string, time.Time) (strin
 	return "", stub.err
 }
 
-type failingAdminValidator struct{ err error }
+type failingAdminSessions struct{ err error }
 
-func (stub failingAdminValidator) ValidateAdmin(
+func (stub failingAdminSessions) ValidateAdmin(
 	context.Context,
 	string,
 	time.Time,
 ) (session.Session, error) {
 	return session.Session{}, stub.err
+}
+
+func (stub failingAdminSessions) Revoke(context.Context, string) error {
+	return stub.err
 }
