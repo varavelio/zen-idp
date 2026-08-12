@@ -114,6 +114,45 @@ func TestHashCredential(t *testing.T) {
 	require.NoError(t, ValidateCredentialHash(hash))
 }
 
+func TestVerifyCredential(t *testing.T) {
+	t.Run("matches the credential that produced the hash", func(t *testing.T) {
+		hash, err := HashCredential("credential")
+		require.NoError(t, err)
+
+		match, err := VerifyCredential("credential", hash)
+
+		require.NoError(t, err)
+		require.True(t, match)
+	})
+
+	t.Run("rejects a wrong credential", func(t *testing.T) {
+		hash, err := HashCredential("credential")
+		require.NoError(t, err)
+
+		match, err := VerifyCredential("wrong", hash)
+
+		require.NoError(t, err)
+		require.False(t, match)
+	})
+
+	t.Run("rejects an empty credential", func(t *testing.T) {
+		hash, err := HashCredential("credential")
+		require.NoError(t, err)
+
+		match, err := VerifyCredential("", hash)
+
+		require.NoError(t, err)
+		require.False(t, match)
+	})
+
+	t.Run("errors on a malformed hash", func(t *testing.T) {
+		match, err := VerifyCredential("credential", "not-a-hash")
+
+		require.Error(t, err)
+		require.False(t, match)
+	})
+}
+
 type failingReader struct {
 	err error
 }

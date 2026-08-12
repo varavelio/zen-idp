@@ -63,6 +63,17 @@ func HashCredential(plain string) (string, error) {
 	return hash, nil
 }
 
+// VerifyCredential reports whether plain matches the given Argon2id PHC
+// hash. The comparison runs in constant time; a malformed hash yields an
+// error instead of a mismatch.
+func VerifyCredential(plain, hash string) (bool, error) {
+	match, err := argon2id.ComparePasswordAndHash(plain, hash)
+	if err != nil {
+		return false, fmt.Errorf("verify Argon2id hash: %w", err)
+	}
+	return match, nil
+}
+
 // ValidateCredentialHash checks the PHC structure and minimum salt and key
 // lengths accepted by Zen IdP configuration.
 func ValidateCredentialHash(hash string) error {
