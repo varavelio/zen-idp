@@ -30,6 +30,9 @@ RUN set -e && \
   npm install --global dprint@0.55.2 && \
   # Install goose
   curl -fsSL https://raw.githubusercontent.com/pressly/goose/v3.27.3/install.sh | sh -s v3.27.3 && \
+  # Install Tailwind CSS standalone binary
+  curl -fsSL -o /usr/local/bin/tailwindcss https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64 && \
+  chmod +x /usr/local/bin/tailwindcss && \
   # Git config
   git config --global --add safe.directory '*' && \
   # Cleanup
