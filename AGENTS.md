@@ -36,6 +36,7 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
 
 - cmd/zen-idp: The entry point of the program
+- internal/audit: Records security-relevant operational events as disposable SQLite-backed audit records
 - internal/cli: Parses Zen IdP command-line invocations into typed commands
 - internal/clock: Formats and parses the canonical UTC RFC 3339 timestamps used by the state database
 - internal/config: Parses, defaults, and validates a unified YAML document into typed configuration
