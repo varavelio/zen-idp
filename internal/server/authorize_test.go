@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/ui"
 )
 
 // validCodeChallenge is the RFC 7636 appendix B example code challenge,
@@ -82,7 +83,7 @@ func requireInvalidRequestPage(t *testing.T, response *httptest.ResponseRecorder
 }
 
 func TestAuthorize(t *testing.T) {
-	handler := New(testPublicJWK(), testClients()).Handler()
+	handler := New(testPublicJWK(), testClients(), ui.Assets()).Handler()
 
 	t.Run("forwards a valid public client request to the login interaction", func(t *testing.T) {
 		params := validPublicRequest()

@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/varavelio/zen-idp/internal/jwk"
+	"github.com/varavelio/zen-idp/internal/ui"
 )
 
 const testJWKJSON = `{"kty":"RSA","n":"MODULUS","e":"AQAB","alg":"RS256","use":"sig","kid":"KID"}`
@@ -25,7 +26,7 @@ func testPublicJWK() jwk.PublicJWK {
 
 func TestJWKS(t *testing.T) {
 	t.Run("serves the public signing identity", func(t *testing.T) {
-		handler := New(testPublicJWK(), nil).Handler()
+		handler := New(testPublicJWK(), nil, ui.Assets()).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
 			http.MethodGet,
@@ -42,7 +43,7 @@ func TestJWKS(t *testing.T) {
 	})
 
 	t.Run("rejects other methods", func(t *testing.T) {
-		handler := New(testPublicJWK(), nil).Handler()
+		handler := New(testPublicJWK(), nil, ui.Assets()).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
 			http.MethodPost,
@@ -57,7 +58,7 @@ func TestJWKS(t *testing.T) {
 	})
 
 	t.Run("returns 404 for unknown paths", func(t *testing.T) {
-		handler := New(testPublicJWK(), nil).Handler()
+		handler := New(testPublicJWK(), nil, ui.Assets()).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
 			http.MethodGet,
