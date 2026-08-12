@@ -2,13 +2,19 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/onetoken"
+	"github.com/varavelio/zen-idp/internal/session"
+	"github.com/varavelio/zen-idp/internal/totp"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
 
@@ -62,6 +68,31 @@ func validPublicRequest() map[string]string {
 	}
 }
 
+// createSessionToken creates an active session for subject at the given
+// instant and returns its browser credential token.
+func createSessionToken(t *testing.T, app *testApp, subject string, now time.Time) string {
+	t.Helper()
+	token, err := app.sessions.Create(context.Background(), session.CreateParams{
+		Subject: subject,
+		Now:     now,
+	})
+	require.NoError(t, err)
+	return token
+}
+
+// authorizeRequestWithSession builds a GET /authorize request carrying the
+// given query string and an SSO session cookie.
+func authorizeRequestWithSession(query, token string) *http.Request {
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/authorize?"+query,
+		nil,
+	)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+	return request
+}
+
 func requireErrorRedirect(t *testing.T, response *httptest.ResponseRecorder, code, state string) {
 	t.Helper()
 	require.Equal(t, http.StatusFound, response.Code)
@@ -83,7 +114,13 @@ func requireInvalidRequestPage(t *testing.T, response *httptest.ResponseRecorder
 }
 
 func TestAuthorize(t *testing.T) {
-	handler := New(testPublicJWK(), testClients(), ui.Assets(), LoginDependencies{}).Handler()
+	handler := New(
+		testPublicJWK(),
+		testClients(),
+		ui.Assets(),
+		LoginDependencies{},
+		AuthorizeDependencies{},
+	).Handler()
 
 	t.Run("forwards a valid public client request to the login interaction", func(t *testing.T) {
 		params := validPublicRequest()
@@ -346,4 +383,274 @@ func TestAuthorize(t *testing.T) {
 
 		require.Equal(t, http.StatusMethodNotAllowed, response.Code)
 	})
+}
+
+func TestAuthorizeIssuesCode(t *testing.T) {
+	queryFor := func(params map[string]string) string {
+		query := url.Values{}
+		for name, value := range params {
+			query.Set(name, value)
+		}
+		return query.Encode()
+	}
+	redirectTo := func(response *httptest.ResponseRecorder) *url.URL {
+		t.Helper()
+		location, err := url.Parse(response.Header().Get("Location"))
+		require.NoError(t, err)
+		return location
+	}
+
+	t.Run("redirects a valid session to the registered URI with a bound code", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), token),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+		location := redirectTo(response)
+		base := location.Scheme + "://" + location.Host + location.Path
+		require.Equal(t, "https://app.example.com/callback", base)
+		require.Equal(t, "STATE", location.Query().Get("state"))
+
+		code, err := app.codes.ConsumeCode(
+			context.Background(),
+			location.Query().Get("code"),
+			time.Now(),
+		)
+		require.NoError(t, err)
+		require.Equal(t, "alice", code.Subject)
+		require.Zero(t, code.TOTPRev)
+		require.Equal(t, "public-app", code.ClientID)
+		require.Equal(t, "https://app.example.com/callback", code.RedirectURI)
+		require.Equal(t, "openid profile", code.Scope)
+		require.Equal(t, "NONCE", code.Nonce)
+		require.Equal(t, referenceCodeChallenge, code.PKCEChallenge)
+		require.Equal(t, "S256", code.PKCEMethod)
+		require.WithinDuration(
+			t,
+			time.Now().Add(authorizationCodeLifetime),
+			code.ExpiresAt,
+			time.Minute,
+		)
+	})
+
+	t.Run("omits state when the request carried none", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		params := validPublicRequest()
+		delete(params, "state")
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		location := redirectTo(response)
+		require.NotEmpty(t, location.Query().Get("code"))
+		require.Empty(t, location.Query().Get("state"))
+	})
+
+	t.Run("preserves the redirect URI's own query parameters", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		params := validPublicRequest()
+		params["client_id"] = "query-app"
+		params["redirect_uri"] = "https://app.example.com/callback?tenant=1"
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		location := redirectTo(response)
+		require.Equal(t, "1", location.Query().Get("tenant"))
+		require.NotEmpty(t, location.Query().Get("code"))
+		require.Equal(t, "STATE", location.Query().Get("state"))
+	})
+
+	t.Run("binds a confidential request without PKCE to no PKCE material", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		params := map[string]string{
+			"client_id":     "confidential-app",
+			"redirect_uri":  "https://app.example.com/callback",
+			"response_type": "code",
+			"scope":         "openid",
+			"state":         "STATE",
+			"nonce":         "NONCE",
+		}
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		location := redirectTo(response)
+		code, err := app.codes.ConsumeCode(
+			context.Background(),
+			location.Query().Get("code"),
+			time.Now(),
+		)
+		require.NoError(t, err)
+		require.Empty(t, code.PKCEChallenge)
+		require.Empty(t, code.PKCEMethod)
+	})
+
+	t.Run("sends an invalid session cookie to the login interaction", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), "not-a-token"),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.Equal(
+			t,
+			"/login?"+queryFor(validPublicRequest()),
+			response.Header().Get("Location"),
+		)
+	})
+
+	t.Run("sends a revoked session to the login interaction", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		require.NoError(t, app.sessions.Revoke(context.Background(), token))
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), token),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.Equal(
+			t,
+			"/login?"+queryFor(validPublicRequest()),
+			response.Header().Get("Location"),
+		)
+	})
+
+	t.Run("sends an expired session to the login interaction", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now().Add(-(testMaxAge + time.Hour)))
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), token),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.Equal(
+			t,
+			"/login?"+queryFor(validPublicRequest()),
+			response.Header().Get("Location"),
+		)
+	})
+
+	t.Run("validates the request before honoring a session", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		params := validPublicRequest()
+		params["scope"] = "profile"
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		requireErrorRedirect(t, response, "invalid_scope", "STATE")
+		require.Empty(t, redirectTo(response).Query().Get("code"))
+	})
+
+	t.Run("reports session validation failures", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.authorization.Sessions = failingSessionValidator{}
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), "sess_abc_def"),
+		)
+
+		require.Equal(t, http.StatusInternalServerError, response.Code)
+		require.Empty(t, response.Header().Get("Location"))
+	})
+
+	t.Run("reports authorization code issuance failures", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.authorization.Codes = failingCodeIssuer{}
+		token := createSessionToken(t, app, "alice", time.Now())
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), token),
+		)
+
+		require.Equal(t, http.StatusInternalServerError, response.Code)
+		require.Empty(t, response.Header().Get("Location"))
+	})
+
+	t.Run("completes the login flow with a code redirect", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		secret, err := totp.DeriveSharedSecret(referenceRootSecret, "alice", 0)
+		require.NoError(t, err)
+		form := url.Values{"identifier": {"alice"}, "code": {totpCode(t, secret, time.Now())}}
+		response := httptest.NewRecorder()
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			"/login?"+queryFor(validPublicRequest()),
+			strings.NewReader(form.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		app.server.Handler().ServeHTTP(response, request)
+		require.Equal(t, http.StatusSeeOther, response.Code)
+		cookie := response.Result().Cookies()[0]
+
+		response = httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), cookie.Value),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		location := redirectTo(response)
+		base := location.Scheme + "://" + location.Host + location.Path
+		require.Equal(t, "https://app.example.com/callback", base)
+		require.Equal(t, "STATE", location.Query().Get("state"))
+		require.NotEmpty(t, location.Query().Get("code"))
+	})
+}
+
+// failingSessionValidator is a SessionValidator that always fails with an
+// infrastructure error.
+type failingSessionValidator struct{}
+
+func (failingSessionValidator) Validate(
+	context.Context,
+	string,
+	time.Time,
+) (session.Session, error) {
+	return session.Session{}, errors.New("session store unavailable")
+}
+
+// failingCodeIssuer is a CodeIssuer that always fails with an
+// infrastructure error.
+type failingCodeIssuer struct{}
+
+func (failingCodeIssuer) CreateCode(context.Context, onetoken.CodeParams) (string, error) {
+	return "", errors.New("one-use token store unavailable")
 }

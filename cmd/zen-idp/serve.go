@@ -17,6 +17,7 @@ import (
 	"github.com/varavelio/zen-idp/internal/id"
 	"github.com/varavelio/zen-idp/internal/lock"
 	"github.com/varavelio/zen-idp/internal/login"
+	"github.com/varavelio/zen-idp/internal/onetoken"
 	"github.com/varavelio/zen-idp/internal/ratelimit"
 	"github.com/varavelio/zen-idp/internal/server"
 	"github.com/varavelio/zen-idp/internal/session"
@@ -95,6 +96,11 @@ func runServe(envFile string, dependencies dependencies) error {
 		return fmt.Errorf("build session store: %w", err)
 	}
 
+	codeStore, err := onetoken.NewStore(queries, id.NewIDGenerator(), runtime.RootSecret)
+	if err != nil {
+		return fmt.Errorf("build one-use token store: %w", err)
+	}
+
 	logins, err := login.New(
 		configuration.Users,
 		runtime.RootSecret,
@@ -125,6 +131,10 @@ func runServe(envFile string, dependencies dependencies) error {
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
 			SessionMaxAge: configuration.Security.Session.MaxAge,
+		},
+		server.AuthorizeDependencies{
+			Sessions: sessionStore,
+			Codes:    codeStore,
 		},
 	)
 	httpServer := &http.Server{

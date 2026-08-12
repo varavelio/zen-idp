@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -8,14 +9,44 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/onetoken"
+	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
 
 // authorizeLoginPath is the login interaction that valid authorization
 // requests are forwarded to.
 const authorizeLoginPath = "/login"
+
+// authorizationCodeLifetime is the absolute lifetime of an issued
+// authorization code.
+const authorizationCodeLifetime = 300 * time.Second
+
+// SessionValidator authenticates an SSO session browser token and returns
+// the authoritative session record, satisfied by session.Store.
+type SessionValidator interface {
+	Validate(context.Context, string, time.Time) (session.Session, error)
+}
+
+// CodeIssuer creates one-use OIDC authorization codes carrying every binding
+// of an accepted authorization request, satisfied by onetoken.Store.
+type CodeIssuer interface {
+	CreateCode(context.Context, onetoken.CodeParams) (string, error)
+}
+
+// AuthorizeDependencies carries the injected pieces of the authorization
+// endpoint's session continuation.
+type AuthorizeDependencies struct {
+	// Sessions validates the SSO session cookie presented with an
+	// authorization request.
+	Sessions SessionValidator
+	// Codes creates the one-use authorization code that completes an
+	// accepted request.
+	Codes CodeIssuer
+}
 
 // authorizeRequest is the parsed wire form of an OIDC authorization request.
 type authorizeRequest struct {
@@ -30,10 +61,12 @@ type authorizeRequest struct {
 }
 
 // authorize handles the OIDC authorization endpoint. It validates every wire
-// parameter of the request and, when the request is valid, forwards it to
-// the login interaction with its parameters intact. Requests whose client or
-// redirect URI is not trusted receive a generic error page instead of a
-// redirect, because no safe target exists for them.
+// parameter of the request and, when the request is valid, continues the
+// flow: an active SSO session receives a fresh authorization code and a
+// redirect to the registered redirect URI, and any other request is
+// forwarded to the login interaction with its parameters intact. Requests
+// whose client or redirect URI is not trusted receive a generic error page
+// instead of a redirect, because no safe target exists for them.
 func (server *Server) authorize(w http.ResponseWriter, r *http.Request) error {
 	request, err := server.parseAndValidateAuthorizeRequest(r)
 	if err != nil {
@@ -43,7 +76,71 @@ func (server *Server) authorize(w http.ResponseWriter, r *http.Request) error {
 		}
 		return writeInvalidRequestPage(w)
 	}
+
+	cookie, err := r.Cookie(sessionCookieName)
+	if err == nil {
+		sessions, err := server.authorization.Sessions.Validate(
+			r.Context(),
+			cookie.Value,
+			time.Now(),
+		)
+		if err == nil {
+			return server.issueCodeAndRedirect(w, r, request, sessions)
+		}
+		switch {
+		case errors.Is(err, session.ErrMalformedToken),
+			errors.Is(err, session.ErrInvalidSession),
+			errors.Is(err, session.ErrExpiredSession):
+			// The cookie does not authenticate an active session; the
+			// browser continues to the login interaction.
+		default:
+			return fmt.Errorf("validate session cookie: %w", err)
+		}
+	}
 	http.Redirect(w, r, authorizeLoginPath+"?"+r.URL.RawQuery, http.StatusFound)
+	return nil
+}
+
+// issueCodeAndRedirect issues a fresh authorization code carrying every
+// binding of the accepted request plus the authenticated session's subject
+// and TOTP revision, and redirects the browser to the client's registered
+// redirect URI with the code and the request state. The response is marked
+// no-store because its target URL carries a redeemable one-use credential.
+func (server *Server) issueCodeAndRedirect(
+	w http.ResponseWriter,
+	r *http.Request,
+	request authorizeRequest,
+	sessions session.Session,
+) error {
+	now := time.Now()
+	code, err := server.authorization.Codes.CreateCode(r.Context(), onetoken.CodeParams{
+		Subject:       sessions.Subject,
+		TOTPRev:       sessions.TOTPRev,
+		ClientID:      request.clientID,
+		RedirectURI:   request.redirectURI,
+		Scope:         request.scope,
+		Nonce:         request.nonce,
+		PKCEChallenge: request.codeChallenge,
+		PKCEMethod:    request.codeChallengeMethod,
+		ExpiresAt:     now.Add(authorizationCodeLifetime),
+		Now:           now,
+	})
+	if err != nil {
+		return fmt.Errorf("issue authorization code: %w", err)
+	}
+
+	target, err := url.Parse(request.redirectURI)
+	if err != nil {
+		return fmt.Errorf("parse redirect URI: %w", err)
+	}
+	query := target.Query()
+	query.Set("code", code)
+	if request.state != "" {
+		query.Set("state", request.state)
+	}
+	target.RawQuery = query.Encode()
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, target.String(), http.StatusFound)
 	return nil
 }
 

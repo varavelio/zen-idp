@@ -26,7 +26,13 @@ func testPublicJWK() jwk.PublicJWK {
 
 func TestJWKS(t *testing.T) {
 	t.Run("serves the public signing identity", func(t *testing.T) {
-		handler := New(testPublicJWK(), nil, ui.Assets(), LoginDependencies{}).Handler()
+		handler := New(
+			testPublicJWK(),
+			nil,
+			ui.Assets(),
+			LoginDependencies{},
+			AuthorizeDependencies{},
+		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
 			http.MethodGet,
@@ -43,7 +49,13 @@ func TestJWKS(t *testing.T) {
 	})
 
 	t.Run("rejects other methods", func(t *testing.T) {
-		handler := New(testPublicJWK(), nil, ui.Assets(), LoginDependencies{}).Handler()
+		handler := New(
+			testPublicJWK(),
+			nil,
+			ui.Assets(),
+			LoginDependencies{},
+			AuthorizeDependencies{},
+		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
 			http.MethodPost,
@@ -58,7 +70,13 @@ func TestJWKS(t *testing.T) {
 	})
 
 	t.Run("returns 404 for unknown paths", func(t *testing.T) {
-		handler := New(testPublicJWK(), nil, ui.Assets(), LoginDependencies{}).Handler()
+		handler := New(
+			testPublicJWK(),
+			nil,
+			ui.Assets(),
+			LoginDependencies{},
+			AuthorizeDependencies{},
+		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
 			http.MethodGet,

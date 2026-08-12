@@ -22,6 +22,7 @@ import (
 	"github.com/varavelio/zen-idp/internal/id"
 	"github.com/varavelio/zen-idp/internal/lock"
 	"github.com/varavelio/zen-idp/internal/login"
+	"github.com/varavelio/zen-idp/internal/onetoken"
 	"github.com/varavelio/zen-idp/internal/ratelimit"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/statestore"
@@ -44,9 +45,17 @@ const testMaxAge = 72 * time.Hour
 // testUsers declares one current, unexpired, unlocked user.
 var testUsers = []config.User{{Subject: "alice"}}
 
-// loginTestServer builds a server with a real migrated SQLite state store and
-// the real login service wired on top of it.
-func loginTestServer(t *testing.T, users []config.User) (*Server, *session.Store) {
+// testApp bundles a fully wired test server with the real stores behind its
+// login and authorization dependencies.
+type testApp struct {
+	server   *Server
+	sessions *session.Store
+	codes    *onetoken.Store
+}
+
+// newTestApp builds a server with a real migrated SQLite state store and the
+// real login service and one-use token store wired on top of it.
+func newTestApp(t *testing.T, users []config.User) *testApp {
 	t.Helper()
 	queries := statestore.New(newLoginTestDB(t))
 	limiter, err := ratelimit.New(queries, 5, 5*time.Minute)
@@ -54,6 +63,8 @@ func loginTestServer(t *testing.T, users []config.User) (*Server, *session.Store
 	locks, err := lock.NewLocks(queries)
 	require.NoError(t, err)
 	store, err := session.NewStore(queries, id.NewIDGenerator(), referenceRootSecret, testMaxAge)
+	require.NoError(t, err)
+	codes, err := onetoken.NewStore(queries, id.NewIDGenerator(), referenceRootSecret)
 	require.NoError(t, err)
 	service, err := login.New(users, referenceRootSecret, limiter, locks, store)
 	require.NoError(t, err)
@@ -68,8 +79,12 @@ func loginTestServer(t *testing.T, users []config.User) (*Server, *session.Store
 			SecureCookies: true,
 			SessionMaxAge: testMaxAge,
 		},
+		AuthorizeDependencies{
+			Sessions: store,
+			Codes:    codes,
+		},
 	)
-	return server, store
+	return &testApp{server: server, sessions: store, codes: codes}
 }
 
 // newLoginTestDB opens and migrates a fresh SQLite state store.
@@ -118,7 +133,7 @@ func totpCode(t *testing.T, secret string, at time.Time) string {
 
 func TestLoginForm(t *testing.T) {
 	t.Run("renders the login form for a valid pending request", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
+		app := newTestApp(t, testUsers)
 		response := httptest.NewRecorder()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -126,7 +141,7 @@ func TestLoginForm(t *testing.T) {
 			"/login?"+loginQuery(),
 			nil,
 		)
-		server.Handler().ServeHTTP(response, request)
+		app.server.Handler().ServeHTTP(response, request)
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Equal(t, "text/html; charset=utf-8", response.Header().Get("Content-Type"))
@@ -142,7 +157,7 @@ func TestLoginForm(t *testing.T) {
 	})
 
 	t.Run("rejects requests without a pending authorization request", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
+		app := newTestApp(t, testUsers)
 		response := httptest.NewRecorder()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -150,14 +165,14 @@ func TestLoginForm(t *testing.T) {
 			"/login",
 			nil,
 		)
-		server.Handler().ServeHTTP(response, request)
+		app.server.Handler().ServeHTTP(response, request)
 
 		require.Equal(t, http.StatusBadRequest, response.Code)
 		require.Contains(t, response.Body.String(), "Invalid authorization request")
 	})
 
 	t.Run("rejects requests with an untrusted client", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
+		app := newTestApp(t, testUsers)
 		query := url.Values{
 			"client_id":     {"unknown"},
 			"redirect_uri":  {"https://app.example.com/callback"},
@@ -171,13 +186,13 @@ func TestLoginForm(t *testing.T) {
 			"/login?"+query,
 			nil,
 		)
-		server.Handler().ServeHTTP(response, request)
+		app.server.Handler().ServeHTTP(response, request)
 
 		require.Equal(t, http.StatusBadRequest, response.Code)
 	})
 
 	t.Run("rejects requests with an invalid pending request", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
+		app := newTestApp(t, testUsers)
 		query := url.Values{
 			"client_id":     {"public-app"},
 			"redirect_uri":  {"https://app.example.com/callback"},
@@ -191,7 +206,7 @@ func TestLoginForm(t *testing.T) {
 			"/login?"+query,
 			nil,
 		)
-		server.Handler().ServeHTTP(response, request)
+		app.server.Handler().ServeHTTP(response, request)
 
 		require.Equal(t, http.StatusBadRequest, response.Code)
 	})
@@ -225,8 +240,8 @@ func TestProcessLogin(t *testing.T) {
 	t.Run(
 		"authenticates a valid identifier and code and issues the session cookie",
 		func(t *testing.T) {
-			server, store := loginTestServer(t, testUsers)
-			response := post(t, server, loginQuery(), "alice", codeFor(t, "alice"))
+			app := newTestApp(t, testUsers)
+			response := post(t, app.server, loginQuery(), "alice", codeFor(t, "alice"))
 
 			require.Equal(t, http.StatusSeeOther, response.Code)
 			require.Equal(t, "/authorize?"+loginQuery(), response.Header().Get("Location"))
@@ -241,7 +256,7 @@ func TestProcessLogin(t *testing.T) {
 			require.Equal(t, "/", cookie.Path)
 			require.Equal(t, int(testMaxAge.Seconds()), cookie.MaxAge)
 
-			sessions, err := store.Validate(context.Background(), cookie.Value, time.Now())
+			sessions, err := app.sessions.Validate(context.Background(), cookie.Value, time.Now())
 			require.NoError(t, err)
 			require.Equal(t, "alice", sessions.Subject)
 		},
@@ -249,16 +264,16 @@ func TestProcessLogin(t *testing.T) {
 
 	t.Run("authenticates a user by its configured login identifier", func(t *testing.T) {
 		users := []config.User{{Subject: "alice", Login: "alice@example.com"}}
-		server, _ := loginTestServer(t, users)
-		response := post(t, server, loginQuery(), "alice@example.com", codeFor(t, "alice"))
+		app := newTestApp(t, users)
+		response := post(t, app.server, loginQuery(), "alice@example.com", codeFor(t, "alice"))
 
 		require.Equal(t, http.StatusSeeOther, response.Code)
 	})
 
 	t.Run("marks the cookie secure only when configured", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
-		server.login.SecureCookies = false
-		response := post(t, server, loginQuery(), "alice", codeFor(t, "alice"))
+		app := newTestApp(t, testUsers)
+		app.server.login.SecureCookies = false
+		response := post(t, app.server, loginQuery(), "alice", codeFor(t, "alice"))
 
 		cookies := response.Result().Cookies()
 		require.Len(t, cookies, 1)
@@ -266,8 +281,8 @@ func TestProcessLogin(t *testing.T) {
 	})
 
 	t.Run("re-renders the form with a generic failure for a wrong code", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
-		response := post(t, server, loginQuery(), "alice", "000000")
+		app := newTestApp(t, testUsers)
+		response := post(t, app.server, loginQuery(), "alice", "000000")
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
@@ -280,8 +295,8 @@ func TestProcessLogin(t *testing.T) {
 	})
 
 	t.Run("returns the same failure for an unknown identifier", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
-		response := post(t, server, loginQuery(), "mallory", "000000")
+		app := newTestApp(t, testUsers)
+		response := post(t, app.server, loginQuery(), "mallory", "000000")
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Contains(
@@ -292,8 +307,8 @@ func TestProcessLogin(t *testing.T) {
 	})
 
 	t.Run("returns the same failure for a malformed code", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
-		response := post(t, server, loginQuery(), "alice", "not-a-code")
+		app := newTestApp(t, testUsers)
+		response := post(t, app.server, loginQuery(), "alice", "not-a-code")
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Contains(
@@ -304,12 +319,12 @@ func TestProcessLogin(t *testing.T) {
 	})
 
 	t.Run("denies attempts once the rate limit is exhausted", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
+		app := newTestApp(t, testUsers)
 		for range 5 {
-			response := post(t, server, loginQuery(), "alice", "000000")
+			response := post(t, app.server, loginQuery(), "alice", "000000")
 			require.Equal(t, http.StatusOK, response.Code)
 		}
-		response := post(t, server, loginQuery(), "alice", codeFor(t, "alice"))
+		response := post(t, app.server, loginQuery(), "alice", codeFor(t, "alice"))
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Contains(
@@ -321,8 +336,8 @@ func TestProcessLogin(t *testing.T) {
 	})
 
 	t.Run("rejects submissions without a pending authorization request", func(t *testing.T) {
-		server, _ := loginTestServer(t, testUsers)
-		response := post(t, server, "", "alice", codeFor(t, "alice"))
+		app := newTestApp(t, testUsers)
+		response := post(t, app.server, "", "alice", codeFor(t, "alice"))
 
 		require.Equal(t, http.StatusBadRequest, response.Code)
 		require.Contains(t, response.Body.String(), "Invalid authorization request")
