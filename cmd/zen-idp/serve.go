@@ -10,10 +10,17 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/varavelio/zen-idp/internal/id"
+	"github.com/varavelio/zen-idp/internal/lock"
+	"github.com/varavelio/zen-idp/internal/login"
+	"github.com/varavelio/zen-idp/internal/ratelimit"
 	"github.com/varavelio/zen-idp/internal/server"
+	"github.com/varavelio/zen-idp/internal/session"
+	"github.com/varavelio/zen-idp/internal/statestore"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
 
@@ -62,6 +69,43 @@ func runServe(envFile string, dependencies dependencies) error {
 		return fmt.Errorf("derive signing identity: %w", err)
 	}
 
+	queries := statestore.New(db)
+
+	rateLimiter, err := ratelimit.New(
+		queries,
+		configuration.Security.RateLimits.MaxUserLoginAttempts,
+		configuration.Security.RateLimits.UserLoginAttemptsWindow,
+	)
+	if err != nil {
+		return fmt.Errorf("build login rate limiter: %w", err)
+	}
+
+	locks, err := lock.NewLocks(queries)
+	if err != nil {
+		return fmt.Errorf("build user locks: %w", err)
+	}
+
+	sessionStore, err := session.NewStore(
+		queries,
+		id.NewIDGenerator(),
+		runtime.RootSecret,
+		configuration.Security.Session.MaxAge,
+	)
+	if err != nil {
+		return fmt.Errorf("build session store: %w", err)
+	}
+
+	logins, err := login.New(
+		configuration.Users,
+		runtime.RootSecret,
+		rateLimiter,
+		locks,
+		sessionStore,
+	)
+	if err != nil {
+		return fmt.Errorf("build login service: %w", err)
+	}
+
 	address := net.JoinHostPort(configuration.Server.Host, strconv.Itoa(configuration.Server.Port))
 	listener, err := dependencies.listen("tcp", address)
 	if err != nil {
@@ -72,7 +116,17 @@ func runServe(envFile string, dependencies dependencies) error {
 		slog.String("address", listener.Addr().String()),
 	)
 
-	app := server.New(publicJWK, configuration.Clients, ui.Assets())
+	app := server.New(
+		publicJWK,
+		configuration.Clients,
+		ui.Assets(),
+		server.LoginDependencies{
+			Service:       logins,
+			UI:            configuration.UI,
+			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
+			SessionMaxAge: configuration.Security.Session.MaxAge,
+		},
+	)
 	httpServer := &http.Server{
 		Handler:           app.Handler(),
 		ReadHeaderTimeout: readHeaderTimeout,
