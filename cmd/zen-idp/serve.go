@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/varavelio/zen-idp/internal/server"
+	"github.com/varavelio/zen-idp/internal/ui"
 )
 
 const (
@@ -71,7 +72,7 @@ func runServe(envFile string, dependencies dependencies) error {
 		slog.String("address", listener.Addr().String()),
 	)
 
-	app := server.New(publicJWK, configuration.Clients)
+	app := server.New(publicJWK, configuration.Clients, ui.Assets())
 	httpServer := &http.Server{
 		Handler:           app.Handler(),
 		ReadHeaderTimeout: readHeaderTimeout,
