@@ -10,12 +10,9 @@ import (
 	"github.com/varavelio/zen-idp/internal/config"
 )
 
-// Token lifetimes are fixed protocol constants: both token kinds expire 900
-// seconds after issuance and are not configurable.
-const (
-	idTokenLifetime     = 900 * time.Second
-	accessTokenLifetime = 900 * time.Second
-)
+// Lifetime is the fixed lifetime of every token an Issuer issues: both
+// token kinds expire 900 seconds after issuance and are not configurable.
+const Lifetime = 900 * time.Second
 
 // ErrDenied is the generic issuance failure returned when the subject is
 // unknown, expired, or locked. All three causes produce the same error so
@@ -113,7 +110,7 @@ func (issuer *Issuer) IssueIDToken(ctx context.Context, params IDTokenParams) (s
 	claims["sub"] = user.Subject
 	claims["aud"] = params.ClientID
 	claims["iat"] = params.Now.Unix()
-	claims["exp"] = params.Now.Add(idTokenLifetime).Unix()
+	claims["exp"] = params.Now.Add(Lifetime).Unix()
 	if params.Nonce != "" {
 		claims["nonce"] = params.Nonce
 	}
@@ -158,7 +155,7 @@ func (issuer *Issuer) IssueAccessToken(
 		"sub": user.Subject,
 		"aud": issuer.audience,
 		"iat": params.Now.Unix(),
-		"exp": params.Now.Add(accessTokenLifetime).Unix(),
+		"exp": params.Now.Add(Lifetime).Unix(),
 	}
 	if params.SessionID != "" {
 		claims["jti"] = params.SessionID
