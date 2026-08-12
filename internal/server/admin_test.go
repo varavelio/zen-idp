@@ -14,6 +14,7 @@ import (
 	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/statestore"
+	"github.com/varavelio/zen-idp/internal/totp"
 )
 
 // testAdminPassword is the plaintext administrator credential of the test
@@ -292,6 +293,88 @@ func TestAdminCookieIndependentOfUserLogin(t *testing.T) {
 	location, err := url.Parse(responseRecorder.Header().Get("Location"))
 	require.NoError(t, err)
 	require.Equal(t, "/login", location.Path)
+}
+
+// TestAdminAndUserCookiesCoexist verifies that the administrator and the
+// regular user can be signed in simultaneously in the same browser: the two
+// credentials travel in distinct cookies, each session stays valid in its
+// own domain, and neither cookie grants access to the other domain.
+func TestAdminAndUserCookiesCoexist(t *testing.T) {
+	app := newTestApp(t, testUsers)
+
+	// Sign in as the administrator and as the regular user alice.
+	adminResponse := adminLoginRequest(t, app, testAdminPassword)
+	adminToken := adminSessionCookie(t, adminResponse)
+	require.NotEmpty(t, adminToken)
+
+	secret, err := totp.DeriveSharedSecret(referenceRootSecret, "alice", 0)
+	require.NoError(t, err)
+	userForm := url.Values{
+		"identifier": {"alice"},
+		"code":       {totpCode(t, secret, time.Now())},
+	}
+	userRequest := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/login?"+loginQuery(),
+		strings.NewReader(userForm.Encode()),
+	)
+	userRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	userResponse := httptest.NewRecorder()
+	app.server.Handler().ServeHTTP(userResponse, userRequest)
+	require.Equal(t, http.StatusSeeOther, userResponse.Code)
+
+	var userToken string
+	for _, cookie := range userResponse.Result().Cookies() {
+		require.Equal(t, sessionCookieName, cookie.Name)
+		userToken = cookie.Value
+	}
+	require.NotEmpty(t, userToken)
+	require.NotEqual(t, adminToken, userToken)
+
+	// Both credentials validate simultaneously, each in its own domain.
+	adminSession, err := app.sessions.ValidateAdmin(
+		context.Background(), adminToken, time.Now().Add(time.Hour),
+	)
+	require.NoError(t, err)
+	require.Equal(t, session.KindAdmin, adminSession.Kind)
+
+	userSession, err := app.sessions.Validate(
+		context.Background(), userToken, time.Now().Add(time.Hour),
+	)
+	require.NoError(t, err)
+	require.Equal(t, session.KindUser, userSession.Kind)
+	require.Equal(t, "alice", userSession.Subject)
+
+	// A browser carrying both cookies at once: /admin honors the admin
+	// cookie, and /authorize honors the user cookie for SSO.
+	both := func() *http.Request {
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			adminLoginPath,
+			nil,
+		)
+		request.AddCookie(&http.Cookie{Name: adminSessionCookieName, Value: adminToken})
+		request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: userToken})
+		return request
+	}
+
+	adminPage := httptest.NewRecorder()
+	app.server.Handler().ServeHTTP(adminPage, both())
+	require.Equal(t, http.StatusOK, adminPage.Code)
+	require.Contains(t, adminPage.Body.String(), "Signed in as administrator.")
+
+	authorizeRequest := buildAuthorizeRequest(t, validPublicRequest())
+	authorizeRequest.AddCookie(&http.Cookie{Name: adminSessionCookieName, Value: adminToken})
+	authorizeRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: userToken})
+	authorizeResponse := httptest.NewRecorder()
+	app.server.Handler().ServeHTTP(authorizeResponse, authorizeRequest)
+	require.Equal(t, http.StatusFound, authorizeResponse.Code)
+	location, err := url.Parse(authorizeResponse.Header().Get("Location"))
+	require.NoError(t, err)
+	require.Equal(t, "app.example.com", location.Host)
+	require.Contains(t, location.Query(), "code")
 }
 
 // failingAdminService and failingAdminValidator are stub implementations

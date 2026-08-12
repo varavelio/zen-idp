@@ -17,7 +17,7 @@ import (
 // adminSessionCookieName is the browser cookie that carries the
 // administrator session credential token, distinct from the user SSO
 // session cookie.
-const adminSessionCookieName = "zen_idp_admin"
+const adminSessionCookieName = "zen_idp_admin_session"
 
 // adminLoginPath is the administration landing page that carries the
 // administrator sign-in form.
