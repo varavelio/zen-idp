@@ -121,6 +121,7 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 		},
 		LogoutDependencies{
 			Sessions:      store,
+			CSRF:          csrfGuard,
 			UI:            config.UI{Name: "Example Auth"},
 			SecureCookies: true,
 		},

@@ -216,6 +216,7 @@ func runServe(envFile string, dependencies dependencies) error {
 		},
 		server.LogoutDependencies{
 			Sessions:      sessionStore,
+			CSRF:          csrfGuard,
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
 		},

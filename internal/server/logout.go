@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
@@ -23,18 +24,45 @@ type SessionRevoker interface {
 type LogoutDependencies struct {
 	// Sessions revokes the SSO session presented with the logout request.
 	Sessions SessionRevoker
-	// UI holds the presentation settings shown on the signed-out page.
+	// CSRF protects the sign-out confirmation form from cross-site request
+	// forgery.
+	CSRF CSRFGuard
+	// UI holds the presentation settings shown on the logout pages.
 	UI config.UI
 	// SecureCookies marks the session cookie Secure; it must be true in
 	// production deployments.
 	SecureCookies bool
 }
 
-// logOut handles the local logout interaction: it revokes the SSO session
-// carried by the session cookie, clears the cookie, and renders the
-// signed-out page. An absent or malformed session cookie is not an error, so
-// logout always completes and always leaves the browser signed out.
-func (server *Server) logOut(w http.ResponseWriter, r *http.Request) error {
+// logoutForm renders the local logout interaction: the sign-out confirmation
+// with its protected form when the browser carries a session cookie, or the
+// signed-out page directly when there is nothing to confirm. The GET itself
+// never changes state; the actual revocation happens only through the
+// protected form submission.
+func (server *Server) logoutForm(w http.ResponseWriter, r *http.Request) error {
+	token, err := server.logout.CSRF.Token(w, r)
+	if err != nil {
+		return fmt.Errorf("get CSRF token: %w", err)
+	}
+	if _, err := r.Cookie(sessionCookieName); err != nil {
+		return server.renderSignedOutPage(w)
+	}
+	return server.renderSignOutConfirmationPage(w, token)
+}
+
+// processLogout handles the sign-out confirmation form submission: it
+// verifies the anti-forgery token, revokes the SSO session carried by the
+// session cookie, clears the cookie, and renders the signed-out page. An
+// absent or malformed session cookie is not an error, so logout always
+// completes and always leaves the browser signed out.
+func (server *Server) processLogout(w http.ResponseWriter, r *http.Request) error {
+	if err := server.logout.CSRF.Verify(r); err != nil {
+		if errors.Is(err, csrf.ErrInvalidToken) {
+			return writeForbiddenPage(w)
+		}
+		return fmt.Errorf("verify CSRF token: %w", err)
+	}
+
 	cookie, err := r.Cookie(sessionCookieName)
 	if err == nil {
 		if err := server.logout.Sessions.Revoke(r.Context(), cookie.Value); err != nil &&
@@ -44,8 +72,26 @@ func (server *Server) logOut(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	http.SetCookie(w, browserCookie(sessionCookieName, "", -1, server.logout.SecureCookies))
+	w.Header().Set("Cache-Control", "no-store")
+	return server.renderSignedOutPage(w)
+}
 
-	html, err := ui.SignedOutPage(server.logout.UI).RenderString()
+// renderSignOutConfirmationPage writes the sign-out confirmation form with
+// the given anti-forgery token.
+func (server *Server) renderSignOutConfirmationPage(w http.ResponseWriter, token string) error {
+	html, err := ui.LogOutConfirmationPage(server.logout.UI, token).RenderString()
+	if err != nil {
+		return fmt.Errorf("render sign-out confirmation page: %w", err)
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, err = io.WriteString(w, html)
+	return err
+}
+
+// renderSignedOutPage writes the signed-out completion page.
+func (server *Server) renderSignedOutPage(w http.ResponseWriter) error {
+	html, err := ui.LoggedOutPage(server.logout.UI).RenderString()
 	if err != nil {
 		return fmt.Errorf("render signed-out page: %w", err)
 	}

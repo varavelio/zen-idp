@@ -71,7 +71,8 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("GET /authorize", handle(server.authorize))
 	mux.Handle("POST /token", handle(server.token))
 	mux.Handle("GET /userinfo", handle(server.userInfo))
-	mux.Handle("GET /logout", handle(server.logOut))
+	mux.Handle("GET /logout", handle(server.logoutForm))
+	mux.Handle("POST /logout", handle(server.processLogout))
 
 	mux.Handle("GET /admin", handle(server.adminForm))
 	mux.Handle("POST /admin/login", handle(server.processAdminLogin))
