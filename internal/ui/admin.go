@@ -111,6 +111,15 @@ func AdminHomePage(settings config.UI) nodx.Node {
 						nodx.Text("Signed in as administrator."),
 					),
 				),
+				nodx.A(
+					nodx.Href("/admin/logout"),
+					nodx.Class(
+						"block w-full text-center rounded-md border border-base-400 bg-base-100 "+
+							"text-content font-medium py-2 px-3 hover:opacity-90 "+
+							"focus:outline-none focus:ring-2 focus:ring-content",
+					),
+					nodx.Text("Sign out"),
+				),
 			),
 		),
 	)
