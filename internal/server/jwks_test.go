@@ -32,6 +32,7 @@ func TestJWKS(t *testing.T) {
 			ui.Assets(),
 			LoginDependencies{},
 			AuthorizeDependencies{},
+			TokenDependencies{},
 		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -55,6 +56,7 @@ func TestJWKS(t *testing.T) {
 			ui.Assets(),
 			LoginDependencies{},
 			AuthorizeDependencies{},
+			TokenDependencies{},
 		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -76,6 +78,7 @@ func TestJWKS(t *testing.T) {
 			ui.Assets(),
 			LoginDependencies{},
 			AuthorizeDependencies{},
+			TokenDependencies{},
 		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),

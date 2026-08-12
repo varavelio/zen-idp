@@ -22,6 +22,13 @@ import (
 // which is exactly 43 characters of the unreserved base64url alphabet.
 const referenceCodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
 
+// testClientSecret is the plaintext secret of the confidential test clients
+// and testClientSecretHash is its precomputed Argon2id PHC hash.
+const (
+	testClientSecret     = "test-client-secret"
+	testClientSecretHash = "$argon2id$v=19$m=65536,t=2,p=2$5XEq+R1hozyGGEdvY7KVYA$cEyyXwpgnzm0IMtpsDu3+O6eBxBdO2VaFEpyLHUetIo"
+)
+
 func testClients() []config.Client {
 	return []config.Client{
 		{
@@ -30,12 +37,12 @@ func testClients() []config.Client {
 		},
 		{
 			ID:           "confidential-app",
-			SecretHash:   "HASH",
+			SecretHash:   testClientSecretHash,
 			RedirectURIs: []string{"https://app.example.com/callback"},
 		},
 		{
 			ID:           "query-app",
-			SecretHash:   "HASH",
+			SecretHash:   testClientSecretHash,
 			RedirectURIs: []string{"https://app.example.com/callback?tenant=1"},
 		},
 	}
@@ -120,6 +127,7 @@ func TestAuthorize(t *testing.T) {
 		ui.Assets(),
 		LoginDependencies{},
 		AuthorizeDependencies{},
+		TokenDependencies{},
 	).Handler()
 
 	t.Run("forwards a valid public client request to the login interaction", func(t *testing.T) {

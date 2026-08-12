@@ -20,12 +20,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/id"
+	"github.com/varavelio/zen-idp/internal/jwt"
 	"github.com/varavelio/zen-idp/internal/lock"
 	"github.com/varavelio/zen-idp/internal/login"
 	"github.com/varavelio/zen-idp/internal/onetoken"
 	"github.com/varavelio/zen-idp/internal/ratelimit"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/statestore"
+	"github.com/varavelio/zen-idp/internal/token"
 	"github.com/varavelio/zen-idp/internal/totp"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
@@ -46,18 +48,22 @@ const testMaxAge = 72 * time.Hour
 var testUsers = []config.User{{Subject: "alice"}}
 
 // testApp bundles a fully wired test server with the real stores behind its
-// login and authorization dependencies.
+// login, authorization, and token dependencies.
 type testApp struct {
 	server   *Server
+	db       *sql.DB
 	sessions *session.Store
 	codes    *onetoken.Store
+	locks    *lock.Locks
 }
 
 // newTestApp builds a server with a real migrated SQLite state store and the
-// real login service and one-use token store wired on top of it.
+// real login service, one-use token store, and token issuer wired on top of
+// it.
 func newTestApp(t *testing.T, users []config.User) *testApp {
 	t.Helper()
-	queries := statestore.New(newLoginTestDB(t))
+	db := newLoginTestDB(t)
+	queries := statestore.New(db)
 	limiter, err := ratelimit.New(queries, 5, 5*time.Minute)
 	require.NoError(t, err)
 	locks, err := lock.NewLocks(queries)
@@ -67,6 +73,10 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 	codes, err := onetoken.NewStore(queries, id.NewIDGenerator(), referenceRootSecret)
 	require.NoError(t, err)
 	service, err := login.New(users, referenceRootSecret, limiter, locks, store)
+	require.NoError(t, err)
+	signer, err := jwt.NewSigner(referenceKey(), referenceKid())
+	require.NoError(t, err)
+	issuer, err := token.NewIssuer(signer, referenceIssuer, users, locks)
 	require.NoError(t, err)
 
 	server := New(
@@ -83,8 +93,12 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			Sessions: store,
 			Codes:    codes,
 		},
+		TokenDependencies{
+			Codes:  codes,
+			Issuer: issuer,
+		},
 	)
-	return &testApp{server: server, sessions: store, codes: codes}
+	return &testApp{server: server, db: db, sessions: store, codes: codes, locks: locks}
 }
 
 // newLoginTestDB opens and migrates a fresh SQLite state store.

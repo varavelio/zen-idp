@@ -267,7 +267,7 @@ func validateAuthorizeRequest(request authorizeRequest, client config.Client) er
 			description: "only the S256 PKCE method is supported",
 		}
 	}
-	if !validCodeChallenge(request.codeChallenge) {
+	if !validPKCEValue(request.codeChallenge) {
 		return &authorizeError{
 			code:        "invalid_request",
 			description: "the code challenge is malformed",
@@ -282,9 +282,10 @@ func scopeContainsOpenID(scope string) bool {
 	return slices.Contains(strings.Fields(scope), "openid")
 }
 
-// validCodeChallenge reports whether value is a syntactically valid PKCE
-// code challenge: 43 to 128 characters from the unreserved URL alphabet.
-func validCodeChallenge(value string) bool {
+// validPKCEValue reports whether value is a syntactically valid PKCE code
+// challenge or verifier: 43 to 128 characters from the unreserved URL
+// alphabet.
+func validPKCEValue(value string) bool {
 	if len(value) < 43 || len(value) > 128 {
 		return false
 	}
