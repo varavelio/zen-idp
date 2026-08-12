@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/varavelio/zen-idp/internal/admin"
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/id"
 	"github.com/varavelio/zen-idp/internal/jwt"
 	"github.com/varavelio/zen-idp/internal/lock"
@@ -146,6 +148,30 @@ func runServe(envFile string, dependencies dependencies) error {
 		return fmt.Errorf("build login service: %w", err)
 	}
 
+	adminRateLimiter, err := ratelimit.New(
+		queries,
+		configuration.Security.RateLimits.MaxUserLoginAttempts,
+		configuration.Security.RateLimits.UserLoginAttemptsWindow,
+	)
+	if err != nil {
+		return fmt.Errorf("build admin rate limiter: %w", err)
+	}
+
+	auditRecorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
+	if err != nil {
+		return fmt.Errorf("build audit recorder: %w", err)
+	}
+
+	adminService, err := admin.New(
+		configuration.Security.AdminPasswordHash,
+		adminRateLimiter,
+		sessionStore,
+		auditRecorder,
+	)
+	if err != nil {
+		return fmt.Errorf("build admin service: %w", err)
+	}
+
 	address := net.JoinHostPort(configuration.Server.Host, strconv.Itoa(configuration.Server.Port))
 	listener, err := dependencies.listen("tcp", address)
 	if err != nil {
@@ -183,6 +209,13 @@ func runServe(envFile string, dependencies dependencies) error {
 			Sessions:      sessionStore,
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
+		},
+		server.AdminDependencies{
+			Service:       adminService,
+			Sessions:      sessionStore,
+			UI:            configuration.UI,
+			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
+			SessionMaxAge: configuration.Security.Session.MaxAge,
 		},
 	)
 	httpServer := &http.Server{
