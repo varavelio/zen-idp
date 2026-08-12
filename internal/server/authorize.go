@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/ui"
 )
 
 // authorizeLoginPath is the login interaction that valid authorization
@@ -34,19 +35,39 @@ type authorizeRequest struct {
 // redirect URI is not trusted receive a generic error page instead of a
 // redirect, because no safe target exists for them.
 func (server *Server) authorize(w http.ResponseWriter, r *http.Request) error {
-	request, err := parseAuthorizeRequest(r.URL.Query())
+	request, err := server.parseAndValidateAuthorizeRequest(r)
 	if err != nil {
+		var authorizeErr *authorizeError
+		if errors.As(err, &authorizeErr) {
+			return redirectAuthorizeError(w, r, request, err)
+		}
 		return writeInvalidRequestPage(w)
-	}
-	client, ok := findClient(server.clients, request.clientID)
-	if !ok || !allowsRedirectURI(client, request.redirectURI) {
-		return writeInvalidRequestPage(w)
-	}
-	if err := validateAuthorizeRequest(request, client); err != nil {
-		return redirectAuthorizeError(w, r, request, err)
 	}
 	http.Redirect(w, r, authorizeLoginPath+"?"+r.URL.RawQuery, http.StatusFound)
 	return nil
+}
+
+// errUntrustedRequest marks an authorization request whose client or redirect
+// URI is not declared, leaving no safe target for an error redirect.
+var errUntrustedRequest = errors.New("untrusted authorization request")
+
+// parseAndValidateAuthorizeRequest parses and fully validates the pending OIDC
+// authorization request carried by r against the declared clients. The
+// returned request is populated whenever the query itself parsed, so callers
+// can still report validation failures to the request's redirect URI.
+func (server *Server) parseAndValidateAuthorizeRequest(r *http.Request) (authorizeRequest, error) {
+	request, err := parseAuthorizeRequest(r.URL.Query())
+	if err != nil {
+		return authorizeRequest{}, err
+	}
+	client, ok := findClient(server.clients, request.clientID)
+	if !ok || !allowsRedirectURI(client, request.redirectURI) {
+		return request, errUntrustedRequest
+	}
+	if err := validateAuthorizeRequest(request, client); err != nil {
+		return request, err
+	}
+	return request, nil
 }
 
 // parseAuthorizeRequest extracts the authorization request parameters from
@@ -219,27 +240,17 @@ func redirectAuthorizeError(
 	return nil
 }
 
-// writeInvalidRequestPage writes the generic error page shown when an
-// authorization request cannot be redirected safely because its client or
-// redirect URI is not trusted.
+// writeInvalidRequestPage writes the generic error page shown when a request
+// cannot be redirected safely because its client or redirect URI is not
+// trusted.
 func writeInvalidRequestPage(w http.ResponseWriter) error {
+	html, err := ui.InvalidRequestPage().RenderString()
+	if err != nil {
+		return fmt.Errorf("render invalid request page: %w", err)
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusBadRequest)
-	_, err := io.WriteString(w, invalidRequestPageHTML)
+	_, err = io.WriteString(w, html)
 	return err
 }
-
-const invalidRequestPageHTML = `
-<!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<title>Zen IdP</title>
-	</head>
-	<body>
-		<h1>Invalid authorization request</h1>
-		<p>The authorization request could not be processed.</p>
-	</body>
-</html>
-`

@@ -13,16 +13,24 @@ type Server struct {
 	publicJWK jwk.PublicJWK
 	clients   []config.Client
 	assets    fs.FS
+	login     LoginDependencies
 }
 
 // New returns a server that publishes the given public signing identity,
-// serves the declared OIDC clients, and serves the given embedded static
-// asset tree at literal paths under /build/ and /vendor/.
-func New(publicJWK jwk.PublicJWK, clients []config.Client, assets fs.FS) *Server {
+// serves the declared OIDC clients, serves the given embedded static asset
+// tree at literal paths under /build/ and /vendor/, and runs the login
+// interaction with the given injected dependencies.
+func New(
+	publicJWK jwk.PublicJWK,
+	clients []config.Client,
+	assets fs.FS,
+	login LoginDependencies,
+) *Server {
 	return &Server{
 		publicJWK: publicJWK,
 		clients:   clients,
 		assets:    assets,
+		login:     login,
 	}
 }
 
@@ -31,10 +39,14 @@ func New(publicJWK jwk.PublicJWK, clients []config.Client, assets fs.FS) *Server
 func (server *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.Handle("GET /.well-known/jwks.json", handle(server.jwks))
-	mux.Handle("GET /authorize", handle(server.authorize))
-	mux.Handle("GET /build/", handle(server.serveAssets(server.assets)))
 	mux.Handle("GET /vendor/", handle(server.serveAssets(server.assets)))
+	mux.Handle("GET /build/", handle(server.serveAssets(server.assets)))
+
+	mux.Handle("GET /.well-known/jwks.json", handle(server.jwks))
+
+	mux.Handle("GET /authorize", handle(server.authorize))
+	mux.Handle("GET /login", handle(server.loginForm))
+	mux.Handle("POST /login", handle(server.processLogin))
 
 	return securityHeaders(mux)
 }

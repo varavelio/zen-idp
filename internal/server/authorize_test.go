@@ -83,7 +83,7 @@ func requireInvalidRequestPage(t *testing.T, response *httptest.ResponseRecorder
 }
 
 func TestAuthorize(t *testing.T) {
-	handler := New(testPublicJWK(), testClients(), ui.Assets()).Handler()
+	handler := New(testPublicJWK(), testClients(), ui.Assets(), LoginDependencies{}).Handler()
 
 	t.Run("forwards a valid public client request to the login interaction", func(t *testing.T) {
 		params := validPublicRequest()
