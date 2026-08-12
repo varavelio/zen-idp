@@ -9,7 +9,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/stretchr/testify v1.11.1
-	github.com/varavelio/nodxgo v1.0.0
+	github.com/varavelio/nodxgo v1.1.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.56.0
