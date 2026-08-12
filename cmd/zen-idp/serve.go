@@ -179,6 +179,11 @@ func runServe(envFile string, dependencies dependencies) error {
 		server.UserinfoDependencies{
 			Service: userinfoService,
 		},
+		server.LogoutDependencies{
+			Sessions:      sessionStore,
+			UI:            configuration.UI,
+			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
+		},
 	)
 	httpServer := &http.Server{
 		Handler:           app.Handler(),
