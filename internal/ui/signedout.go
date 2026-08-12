@@ -82,8 +82,8 @@ func LogOutConfirmationPage(settings config.UI, token string) nodx.Node {
 					nodx.Button(
 						nodx.Attr("type", "submit"),
 						nodx.Class(
-							"w-full rounded-md bg-content text-base-100 font-medium py-2 px-3 "+
-								"hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-content",
+							"w-full rounded-md bg-content text-base-100 font-medium py-2 px-3",
+							"hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-content",
 						),
 						nodx.Text("Sign out"),
 					),

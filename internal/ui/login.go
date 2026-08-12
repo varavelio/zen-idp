@@ -64,9 +64,9 @@ func LoginPage(settings config.UI, action, failure string) nodx.Node {
 							nodx.Required(true),
 							nodx.Autofocus(true),
 							nodx.Class(
-								"w-full rounded-md border border-base-400 bg-base-100 px-3 py-2 text-sm "+
-									"text-content placeholder:text-content-muted focus:outline-none "+
-									"focus:ring-2 focus:ring-content",
+								"w-full rounded-md border border-base-400 bg-base-100 px-3 py-2 text-sm",
+								"text-content placeholder:text-content-muted focus:outline-none",
+								"focus:ring-2 focus:ring-content",
 							),
 						),
 					),
@@ -87,17 +87,17 @@ func LoginPage(settings config.UI, action, failure string) nodx.Node {
 							nodx.Maxlength("6"),
 							nodx.Required(true),
 							nodx.Class(
-								"w-full rounded-md border border-base-400 bg-base-100 px-3 py-2 text-sm "+
-									"text-content placeholder:text-content-muted focus:outline-none "+
-									"focus:ring-2 focus:ring-content",
+								"w-full rounded-md border border-base-400 bg-base-100 px-3 py-2 text-sm",
+								"text-content placeholder:text-content-muted focus:outline-none",
+								"focus:ring-2 focus:ring-content",
 							),
 						),
 					),
 					nodx.Button(
 						nodx.Attr("type", "submit"),
 						nodx.Class(
-							"w-full rounded-md bg-content text-base-100 font-medium py-2 px-3 "+
-								"hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-content",
+							"w-full rounded-md bg-content text-base-100 font-medium py-2 px-3",
+							"hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-content",
 						),
 						nodx.Text(loginTitle),
 					),
