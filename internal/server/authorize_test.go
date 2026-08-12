@@ -123,6 +123,7 @@ func requireInvalidRequestPage(t *testing.T, response *httptest.ResponseRecorder
 func TestAuthorize(t *testing.T) {
 	handler := New(
 		testPublicJWK(),
+		referenceIssuer,
 		testClients(),
 		ui.Assets(),
 		LoginDependencies{},

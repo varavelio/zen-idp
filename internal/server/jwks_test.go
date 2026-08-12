@@ -28,6 +28,7 @@ func TestJWKS(t *testing.T) {
 	t.Run("serves the public signing identity", func(t *testing.T) {
 		handler := New(
 			testPublicJWK(),
+			referenceIssuer,
 			nil,
 			ui.Assets(),
 			LoginDependencies{},
@@ -53,6 +54,7 @@ func TestJWKS(t *testing.T) {
 	t.Run("rejects other methods", func(t *testing.T) {
 		handler := New(
 			testPublicJWK(),
+			referenceIssuer,
 			nil,
 			ui.Assets(),
 			LoginDependencies{},
@@ -76,6 +78,7 @@ func TestJWKS(t *testing.T) {
 	t.Run("returns 404 for unknown paths", func(t *testing.T) {
 		handler := New(
 			testPublicJWK(),
+			referenceIssuer,
 			nil,
 			ui.Assets(),
 			LoginDependencies{},

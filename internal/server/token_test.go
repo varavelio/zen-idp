@@ -507,6 +507,7 @@ func TestToken(t *testing.T) {
 	t.Run("returns an internal error when code redemption fails", func(t *testing.T) {
 		handler := New(
 			testPublicJWK(),
+			referenceIssuer,
 			testClients(),
 			ui.Assets(),
 			LoginDependencies{},
@@ -528,6 +529,7 @@ func TestToken(t *testing.T) {
 		code := createCode(t, app, nil)
 		handler := New(
 			testPublicJWK(),
+			referenceIssuer,
 			testClients(),
 			ui.Assets(),
 			LoginDependencies{},

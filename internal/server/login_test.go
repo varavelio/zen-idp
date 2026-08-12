@@ -86,6 +86,7 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 
 	server := New(
 		testPublicJWK(),
+		referenceIssuer,
 		testClients(),
 		ui.Assets(),
 		LoginDependencies{

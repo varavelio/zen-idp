@@ -15,6 +15,7 @@ func TestNew(t *testing.T) {
 	t.Run("returns a handler that serves the JWKS route", func(t *testing.T) {
 		handler := New(
 			testPublicJWK(),
+			referenceIssuer,
 			nil,
 			ui.Assets(),
 			LoginDependencies{},
@@ -36,6 +37,7 @@ func TestServeAssets(t *testing.T) {
 	newServer := func() http.Handler {
 		return New(
 			testPublicJWK(),
+			referenceIssuer,
 			nil,
 			files,
 			LoginDependencies{},
@@ -105,6 +107,7 @@ func TestServeAssets(t *testing.T) {
 	t.Run("serves the compiled stylesheet from the real asset tree", func(t *testing.T) {
 		handler := New(
 			testPublicJWK(),
+			referenceIssuer,
 			nil,
 			ui.Assets(),
 			LoginDependencies{},
@@ -129,6 +132,7 @@ func TestServeAssets(t *testing.T) {
 	t.Run("serves the vendored fonts from the real asset tree", func(t *testing.T) {
 		handler := New(
 			testPublicJWK(),
+			referenceIssuer,
 			nil,
 			ui.Assets(),
 			LoginDependencies{},

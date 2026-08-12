@@ -234,6 +234,7 @@ func TestUserInfo(t *testing.T) {
 	t.Run("returns an internal error when resolution fails", func(t *testing.T) {
 		handler := New(
 			testPublicJWK(),
+			referenceIssuer,
 			testClients(),
 			ui.Assets(),
 			LoginDependencies{},
