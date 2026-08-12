@@ -1,6 +1,7 @@
 -- name: CreateSession :exec
 INSERT INTO sessions (
     id,
+    kind,
     secret_hash,
     sub,
     totp_rev,
@@ -10,6 +11,7 @@ INSERT INTO sessions (
     user_agent
 ) VALUES (
     sqlc.arg(id),
+    sqlc.arg(kind),
     sqlc.arg(secret_hash),
     sqlc.arg(sub),
     sqlc.arg(totp_rev),
@@ -20,7 +22,7 @@ INSERT INTO sessions (
 );
 
 -- name: GetSession :one
-SELECT id, secret_hash, sub, totp_rev, created_at, expires_at, ip_address, user_agent
+SELECT id, kind, secret_hash, sub, totp_rev, created_at, expires_at, ip_address, user_agent
 FROM sessions
 WHERE id = sqlc.arg(id);
 

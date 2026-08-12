@@ -52,6 +52,7 @@ type RateLimitCounter struct {
 
 type Session struct {
 	ID         string
+	Kind       string
 	SecretHash []byte
 	Sub        string
 	TotpRev    int64

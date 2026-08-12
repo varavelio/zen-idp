@@ -13,6 +13,7 @@ import (
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (
     id,
+    kind,
     secret_hash,
     sub,
     totp_rev,
@@ -28,12 +29,14 @@ INSERT INTO sessions (
     ?5,
     ?6,
     ?7,
-    ?8
+    ?8,
+    ?9
 )
 `
 
 type CreateSessionParams struct {
 	ID         string
+	Kind       string
 	SecretHash []byte
 	Sub        string
 	TotpRev    int64
@@ -46,6 +49,7 @@ type CreateSessionParams struct {
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
 	_, err := q.db.ExecContext(ctx, createSession,
 		arg.ID,
+		arg.Kind,
 		arg.SecretHash,
 		arg.Sub,
 		arg.TotpRev,
@@ -68,7 +72,7 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, now string) error {
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, secret_hash, sub, totp_rev, created_at, expires_at, ip_address, user_agent
+SELECT id, kind, secret_hash, sub, totp_rev, created_at, expires_at, ip_address, user_agent
 FROM sessions
 WHERE id = ?1
 `
@@ -78,6 +82,7 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 	var i Session
 	err := row.Scan(
 		&i.ID,
+		&i.Kind,
 		&i.SecretHash,
 		&i.Sub,
 		&i.TotpRev,
