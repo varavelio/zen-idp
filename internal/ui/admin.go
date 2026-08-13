@@ -261,9 +261,13 @@ func AdminHomePage(settings config.UI, token, failure string) nodx.Node {
 }
 
 // EnrollmentTokenPage renders the one-time display of a freshly created
-// enrollment token bound to the given subject and absolute expiration. The
+// enrollment token bound to the given subject and absolute expiration,
+// together with the shareable enrollment link that carries the token. The
 // token is shown exactly once on this page, which must never be cached.
-func EnrollmentTokenPage(settings config.UI, subject, expiresAt, token string) nodx.Node {
+func EnrollmentTokenPage(
+	settings config.UI,
+	subject, expiresAt, token, enrollURL string,
+) nodx.Node {
 	name := settings.Name
 	if name == "" {
 		name = adminTitle
@@ -298,12 +302,33 @@ func EnrollmentTokenPage(settings config.UI, subject, expiresAt, token string) n
 						nodx.Text(fmt.Sprintf("Expires: %s", expiresAt)),
 					),
 				),
-				nodx.CodeEl(
-					nodx.Class(
-						"block break-all rounded-md border border-base-400 bg-base-100",
-						"px-3 py-2 text-xs text-content select-all",
+				nodx.Div(
+					nodx.Class("space-y-1"),
+					nodx.P(
+						nodx.Class("text-sm text-content"),
+						nodx.Text("Share this enrollment link with the user:"),
 					),
-					nodx.Text(token),
+					nodx.CodeEl(
+						nodx.Class(
+							"block break-all rounded-md border border-base-400 bg-base-100",
+							"px-3 py-2 text-xs text-content select-all",
+						),
+						nodx.Text(enrollURL),
+					),
+				),
+				nodx.Div(
+					nodx.Class("space-y-1"),
+					nodx.P(
+						nodx.Class("text-sm text-content"),
+						nodx.Text("Or share the token alone, for text-only channels:"),
+					),
+					nodx.CodeEl(
+						nodx.Class(
+							"block break-all rounded-md border border-base-400 bg-base-100",
+							"px-3 py-2 text-xs text-content select-all",
+						),
+						nodx.Text(token),
+					),
 				),
 				nodx.P(
 					nodx.Class("text-sm text-warning"),
