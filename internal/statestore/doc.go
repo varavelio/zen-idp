@@ -4,6 +4,9 @@
 // records. It never stores identity declarations, credentials, or derived
 // keys.
 //
+// WithTx runs sqlc functions inside one database transaction, the primitive
+// behind the atomic actions that combine statements from different tables.
+//
 // Timestamps in the state schema use the canonical UTC RFC 3339 format with
 // second precision defined by internal/clock.
 package statestore
