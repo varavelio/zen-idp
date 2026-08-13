@@ -70,6 +70,8 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 	queries := statestore.New(db)
 	limiter, err := ratelimit.New(queries, 5, 5*time.Minute)
 	require.NoError(t, err)
+	clientLimiter, err := ratelimit.New(queries, 5, 5*time.Minute)
+	require.NoError(t, err)
 	locks, err := lock.NewLocks(queries, testStateStoreTx{db: db})
 	require.NoError(t, err)
 	store, err := session.NewStore(queries, id.NewIDGenerator(), referenceRootSecret, testMaxAge)
@@ -113,8 +115,9 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			Codes:    codes,
 		},
 		TokenDependencies{
-			Codes:  codes,
-			Issuer: issuer,
+			Codes:      codes,
+			Issuer:     issuer,
+			ClientAuth: clientLimiter,
 		},
 		UserinfoDependencies{
 			Service: userinfoService,

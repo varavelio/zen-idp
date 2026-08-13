@@ -504,6 +504,154 @@ func TestToken(t *testing.T) {
 		requireTokenError(t, response, http.StatusBadRequest, "invalid_request")
 	})
 
+	t.Run(
+		"blocks a confidential client after repeated failed authentication attempts",
+		func(t *testing.T) {
+			app := newTestApp(t, testUsers)
+			code := createCode(t, app, func(params *onetoken.CodeParams) {
+				params.ClientID = "confidential-app"
+			})
+			form := validExchangeForm(code)
+
+			for range 5 {
+				response := tokenRequest(
+					t,
+					app.server.Handler(),
+					form,
+					basicAuth("confidential-app", "wrong-secret"),
+				)
+				requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+			}
+
+			// The budget is exhausted: even the correct secret is rejected until
+			// the window ends.
+			response := tokenRequest(
+				t,
+				app.server.Handler(),
+				form,
+				basicAuth("confidential-app", testClientSecret),
+			)
+			requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+		},
+	)
+
+	t.Run("resets the failure budget after a successful authentication", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		code := createCode(t, app, func(params *onetoken.CodeParams) {
+			params.ClientID = "confidential-app"
+		})
+		form := validExchangeForm(code)
+
+		// Four failures leave one attempt of the five-attempt budget.
+		for range 4 {
+			response := tokenRequest(
+				t,
+				app.server.Handler(),
+				form,
+				basicAuth("confidential-app", "wrong-secret"),
+			)
+			requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+		}
+
+		// A successful authentication resets the budget.
+		response := tokenRequest(
+			t,
+			app.server.Handler(),
+			form,
+			basicAuth("confidential-app", testClientSecret),
+		)
+		require.Equal(t, http.StatusOK, response.Code)
+
+		// The full budget is available again.
+		for range 5 {
+			response := tokenRequest(
+				t,
+				app.server.Handler(),
+				form,
+				basicAuth("confidential-app", "wrong-secret"),
+			)
+			requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+		}
+		response = tokenRequest(
+			t,
+			app.server.Handler(),
+			form,
+			basicAuth("confidential-app", testClientSecret),
+		)
+		requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+	})
+
+	t.Run("rejects a request without a client id", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"grant_type":   {"authorization_code"},
+			"code":         {"tok_whatever"},
+			"redirect_uri": {"https://app.example.com/callback"},
+		}
+
+		response := tokenRequest(t, app.server.Handler(), form, "")
+
+		requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+	})
+
+	t.Run(
+		"returns an internal error when the client auth rate limit cannot be checked",
+		func(t *testing.T) {
+			handler := New(
+				testPublicJWK(),
+				referenceIssuer,
+				testClients(),
+				ui.Assets(),
+				LoginDependencies{},
+				AuthorizeDependencies{},
+				TokenDependencies{
+					Codes:      failingCodeConsumer{},
+					Issuer:     failingTokenIssuer{},
+					ClientAuth: failingClientAuthLimiter{},
+				},
+				UserinfoDependencies{},
+				LogoutDependencies{},
+				EnrollDependencies{},
+				AdminDependencies{},
+				PanicDependencies{},
+			).Handler()
+			response := tokenRequest(t, handler, validExchangeForm("anything"), "")
+
+			require.Equal(t, http.StatusInternalServerError, response.Code)
+			require.Contains(t, response.Body.String(), "internal server error")
+		},
+	)
+
+	t.Run(
+		"returns an internal error when recording a client auth failure fails",
+		func(t *testing.T) {
+			handler := New(
+				testPublicJWK(),
+				referenceIssuer,
+				testClients(),
+				ui.Assets(),
+				LoginDependencies{},
+				AuthorizeDependencies{},
+				TokenDependencies{
+					Codes:      failingCodeConsumer{},
+					Issuer:     failingTokenIssuer{},
+					ClientAuth: failingClientAuthRecorder{},
+				},
+				UserinfoDependencies{},
+				LogoutDependencies{},
+				EnrollDependencies{},
+				AdminDependencies{},
+				PanicDependencies{},
+			).Handler()
+			form := validExchangeForm("anything")
+			form.Set("client_id", "unknown")
+			response := tokenRequest(t, handler, form, "")
+
+			require.Equal(t, http.StatusInternalServerError, response.Code)
+			require.Contains(t, response.Body.String(), "internal server error")
+		},
+	)
+
 	t.Run("returns an internal error when code redemption fails", func(t *testing.T) {
 		handler := New(
 			testPublicJWK(),
@@ -553,6 +701,38 @@ func TestToken(t *testing.T) {
 		require.Equal(t, http.StatusInternalServerError, response.Code)
 		require.Contains(t, response.Body.String(), "internal server error")
 	})
+}
+
+// failingClientAuthLimiter is a client-auth limiter whose checks always
+// fail with an infrastructure error.
+type failingClientAuthLimiter struct{}
+
+func (failingClientAuthLimiter) Allow(context.Context, string, time.Time) (bool, error) {
+	return false, errors.New("database unavailable")
+}
+
+func (failingClientAuthLimiter) RecordFailure(context.Context, string, time.Time) error {
+	return nil
+}
+
+func (failingClientAuthLimiter) Reset(context.Context, string) error {
+	return nil
+}
+
+// failingClientAuthRecorder is a client-auth limiter whose failure
+// recording always fails with an infrastructure error.
+type failingClientAuthRecorder struct{}
+
+func (failingClientAuthRecorder) Allow(context.Context, string, time.Time) (bool, error) {
+	return true, nil
+}
+
+func (failingClientAuthRecorder) RecordFailure(context.Context, string, time.Time) error {
+	return errors.New("database unavailable")
+}
+
+func (failingClientAuthRecorder) Reset(context.Context, string) error {
+	return nil
 }
 
 // failingCodeConsumer is a code consumer whose redemption always fails with

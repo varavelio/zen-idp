@@ -41,12 +41,24 @@ type TokenIssuer interface {
 	IssueAccessToken(context.Context, token.AccessTokenParams) (string, error)
 }
 
+// ClientAuthLimiter enforces the per-client failed-authentication budget of
+// the token endpoint, satisfied by ratelimit.Limiter.
+type ClientAuthLimiter interface {
+	Allow(context.Context, string, time.Time) (bool, error)
+	RecordFailure(context.Context, string, time.Time) error
+	Reset(context.Context, string) error
+}
+
 // TokenDependencies carries the injected pieces of the token endpoint.
 type TokenDependencies struct {
 	// Codes redeems the one-use authorization code of the request.
 	Codes CodeConsumer
 	// Issuer mints the ID and access tokens of the response.
 	Issuer TokenIssuer
+	// ClientAuth bounds failed client authentication attempts per client id,
+	// protecting confidential client secrets from brute force. A nil value
+	// disables the budget.
+	ClientAuth ClientAuthLimiter
 	// RequireClientSecretTLS demands HTTPS for client-secret
 	// authentication; production deployments must set it.
 	RequireClientSecretTLS bool
@@ -210,14 +222,67 @@ func (server *Server) token(w http.ResponseWriter, r *http.Request) error {
 }
 
 // authenticateTokenClient identifies the client of a token request and
-// verifies its credentials. Confidential clients must authenticate with
-// client_secret_basic over HTTPS in production; public clients must identify
-// themselves with the client_id parameter and must not present a secret.
+// verifies its credentials under the client's failed-attempt budget.
+// Confidential clients must authenticate with client_secret_basic over HTTPS
+// in production; public clients must identify themselves with the client_id
+// parameter and must not present a secret. The budget is checked before any
+// credential verification, every failed authentication consumes one attempt
+// of the client's budget, and every successful authentication resets it.
 func (server *Server) authenticateTokenClient(r *http.Request) (config.Client, error) {
 	clientID, clientSecret, presented, err := parseClientCredentials(r)
 	if err != nil {
 		return config.Client{}, err
 	}
+	if clientID == "" {
+		// An absent identifier leaves nothing to protect and no key to
+		// budget; the request fails as an unregistered client.
+		return config.Client{}, clientError("the client is not registered")
+	}
+
+	limiter := server.tokens.ClientAuth
+	if limiter != nil {
+		now := time.Now()
+		allowed, err := limiter.Allow(r.Context(), clientID, now)
+		if err != nil {
+			return config.Client{}, fmt.Errorf("check client auth rate limit: %w", err)
+		}
+		if !allowed {
+			return config.Client{}, clientError(
+				"the client is blocked after repeated failed authentication attempts",
+			)
+		}
+	}
+
+	client, err := server.authenticateClient(r, clientID, clientSecret, presented)
+	if err != nil {
+		if limiter != nil {
+			if recordErr := limiter.RecordFailure(
+				r.Context(),
+				clientID,
+				time.Now(),
+			); recordErr != nil {
+				return config.Client{}, fmt.Errorf("record client auth failure: %w", recordErr)
+			}
+		}
+		return config.Client{}, err
+	}
+	if limiter != nil {
+		if err := limiter.Reset(r.Context(), clientID); err != nil {
+			return config.Client{}, fmt.Errorf("reset client auth rate limit: %w", err)
+		}
+	}
+	return client, nil
+}
+
+// authenticateClient verifies the presented client credentials against the
+// configured clients without any rate limiting. It returns the matched
+// client on success and an invalid_client error on every authentication
+// failure.
+func (server *Server) authenticateClient(
+	r *http.Request,
+	clientID, clientSecret string,
+	presented bool,
+) (config.Client, error) {
 	client, ok := findClient(server.clients, clientID)
 	if !ok {
 		return config.Client{}, clientError("the client is not registered")
