@@ -47,7 +47,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/id: Generates prefix-less TypeID identifiers for state records
 - internal/jwk: Derives the public RSA JWK and the stable RFC 7638 key identifier of the signing identity
 - internal/jwt: Signs and verifies RS256 JSON Web Tokens with the deterministic signing identity
-- internal/lock: Manages the disposable panic and administrative locks that gate login and SSO use
+- internal/lock: Manages the disposable panic and administrative locks that gate login and SSO use; administrative locking atomically revokes the subject's sessions with the lock creation
 - internal/login: Orchestrates identifier resolution, rate limiting, lock enforcement, TOTP verification, and authoritative session creation
 - internal/onetoken: Creates and atomically consumes disposable SQLite-backed one-use tokens, covering enrollment tokens and OIDC authorization-code bindings
 - internal/qr: Renders QR codes as inline PNG data URIs for the enrollment interaction
@@ -56,7 +56,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including an explicitly selected env file
 - internal/server: Exposes Zen IdP's HTTP endpoints with injected dependencies and centralized error handling
 - internal/session: Creates, validates, and revokes authoritative SQLite-backed SSO sessions and distinct administrator sessions from sess_{id}_{secret} browser tokens, with per-kind domain-separated secret digests
-- internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
+- internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries, and runs sqlc functions inside database transactions with WithTx; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
 - internal/token: Issues the RS256-signed ID and access tokens of the deterministic signing identity with fixed 900-second lifetimes
 - internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret, builds their otpauth enrollment URIs, and verifies authenticator codes
 - internal/ui: Renders the HTML pages served by Zen IdP with NodX and embeds the static assets (compiled stylesheet, vendored fonts, and scripts)
