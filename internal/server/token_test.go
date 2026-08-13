@@ -490,6 +490,31 @@ func TestToken(t *testing.T) {
 		requireTokenError(t, response, http.StatusBadRequest, "invalid_grant")
 	})
 
+	t.Run("rejects a code bound to a stale TOTP revision", func(t *testing.T) {
+		users := []config.User{{Subject: "alice", TOTPRevision: 1}}
+		app := newTestApp(t, users)
+		code := createCode(t, app, func(params *onetoken.CodeParams) {
+			params.TOTPRev = 0
+		})
+		response := tokenRequest(t, app.server.Handler(), validExchangeForm(code), "")
+
+		requireTokenError(t, response, http.StatusBadRequest, "invalid_grant")
+	})
+
+	t.Run("accepts a code bound to the current TOTP revision", func(t *testing.T) {
+		users := []config.User{{Subject: "alice", TOTPRevision: 3}}
+		app := newTestApp(t, users)
+		code := createCode(t, app, func(params *onetoken.CodeParams) {
+			params.TOTPRev = 3
+		})
+		response := tokenRequest(t, app.server.Handler(), validExchangeForm(code), "")
+
+		require.Equal(t, http.StatusOK, response.Code)
+		body := decodeTokenResponse(t, response)
+		require.NotEmpty(t, body.AccessToken)
+		require.NotEmpty(t, body.IDToken)
+	})
+
 	t.Run("rejects requests that carry query parameters", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		response := httptest.NewRecorder()
@@ -729,6 +754,7 @@ func TestToken(t *testing.T) {
 			TokenDependencies{
 				Codes:  app.codes,
 				Issuer: failingTokenIssuer{},
+				Users:  testUsers,
 			},
 			UserinfoDependencies{},
 			LogoutDependencies{},

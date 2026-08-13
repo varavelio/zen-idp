@@ -25,10 +25,13 @@ const authorizeLoginPath = "/login"
 // authorization code.
 const authorizationCodeLifetime = 300 * time.Second
 
-// SessionValidator authenticates an SSO session browser token and returns
-// the authoritative session record, satisfied by session.Store.
-type SessionValidator interface {
+// SessionStore validates and revokes SSO session browser tokens, satisfied
+// by session.Store. Validation authenticates the cookie presented with an
+// authorization request; revocation removes the record of a session that
+// can never be usable again.
+type SessionStore interface {
 	Validate(context.Context, string, time.Time) (session.Session, error)
+	Revoke(context.Context, string) error
 }
 
 // CodeIssuer creates one-use OIDC authorization codes carrying every binding
@@ -37,15 +40,27 @@ type CodeIssuer interface {
 	CreateCode(context.Context, onetoken.CodeParams) (string, error)
 }
 
+// LockChecker reports whether a subject is currently gated by a panic or
+// administrative lock, satisfied by lock.Locks.
+type LockChecker interface {
+	IsLocked(context.Context, string) (bool, error)
+}
+
 // AuthorizeDependencies carries the injected pieces of the authorization
 // endpoint's session continuation.
 type AuthorizeDependencies struct {
-	// Sessions validates the SSO session cookie presented with an
-	// authorization request.
-	Sessions SessionValidator
+	// Sessions validates and revokes the SSO session cookie presented
+	// with an authorization request.
+	Sessions SessionStore
 	// Codes creates the one-use authorization code that completes an
 	// accepted request.
 	Codes CodeIssuer
+	// Users lists every configured user, the only subjects whose sessions
+	// may continue an authorization request.
+	Users []config.User
+	// Locks gates session continuation on the subject's current lock
+	// state.
+	Locks LockChecker
 }
 
 // authorizeRequest is the parsed wire form of an OIDC authorization request.
@@ -62,11 +77,12 @@ type authorizeRequest struct {
 
 // authorize handles the OIDC authorization endpoint. It validates every wire
 // parameter of the request and, when the request is valid, continues the
-// flow: an active SSO session receives a fresh authorization code and a
-// redirect to the registered redirect URI, and any other request is
-// forwarded to the login interaction with its parameters intact. Requests
-// whose client or redirect URI is not trusted receive a generic error page
-// instead of a redirect, because no safe target exists for them.
+// flow: an active SSO session whose subject is still current in the
+// configuration receives a fresh authorization code and a redirect to the
+// registered redirect URI, and any other request is forwarded to the login
+// interaction with its parameters intact. Requests whose client or redirect
+// URI is not trusted receive a generic error page instead of a redirect,
+// because no safe target exists for them.
 func (server *Server) authorize(w http.ResponseWriter, r *http.Request) error {
 	request, err := server.parseAndValidateAuthorizeRequest(r)
 	if err != nil {
@@ -77,15 +93,46 @@ func (server *Server) authorize(w http.ResponseWriter, r *http.Request) error {
 		return writeInvalidRequestPage(w)
 	}
 
+	current, ok, err := server.currentAuthorizeSession(r, time.Now())
+	if err != nil {
+		return err
+	}
+	if ok {
+		return server.issueCodeAndRedirect(w, r, request, current)
+	}
+	http.Redirect(w, r, authorizeLoginPath+"?"+r.URL.RawQuery, http.StatusFound)
+	return nil
+}
+
+// currentAuthorizeSession authenticates the SSO session cookie presented
+// with an authorization request and reports whether the session may
+// continue the flow. The cookie must authenticate an active user-kind
+// session whose subject is still declared, unexpired, unlocked, and at the
+// subject's current TOTP revision at the given instant; any other state
+// reports ok=false, which is not an error and sends the browser to the
+// login interaction. A validated session that fails the current-state
+// checks is revoked opportunistically, because those checks depend only on
+// the current configuration and lock state and can never make the session
+// usable again.
+func (server *Server) currentAuthorizeSession(
+	r *http.Request,
+	now time.Time,
+) (session.Session, bool, error) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err == nil {
-		sessions, err := server.authorization.Sessions.Validate(
-			r.Context(),
-			cookie.Value,
-			time.Now(),
-		)
+		current, err := server.authorization.Sessions.Validate(r.Context(), cookie.Value, now)
 		if err == nil {
-			return server.issueCodeAndRedirect(w, r, request, sessions)
+			usable, err := server.usableSession(r.Context(), current, now)
+			if err != nil {
+				return session.Session{}, false, err
+			}
+			if usable {
+				return current, true, nil
+			}
+			// The record can never become usable again; deletion is
+			// opportunistic, so a failing delete is not an error.
+			_ = server.authorization.Sessions.Revoke(r.Context(), cookie.Value)
+			return session.Session{}, false, nil
 		}
 		switch {
 		case errors.Is(err, session.ErrMalformedToken),
@@ -94,11 +141,51 @@ func (server *Server) authorize(w http.ResponseWriter, r *http.Request) error {
 			// The cookie does not authenticate an active session; the
 			// browser continues to the login interaction.
 		default:
-			return fmt.Errorf("validate session cookie: %w", err)
+			return session.Session{}, false, fmt.Errorf("validate session cookie: %w", err)
 		}
 	}
-	http.Redirect(w, r, authorizeLoginPath+"?"+r.URL.RawQuery, http.StatusFound)
-	return nil
+	return session.Session{}, false, nil
+}
+
+// usableSession reports whether the validated session may continue an
+// authorization request at the given instant: its subject must still be
+// declared in the active configuration, unexpired, unlocked, and
+// authenticated at the subject's current TOTP revision.
+func (server *Server) usableSession(
+	ctx context.Context,
+	current session.Session,
+	now time.Time,
+) (bool, error) {
+	user, ok := server.resolveAuthorizeUser(current.Subject)
+	if !ok {
+		return false, nil
+	}
+	if !user.ExpiresAt.IsZero() && !now.Before(user.ExpiresAt) {
+		return false, nil
+	}
+	if user.TOTPRevision != current.TOTPRev {
+		return false, nil
+	}
+	locked, err := server.authorization.Locks.IsLocked(ctx, current.Subject)
+	if err != nil {
+		return false, fmt.Errorf("check session subject locks: %w", err)
+	}
+	if locked {
+		return false, nil
+	}
+	return true, nil
+}
+
+// resolveAuthorizeUser returns the configured user declared with exactly
+// the given subject. Configuration validation guarantees that subjects are
+// unique, so the first match is the only match.
+func (server *Server) resolveAuthorizeUser(subject string) (config.User, bool) {
+	for _, user := range server.authorization.Users {
+		if user.Subject == subject {
+			return user, true
+		}
+	}
+	return config.User{}, false
 }
 
 // issueCodeAndRedirect issues a fresh authorization code carrying every

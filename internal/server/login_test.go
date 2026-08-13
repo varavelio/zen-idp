@@ -113,12 +113,15 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 		AuthorizeDependencies{
 			Sessions: store,
 			Codes:    codes,
+			Users:    users,
+			Locks:    locks,
 		},
 		TokenDependencies{
 			Codes:      codes,
 			Issuer:     issuer,
 			ClientAuth: clientLimiter,
 			Audit:      recorder,
+			Users:      users,
 		},
 		UserinfoDependencies{
 			Service: userinfoService,

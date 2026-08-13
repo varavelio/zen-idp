@@ -66,6 +66,9 @@ type TokenDependencies struct {
 	// RequireClientSecretTLS demands HTTPS for client-secret
 	// authentication; production deployments must set it.
 	RequireClientSecretTLS bool
+	// Users lists every configured user, the only subjects whose
+	// authorization codes may still be redeemed.
+	Users []config.User
 }
 
 // token handles the OIDC token endpoint. It authenticates the client,
@@ -173,6 +176,14 @@ func (server *Server) token(w http.ResponseWriter, r *http.Request) error {
 			http.StatusBadRequest,
 			"invalid_grant",
 			"the PKCE verifier does not match the code challenge",
+		)
+	}
+	if !server.codeSubjectCurrent(code) {
+		return writeTokenError(
+			w,
+			http.StatusBadRequest,
+			"invalid_grant",
+			"the authorization code can no longer be redeemed",
 		)
 	}
 
@@ -367,6 +378,30 @@ func verifyPKCEVerifier(challenge, verifier string) bool {
 	digest := sha256.Sum256([]byte(verifier))
 	computed := base64.RawURLEncoding.EncodeToString(digest[:])
 	return subtle.ConstantTimeCompare([]byte(computed), []byte(challenge)) == 1
+}
+
+// codeSubjectCurrent reports whether the code's authenticated subject is
+// still declared in the active configuration at the exact TOTP revision the
+// code was bound to. Every other state returns false, matching the denial
+// semantics of token issuance for a subject that is no longer current.
+func (server *Server) codeSubjectCurrent(code onetoken.Code) bool {
+	user, ok := server.resolveTokenUser(code.Subject)
+	if !ok {
+		return false
+	}
+	return user.TOTPRevision == uint64(code.TOTPRev)
+}
+
+// resolveTokenUser returns the configured user declared with exactly the
+// given subject. Configuration validation guarantees that subjects are
+// unique, so the first match is the only match.
+func (server *Server) resolveTokenUser(subject string) (config.User, bool) {
+	for _, user := range server.tokens.Users {
+		if user.Subject == subject {
+			return user, true
+		}
+	}
+	return config.User{}, false
 }
 
 // tokenResponse is the JSON body of a successful token request.

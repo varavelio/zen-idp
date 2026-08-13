@@ -249,6 +249,8 @@ func runServe(envFile string, dependencies dependencies) error {
 		server.AuthorizeDependencies{
 			Sessions: sessionStore,
 			Codes:    codeStore,
+			Users:    configuration.Users,
+			Locks:    locks,
 		},
 		server.TokenDependencies{
 			Codes:                  codeStore,
@@ -256,6 +258,7 @@ func runServe(envFile string, dependencies dependencies) error {
 			ClientAuth:             clientRateLimiter,
 			Audit:                  auditRecorder,
 			RequireClientSecretTLS: strings.HasPrefix(configuration.Issuer, "https://"),
+			Users:                  configuration.Users,
 		},
 		server.UserinfoDependencies{
 			Service: userinfoService,

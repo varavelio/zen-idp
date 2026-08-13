@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/varavelio/zen-idp/internal/clock"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/onetoken"
 	"github.com/varavelio/zen-idp/internal/session"
+	"github.com/varavelio/zen-idp/internal/statestore"
 	"github.com/varavelio/zen-idp/internal/totp"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
@@ -572,6 +574,111 @@ func TestAuthorizeIssuesCode(t *testing.T) {
 		)
 	})
 
+	t.Run("sends a removed user's session to the login interaction", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "ghost", time.Now())
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), token),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.Equal(
+			t,
+			"/login?"+queryFor(validPublicRequest()),
+			response.Header().Get("Location"),
+		)
+		_, err := app.sessions.Validate(context.Background(), token, time.Now())
+		require.ErrorIs(t, err, session.ErrInvalidSession)
+	})
+
+	t.Run("sends an expired user's session to the login interaction", func(t *testing.T) {
+		users := []config.User{{Subject: "alice", ExpiresAt: time.Now().Add(-time.Hour)}}
+		app := newTestApp(t, users)
+		token := createSessionToken(t, app, "alice", time.Now())
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), token),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.Equal(
+			t,
+			"/login?"+queryFor(validPublicRequest()),
+			response.Header().Get("Location"),
+		)
+		_, err := app.sessions.Validate(context.Background(), token, time.Now())
+		require.ErrorIs(t, err, session.ErrInvalidSession)
+	})
+
+	t.Run("sends a stale-revision session to the login interaction", func(t *testing.T) {
+		users := []config.User{{Subject: "alice", TOTPRevision: 1}}
+		app := newTestApp(t, users)
+		token := createSessionToken(t, app, "alice", time.Now())
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), token),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.Equal(
+			t,
+			"/login?"+queryFor(validPublicRequest()),
+			response.Header().Get("Location"),
+		)
+		_, err := app.sessions.Validate(context.Background(), token, time.Now())
+		require.ErrorIs(t, err, session.ErrInvalidSession)
+	})
+
+	t.Run("sends a locked subject's session to the login interaction", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		queries := statestore.New(app.db)
+		require.NoError(
+			t,
+			queries.CreatePanicLock(context.Background(), statestore.CreatePanicLockParams{
+				Sub:       "alice",
+				CreatedAt: clock.Format(time.Now()),
+			}),
+		)
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), token),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.Equal(
+			t,
+			"/login?"+queryFor(validPublicRequest()),
+			response.Header().Get("Location"),
+		)
+		_, err := app.sessions.Validate(context.Background(), token, time.Now())
+		require.ErrorIs(t, err, session.ErrInvalidSession)
+	})
+
+	t.Run("reports session usability failures", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.authorization.Locks = failingLockChecker{}
+		token := createSessionToken(t, app, "alice", time.Now())
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(validPublicRequest()), token),
+		)
+
+		require.Equal(t, http.StatusInternalServerError, response.Code)
+		require.Empty(t, response.Header().Get("Location"))
+	})
+
 	t.Run("validates the request before honoring a session", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		token := createSessionToken(t, app, "alice", time.Now())
@@ -649,8 +756,8 @@ func TestAuthorizeIssuesCode(t *testing.T) {
 	})
 }
 
-// failingSessionValidator is a SessionValidator that always fails with an
-// infrastructure error.
+// failingSessionValidator is a SessionStore that always fails validation
+// with an infrastructure error.
 type failingSessionValidator struct{}
 
 func (failingSessionValidator) Validate(
@@ -659,6 +766,18 @@ func (failingSessionValidator) Validate(
 	time.Time,
 ) (session.Session, error) {
 	return session.Session{}, errors.New("session store unavailable")
+}
+
+func (failingSessionValidator) Revoke(context.Context, string) error {
+	return errors.New("session store unavailable")
+}
+
+// failingLockChecker is a LockChecker that always fails with an
+// infrastructure error.
+type failingLockChecker struct{}
+
+func (failingLockChecker) IsLocked(context.Context, string) (bool, error) {
+	return false, errors.New("lock store unavailable")
 }
 
 // failingCodeIssuer is a CodeIssuer that always fails with an
