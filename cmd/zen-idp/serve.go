@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -55,6 +56,21 @@ func (deriver totpSecretDeriver) DeriveTOTPSecret(subject string, revision uint6
 	return totp.DeriveSharedSecret(deriver.rootSecret, subject, revision)
 }
 
+// stateStoreTx runs sqlc functions inside state database transactions,
+// satisfying the transaction-runner interfaces of the domain packages.
+type stateStoreTx struct {
+	db *sql.DB
+}
+
+// WithTx runs fn inside one database transaction, committing when it
+// succeeds.
+func (runner stateStoreTx) WithTx(
+	ctx context.Context,
+	fn func(*statestore.Queries) error,
+) error {
+	return statestore.WithTx(ctx, runner.db, fn)
+}
+
 // runServe bootstraps the OIDC service and serves until a failure or a
 // termination signal.
 func runServe(envFile string, dependencies dependencies) error {
@@ -101,7 +117,7 @@ func runServe(envFile string, dependencies dependencies) error {
 		return fmt.Errorf("build login rate limiter: %w", err)
 	}
 
-	locks, err := lock.NewLocks(queries)
+	locks, err := lock.NewLocks(queries, stateStoreTx{db: db})
 	if err != nil {
 		return fmt.Errorf("build user locks: %w", err)
 	}
@@ -247,6 +263,7 @@ func runServe(envFile string, dependencies dependencies) error {
 			CSRF:          csrfGuard,
 			Enrollments:   codeStore,
 			Audit:         auditRecorder,
+			Locks:         locks,
 			Users:         configuration.Users,
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
