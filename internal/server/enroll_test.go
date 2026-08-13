@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/onetoken"
@@ -84,6 +85,13 @@ func TestProcessEnroll(t *testing.T) {
 		require.Contains(t, body, html.EscapeString(referenceEnrollmentURI))
 		require.Contains(t, body, "LQJ2MSFEHZMA4KVBU5SNJRDAJHEH7PCGYIADZIKUDNYNG4SD6XFQ")
 		require.Contains(t, body, "Scan the code with your authenticator app.")
+
+		// The reveal point records the consumption against the subject.
+		events := auditEvents(t, app)
+		require.Len(t, events, 1)
+		require.Equal(t, audit.CategoryEnrollmentTokenConsumed, events[0].Category)
+		require.Equal(t, "alice", events[0].Subject)
+		require.JSONEq(t, `{}`, events[0].Details)
 	})
 
 	t.Run("redeems the token exactly once", func(t *testing.T) {
@@ -101,6 +109,11 @@ func TestProcessEnroll(t *testing.T) {
 		require.Contains(t, body, enrollDeniedMessage)
 		require.NotContains(t, body, "data:image/png;base64,")
 		require.NotContains(t, body, referenceEnrollmentURI)
+
+		// Only the successful redemption is recorded, never the replay.
+		events := auditEvents(t, app)
+		require.Len(t, events, 1)
+		require.Equal(t, audit.CategoryEnrollmentTokenConsumed, events[0].Category)
 	})
 
 	t.Run("rejects a malformed token without echoing it", func(t *testing.T) {
@@ -234,6 +247,22 @@ func TestProcessEnroll(t *testing.T) {
 		response := postEnroll(t, app, url.Values{enrollTokenParam: {token}})
 
 		require.Equal(t, http.StatusInternalServerError, response.Code)
+	})
+
+	t.Run("returns 500 when the consumption event cannot be recorded", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := enrollmentToken(t, app, "alice", 0)
+		app.server.enroll.Audit = failingPanicAudit{}
+
+		response := postEnroll(t, app, url.Values{enrollTokenParam: {token}})
+
+		require.Equal(t, http.StatusInternalServerError, response.Code)
+
+		// The token is consumed even though the event could not be
+		// recorded, so a retry cannot reveal the secret twice.
+		second := postEnroll(t, app, url.Values{enrollTokenParam: {token}})
+		require.Equal(t, http.StatusOK, second.Code)
+		require.Contains(t, second.Body.String(), enrollDeniedMessage)
 	})
 }
 

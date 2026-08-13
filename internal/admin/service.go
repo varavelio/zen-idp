@@ -87,14 +87,18 @@ func New(
 // The rate limit is applied before credential verification. Every denied
 // attempt returns ErrDenied; attempts that pass the rate-limit gate consume
 // one failure from the counter and are recorded as failed authentication
-// events. A successful login resets the counter, records a new
-// administrator session, and appends a successful authentication event.
+// events, while a throttled attempt is recorded as a rate-limit event. A
+// successful login resets the counter, records a new administrator session,
+// and appends a successful authentication event.
 func (service *Service) Login(ctx context.Context, password string, now time.Time) (string, error) {
 	allowed, err := service.rateLimiter.Allow(ctx, rateLimitKey, now)
 	if err != nil {
 		return "", fmt.Errorf("check admin rate limit: %w", err)
 	}
 	if !allowed {
+		if err := service.recordRateLimitEvent(ctx, now); err != nil {
+			return "", err
+		}
 		return "", ErrDenied
 	}
 
@@ -135,6 +139,21 @@ func (service *Service) recordEvent(ctx context.Context, outcome string, now tim
 	})
 	if err != nil {
 		return fmt.Errorf("record admin authentication event: %w", err)
+	}
+	return nil
+}
+
+// recordRateLimitEvent appends a rate-limit audit event for a throttled
+// administrator authentication attempt. The event carries the fixed counter
+// key and no subject, matching the authentication events.
+func (service *Service) recordRateLimitEvent(ctx context.Context, now time.Time) error {
+	err := service.audit.Record(ctx, audit.RecordParams{
+		Category: audit.CategoryRateLimit,
+		Details:  map[string]any{"key": rateLimitKey},
+		Now:      now,
+	})
+	if err != nil {
+		return fmt.Errorf("record admin rate limit event: %w", err)
 	}
 	return nil
 }

@@ -11,13 +11,19 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
 
-// failingSessionRevoker reports a persistence failure for every revocation.
+// failingSessionRevoker reports a persistence failure for every validation
+// and revocation.
 type failingSessionRevoker struct{}
+
+func (failingSessionRevoker) Validate(context.Context, string, time.Time) (session.Session, error) {
+	return session.Session{}, errors.New("database unavailable")
+}
 
 func (failingSessionRevoker) Revoke(context.Context, string) error {
 	return errors.New("database unavailable")
@@ -127,6 +133,13 @@ func TestLogout(t *testing.T) {
 		require.Contains(t, setCookie[0], "HttpOnly")
 		_, err := app.sessions.Validate(context.Background(), token, time.Now())
 		require.ErrorIs(t, err, session.ErrInvalidSession)
+
+		// The live session revocation is recorded against its subject.
+		events := auditEvents(t, app)
+		require.Len(t, events, 1)
+		require.Equal(t, audit.CategorySessionRevoked, events[0].Category)
+		require.Equal(t, "alice", events[0].Subject)
+		require.JSONEq(t, `{}`, events[0].Details)
 	})
 
 	t.Run("renders the signed-out page directly without a session cookie", func(t *testing.T) {
@@ -178,6 +191,9 @@ func TestLogout(t *testing.T) {
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Contains(t, response.Body.String(), "You have been signed out")
 		require.Contains(t, response.Header().Values("Set-Cookie")[0], "Max-Age=0")
+
+		// Nothing live was revoked, so no revocation event is recorded.
+		require.Empty(t, auditEvents(t, app))
 	})
 
 	t.Run("rejects a sign-out without a CSRF token", func(t *testing.T) {
@@ -293,6 +309,27 @@ func TestLogout(t *testing.T) {
 		)
 
 		require.Equal(t, http.StatusInternalServerError, response.Code)
+	})
+
+	t.Run("returns an internal error when recording the revocation fails", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		csrfToken := logoutCSRFToken(t, app)
+		app.server.logout.Audit = failingPanicAudit{}
+
+		response := logoutRequest(
+			t,
+			app.server.Handler(),
+			csrfToken,
+			&http.Cookie{Name: sessionCookieName, Value: token},
+		)
+
+		require.Equal(t, http.StatusInternalServerError, response.Code)
+
+		// The session is revoked even though the event could not be
+		// recorded.
+		_, err := app.sessions.Validate(context.Background(), token, time.Now())
+		require.ErrorIs(t, err, session.ErrInvalidSession)
 	})
 
 	t.Run("rejects other methods", func(t *testing.T) {

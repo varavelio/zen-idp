@@ -254,22 +254,40 @@ func TestLoginAuditEvents(t *testing.T) {
 		require.JSONEq(t, `{"outcome":"failure"}`, events[1].Details)
 	})
 
-	t.Run("does not audit throttled attempts", func(t *testing.T) {
+	t.Run("records throttled attempts as rate-limit events", func(t *testing.T) {
 		service, _ := newTestService(t)
 
 		for range testMaxAttempts {
 			_, err := service.Login(context.Background(), "wrong-password", testNow)
 			require.ErrorIs(t, err, ErrDenied)
 		}
-		// The throttled attempt carries no verification and no event.
+		// The throttled attempt carries no verification and no
+		// authentication event, only a rate-limit event.
 		_, err := service.Login(context.Background(), testAdminPassword, testNow)
 		require.ErrorIs(t, err, ErrDenied)
 
 		events := listEvents(t, service)
-		require.Len(t, events, testMaxAttempts)
-		for _, event := range events {
+		require.Len(t, events, testMaxAttempts+1)
+		require.Equal(t, audit.CategoryRateLimit, events[0].Category)
+		require.JSONEq(t, `{"key":"admin-login"}`, events[0].Details)
+		require.Empty(t, events[0].Subject)
+		for _, event := range events[1:] {
+			require.Equal(t, audit.CategoryAdminAuthentication, event.Category)
 			require.JSONEq(t, `{"outcome":"failure"}`, event.Details)
 		}
+	})
+
+	t.Run("propagates audit failures on throttled attempts", func(t *testing.T) {
+		service, _ := newTestService(t)
+		for range testMaxAttempts {
+			_, err := service.Login(context.Background(), "wrong-password", testNow)
+			require.ErrorIs(t, err, ErrDenied)
+		}
+		service.audit = failingRecorder{err: errors.New("boom")}
+
+		_, err := service.Login(context.Background(), testAdminPassword, testNow)
+
+		require.ErrorContains(t, err, "record admin rate limit event: boom")
 	})
 }
 

@@ -14,5 +14,8 @@
 // resolves to no user is keyed by the exact identifier, which keeps unknown
 // identifiers bounded. Every denied attempt returns the same ErrDenied
 // regardless of cause, so unknown users, wrong or malformed codes, expired
-// users, locked users, and throttling cannot be told apart.
+// users, locked users, and throttling cannot be told apart. A throttled
+// attempt is additionally recorded as a rate-limit audit event carrying the
+// affected subject when the identifier resolves to a known user and the
+// exact counter key in all cases.
 package login

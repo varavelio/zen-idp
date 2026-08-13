@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/totp"
@@ -44,6 +45,12 @@ type sessionCreator interface {
 	Create(context.Context, session.CreateParams) (string, error)
 }
 
+// auditRecorder appends security-relevant events, satisfied by
+// audit.Recorder.
+type auditRecorder interface {
+	Record(context.Context, audit.RecordParams) error
+}
+
 // Service authenticates users and creates their authoritative sessions.
 type Service struct {
 	users       []config.User
@@ -51,17 +58,20 @@ type Service struct {
 	rateLimiter rateLimiter
 	locks       lockChecker
 	sessions    sessionCreator
+	audit       auditRecorder
 }
 
 // New returns a service that authenticates against users with the
 // deterministic TOTP credentials derived from rootSecret, gates attempts
-// through rateLimiter and locks, and records sessions through sessions.
+// through rateLimiter and locks, records sessions through sessions, and
+// appends rate-limit events through audit.
 func New(
 	users []config.User,
 	rootSecret [sha256.Size]byte,
 	rateLimiter rateLimiter,
 	locks lockChecker,
 	sessions sessionCreator,
+	audit auditRecorder,
 ) (*Service, error) {
 	if rateLimiter == nil {
 		return nil, errors.New("login rate limiter is nil")
@@ -72,12 +82,16 @@ func New(
 	if sessions == nil {
 		return nil, errors.New("login session creator is nil")
 	}
+	if audit == nil {
+		return nil, errors.New("login audit recorder is nil")
+	}
 	return &Service{
 		users:       users,
 		rootSecret:  rootSecret,
 		rateLimiter: rateLimiter,
 		locks:       locks,
 		sessions:    sessions,
+		audit:       audit,
 	}, nil
 }
 
@@ -110,7 +124,9 @@ type Params struct {
 //
 // Every denied attempt returns ErrDenied. Attempts that pass the rate-limit
 // gate consume one failure from the identifier's counter; a successful
-// login resets the counter and records a new session.
+// login resets the counter and records a new session. A throttled attempt,
+// one denied by the rate limiter before any verification, is recorded as a
+// rate-limit audit event.
 func (service *Service) Login(ctx context.Context, params Params) (string, error) {
 	if params.Identifier == "" || len(params.Identifier) > maxIdentifierLength {
 		return "", ErrDenied
@@ -127,6 +143,13 @@ func (service *Service) Login(ctx context.Context, params Params) (string, error
 		return "", fmt.Errorf("check rate limit: %w", err)
 	}
 	if !allowed {
+		subject := ""
+		if known {
+			subject = user.Subject
+		}
+		if err := service.recordRateLimitEvent(ctx, subject, key, params.Now); err != nil {
+			return "", err
+		}
 		return "", ErrDenied
 	}
 
@@ -194,4 +217,26 @@ func (service *Service) resolve(identifier string) (config.User, bool) {
 		}
 	}
 	return config.User{}, false
+}
+
+// recordRateLimitEvent appends a rate-limit audit event for a throttled
+// attempt against the given counter key. The subject carries the stable sub
+// of a known user and stays empty for an unknown identifier; the key always
+// carries the exact counter key the limiter denied, which is the identifier
+// itself when it resolves to no user.
+func (service *Service) recordRateLimitEvent(
+	ctx context.Context,
+	subject, key string,
+	now time.Time,
+) error {
+	err := service.audit.Record(ctx, audit.RecordParams{
+		Category: audit.CategoryRateLimit,
+		Subject:  subject,
+		Details:  map[string]any{"key": key},
+		Now:      now,
+	})
+	if err != nil {
+		return fmt.Errorf("record rate limit event: %w", err)
+	}
+	return nil
 }

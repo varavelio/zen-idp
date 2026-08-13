@@ -168,12 +168,18 @@ func runServe(envFile string, dependencies dependencies) error {
 		return fmt.Errorf("build userinfo service: %w", err)
 	}
 
+	auditRecorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
+	if err != nil {
+		return fmt.Errorf("build audit recorder: %w", err)
+	}
+
 	logins, err := login.New(
 		configuration.Users,
 		runtime.RootSecret,
 		rateLimiter,
 		locks,
 		sessionStore,
+		auditRecorder,
 	)
 	if err != nil {
 		return fmt.Errorf("build login service: %w", err)
@@ -195,11 +201,6 @@ func runServe(envFile string, dependencies dependencies) error {
 	)
 	if err != nil {
 		return fmt.Errorf("build client auth rate limiter: %w", err)
-	}
-
-	auditRecorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
-	if err != nil {
-		return fmt.Errorf("build audit recorder: %w", err)
 	}
 
 	adminService, err := admin.New(
@@ -249,6 +250,7 @@ func runServe(envFile string, dependencies dependencies) error {
 			Codes:                  codeStore,
 			Issuer:                 tokenIssuer,
 			ClientAuth:             clientRateLimiter,
+			Audit:                  auditRecorder,
 			RequireClientSecretTLS: strings.HasPrefix(configuration.Issuer, "https://"),
 		},
 		server.UserinfoDependencies{
@@ -256,6 +258,7 @@ func runServe(envFile string, dependencies dependencies) error {
 		},
 		server.LogoutDependencies{
 			Sessions:      sessionStore,
+			Audit:         auditRecorder,
 			CSRF:          csrfGuard,
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
@@ -264,6 +267,7 @@ func runServe(envFile string, dependencies dependencies) error {
 			Consume: codeStore,
 			Deriver: totpSecretDeriver{rootSecret: runtime.RootSecret},
 			CSRF:    csrfGuard,
+			Audit:   auditRecorder,
 			Users:   configuration.Users,
 			UI:      configuration.UI,
 		},

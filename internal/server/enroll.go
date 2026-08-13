@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/onetoken"
@@ -58,6 +59,8 @@ type EnrollDependencies struct {
 	// CSRF protects the enrollment form submission from cross-site
 	// request forgery.
 	CSRF CSRFGuard
+	// Audit appends enrollment-token consumption to the audit log.
+	Audit AuditRecorder
 	// Users lists every configured user, the only subjects enrollment
 	// tokens may be redeemed for.
 	Users []config.User
@@ -83,9 +86,10 @@ func (server *Server) enrollForm(w http.ResponseWriter, r *http.Request) error {
 // processEnroll handles the enrollment form submission: it verifies the
 // anti-forgery token, redeems the submitted one-use enrollment token at
 // the security-sensitive reveal point, checks the redeemed bindings against
-// the current configuration, derives the deterministic TOTP shared secret,
-// and renders the enrollment QR code. Every denial re-renders the form with
-// the same generic message, never revealing which check failed.
+// the current configuration, records the consumption event, derives the
+// deterministic TOTP shared secret, and renders the enrollment QR code.
+// Every denial re-renders the form with the same generic message, never
+// revealing which check failed.
 func (server *Server) processEnroll(w http.ResponseWriter, r *http.Request) error {
 	if err := server.enroll.CSRF.Verify(r); err != nil {
 		if errors.Is(err, csrf.ErrInvalidToken) {
@@ -115,6 +119,14 @@ func (server *Server) processEnroll(w http.ResponseWriter, r *http.Request) erro
 	user, ok := server.resolveEnrollUser(enrollment.Subject)
 	if !ok || !server.userEnrollable(user, enrollment.TOTPRev, now) {
 		return server.renderEnrollPageFailure(w, r, enrollDeniedMessage)
+	}
+
+	if err := server.enroll.Audit.Record(r.Context(), audit.RecordParams{
+		Category: audit.CategoryEnrollmentTokenConsumed,
+		Subject:  enrollment.Subject,
+		Now:      now,
+	}); err != nil {
+		return fmt.Errorf("record enrollment consumption audit event: %w", err)
 	}
 
 	secret, err := server.enroll.Deriver.DeriveTOTPSecret(user.Subject, user.TOTPRevision)

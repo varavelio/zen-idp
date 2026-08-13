@@ -6,24 +6,31 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
 
-// SessionRevoker revokes the SSO session identified by a browser token,
-// satisfied by session.Store.
+// SessionRevoker validates and revokes the SSO session identified by a
+// browser token, satisfied by session.Store. Validation identifies the
+// affected subject so the revocation can be recorded.
 type SessionRevoker interface {
+	Validate(context.Context, string, time.Time) (session.Session, error)
 	Revoke(context.Context, string) error
 }
 
 // LogoutDependencies carries the injected pieces of the local logout
 // interaction.
 type LogoutDependencies struct {
-	// Sessions revokes the SSO session presented with the logout request.
+	// Sessions validates and revokes the SSO session presented with the
+	// logout request.
 	Sessions SessionRevoker
+	// Audit appends the session revocation to the audit log.
+	Audit AuditRecorder
 	// CSRF protects the sign-out confirmation form from cross-site request
 	// forgery.
 	CSRF CSRFGuard
@@ -51,10 +58,11 @@ func (server *Server) logoutForm(w http.ResponseWriter, r *http.Request) error {
 }
 
 // processLogout handles the sign-out confirmation form submission: it
-// verifies the anti-forgery token, revokes the SSO session carried by the
-// session cookie, clears the cookie, and renders the signed-out page. An
-// absent or malformed session cookie is not an error, so logout always
-// completes and always leaves the browser signed out.
+// verifies the anti-forgery token, validates the SSO session carried by the
+// session cookie, revokes it, records the revocation, clears the cookie, and
+// renders the signed-out page. An absent or malformed cookie is not an
+// error, so logout always completes and always leaves the browser signed
+// out; only a live session is revoked and recorded.
 func (server *Server) processLogout(w http.ResponseWriter, r *http.Request) error {
 	if err := server.logout.CSRF.Verify(r); err != nil {
 		if errors.Is(err, csrf.ErrInvalidToken) {
@@ -65,9 +73,27 @@ func (server *Server) processLogout(w http.ResponseWriter, r *http.Request) erro
 
 	cookie, err := r.Cookie(sessionCookieName)
 	if err == nil {
-		if err := server.logout.Sessions.Revoke(r.Context(), cookie.Value); err != nil &&
-			!errors.Is(err, session.ErrMalformedToken) {
-			return fmt.Errorf("revoke session: %w", err)
+		current, err := server.logout.Sessions.Validate(r.Context(), cookie.Value, time.Now())
+		switch {
+		case err == nil:
+			if err := server.logout.Sessions.Revoke(r.Context(), cookie.Value); err != nil &&
+				!errors.Is(err, session.ErrMalformedToken) {
+				return fmt.Errorf("revoke session: %w", err)
+			}
+			if err := server.logout.Audit.Record(r.Context(), audit.RecordParams{
+				Category: audit.CategorySessionRevoked,
+				Subject:  current.Subject,
+				Now:      time.Now(),
+			}); err != nil {
+				return fmt.Errorf("record session revocation audit event: %w", err)
+			}
+		case errors.Is(err, session.ErrMalformedToken),
+			errors.Is(err, session.ErrInvalidSession),
+			errors.Is(err, session.ErrExpiredSession):
+			// The cookie does not authenticate a live session: there is
+			// nothing to revoke and no event to record.
+		default:
+			return fmt.Errorf("validate session cookie: %w", err)
 		}
 	}
 

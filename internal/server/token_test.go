@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/clock"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/jwk"
@@ -532,6 +533,14 @@ func TestToken(t *testing.T) {
 				basicAuth("confidential-app", testClientSecret),
 			)
 			requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+
+			// Only the blocked attempt is recorded, against the client key;
+			// the failed authentications themselves produce no events.
+			events := auditEvents(t, app)
+			require.Len(t, events, 1)
+			require.Equal(t, audit.CategoryRateLimit, events[0].Category)
+			require.Empty(t, events[0].Subject)
+			require.JSONEq(t, `{"key":"confidential-app"}`, events[0].Details)
 		},
 	)
 
@@ -646,6 +655,37 @@ func TestToken(t *testing.T) {
 			form := validExchangeForm("anything")
 			form.Set("client_id", "unknown")
 			response := tokenRequest(t, handler, form, "")
+
+			require.Equal(t, http.StatusInternalServerError, response.Code)
+			require.Contains(t, response.Body.String(), "internal server error")
+		},
+	)
+
+	t.Run(
+		"returns an internal error when recording a client auth rate limit event fails",
+		func(t *testing.T) {
+			app := newTestApp(t, testUsers)
+			app.server.tokens.Audit = failingPanicAudit{}
+			form := validExchangeForm("anything")
+			form.Set("client_id", "unknown")
+
+			// Exhaust the budget of the unknown client.
+			for range 5 {
+				response := tokenRequest(
+					t,
+					app.server.Handler(),
+					form,
+					basicAuth("unknown", "wrong-secret"),
+				)
+				requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+			}
+
+			response := tokenRequest(
+				t,
+				app.server.Handler(),
+				form,
+				basicAuth("unknown", "wrong-secret"),
+			)
 
 			require.Equal(t, http.StatusInternalServerError, response.Code)
 			require.Contains(t, response.Body.String(), "internal server error")

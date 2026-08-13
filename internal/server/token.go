@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/crypto"
 	"github.com/varavelio/zen-idp/internal/onetoken"
@@ -59,6 +60,9 @@ type TokenDependencies struct {
 	// protecting confidential client secrets from brute force. A nil value
 	// disables the budget.
 	ClientAuth ClientAuthLimiter
+	// Audit records client-authentication rate-limit events. A nil value
+	// disables the events.
+	Audit AuditRecorder
 	// RequireClientSecretTLS demands HTTPS for client-secret
 	// authentication; production deployments must set it.
 	RequireClientSecretTLS bool
@@ -227,7 +231,8 @@ func (server *Server) token(w http.ResponseWriter, r *http.Request) error {
 // in production; public clients must identify themselves with the client_id
 // parameter and must not present a secret. The budget is checked before any
 // credential verification, every failed authentication consumes one attempt
-// of the client's budget, and every successful authentication resets it.
+// of the client's budget, every successful authentication resets it, and a
+// blocked client is recorded as a rate-limit event.
 func (server *Server) authenticateTokenClient(r *http.Request) (config.Client, error) {
 	clientID, clientSecret, presented, err := parseClientCredentials(r)
 	if err != nil {
@@ -247,6 +252,18 @@ func (server *Server) authenticateTokenClient(r *http.Request) (config.Client, e
 			return config.Client{}, fmt.Errorf("check client auth rate limit: %w", err)
 		}
 		if !allowed {
+			if server.tokens.Audit != nil {
+				if err := server.tokens.Audit.Record(r.Context(), audit.RecordParams{
+					Category: audit.CategoryRateLimit,
+					Details:  map[string]any{"key": clientID},
+					Now:      now,
+				}); err != nil {
+					return config.Client{}, fmt.Errorf(
+						"record client auth rate limit event: %w",
+						err,
+					)
+				}
+			}
 			return config.Client{}, clientError(
 				"the client is blocked after repeated failed authentication attempts",
 			)

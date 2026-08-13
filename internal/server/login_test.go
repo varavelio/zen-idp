@@ -78,7 +78,9 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 	require.NoError(t, err)
 	codes, err := onetoken.NewStore(queries, id.NewIDGenerator(), referenceRootSecret)
 	require.NoError(t, err)
-	service, err := login.New(users, referenceRootSecret, limiter, locks, store)
+	recorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
+	require.NoError(t, err)
+	service, err := login.New(users, referenceRootSecret, limiter, locks, store, recorder)
 	require.NoError(t, err)
 	signer, err := jwt.NewSigner(referenceKey(), referenceKid())
 	require.NoError(t, err)
@@ -90,8 +92,6 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 	require.NoError(t, err)
 
 	adminLimiter, err := ratelimit.New(queries, adminTestMaxAttempts, adminTestWindow)
-	require.NoError(t, err)
-	recorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
 	require.NoError(t, err)
 	adminService, err := admin.New(testAdminPasswordHash, adminLimiter, store, recorder)
 	require.NoError(t, err)
@@ -118,12 +118,14 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			Codes:      codes,
 			Issuer:     issuer,
 			ClientAuth: clientLimiter,
+			Audit:      recorder,
 		},
 		UserinfoDependencies{
 			Service: userinfoService,
 		},
 		LogoutDependencies{
 			Sessions:      store,
+			Audit:         recorder,
 			CSRF:          csrfGuard,
 			UI:            config.UI{Name: "Example Auth"},
 			SecureCookies: true,
@@ -132,6 +134,7 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			Consume: codes,
 			Deriver: testTOTPDeriver{rootSecret: referenceRootSecret},
 			CSRF:    csrfGuard,
+			Audit:   recorder,
 			Users:   users,
 			UI:      config.UI{Name: "Example Auth"},
 		},
@@ -169,6 +172,17 @@ func newLoginTestDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { _ = db.Close() })
 	require.NoError(t, statestore.Migrate(ctx, db))
 	return db
+}
+
+// auditEvents lists the audit records written by the test app, newest
+// first, through the recorder shared by every server dependency.
+func auditEvents(t *testing.T, app *testApp) []audit.Event {
+	t.Helper()
+	recorder, ok := app.server.admin.Audit.(*audit.Recorder)
+	require.True(t, ok)
+	events, err := recorder.List(context.Background(), 100)
+	require.NoError(t, err)
+	return events
 }
 
 // testTOTPDeriver derives deterministic TOTP shared secrets with the

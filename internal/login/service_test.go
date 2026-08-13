@@ -9,6 +9,7 @@ import (
 	"encoding/base32"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/clock"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/id"
@@ -80,13 +82,14 @@ func (runner testTxRunner) WithTx(
 }
 
 // testService bundles a login service with its real dependencies so tests
-// can inspect counters, locks, and sessions directly.
+// can inspect counters, locks, sessions, and audit records directly.
 type testService struct {
 	service *Service
 	queries *statestore.Queries
 	limiter *ratelimit.Limiter
 	locks   *lock.Locks
 	session *session.Store
+	audit   *audit.Recorder
 }
 
 // newTestService returns a service backed by a migrated temporary SQLite
@@ -106,7 +109,9 @@ func newTestService(
 	require.NoError(t, err)
 	store, err := session.NewStore(queries, id.NewIDGenerator(), referenceRootSecret, testMaxAge)
 	require.NoError(t, err)
-	service, err := New(users, referenceRootSecret, limiter, locks, store)
+	recorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
+	require.NoError(t, err)
+	service, err := New(users, referenceRootSecret, limiter, locks, store, recorder)
 	require.NoError(t, err)
 	return testService{
 		service: service,
@@ -114,6 +119,7 @@ func newTestService(
 		limiter: limiter,
 		locks:   locks,
 		session: store,
+		audit:   recorder,
 	}
 }
 
@@ -167,8 +173,10 @@ func TestNew(t *testing.T) {
 			testMaxAge,
 		)
 		require.NoError(t, err)
+		recorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
+		require.NoError(t, err)
 
-		_, err = New(testUsers, referenceRootSecret, nil, locks, store)
+		_, err = New(testUsers, referenceRootSecret, nil, locks, store, recorder)
 		require.EqualError(t, err, "login rate limiter is nil")
 	})
 
@@ -183,8 +191,10 @@ func TestNew(t *testing.T) {
 			testMaxAge,
 		)
 		require.NoError(t, err)
+		recorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
+		require.NoError(t, err)
 
-		_, err = New(testUsers, referenceRootSecret, limiter, nil, store)
+		_, err = New(testUsers, referenceRootSecret, limiter, nil, store, recorder)
 		require.EqualError(t, err, "login lock checker is nil")
 	})
 
@@ -195,9 +205,30 @@ func TestNew(t *testing.T) {
 		require.NoError(t, err)
 		locks, err := lock.NewLocks(queries, testTxRunner{db: db})
 		require.NoError(t, err)
+		recorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
+		require.NoError(t, err)
 
-		_, err = New(testUsers, referenceRootSecret, limiter, locks, nil)
+		_, err = New(testUsers, referenceRootSecret, limiter, locks, nil, recorder)
 		require.EqualError(t, err, "login session creator is nil")
+	})
+
+	t.Run("rejects nil audit recorder", func(t *testing.T) {
+		db := newTestDB(t)
+		queries := statestore.New(db)
+		limiter, err := ratelimit.New(queries, 5, 5*time.Minute)
+		require.NoError(t, err)
+		locks, err := lock.NewLocks(queries, testTxRunner{db: db})
+		require.NoError(t, err)
+		store, err := session.NewStore(
+			queries,
+			id.NewIDGenerator(),
+			referenceRootSecret,
+			testMaxAge,
+		)
+		require.NoError(t, err)
+
+		_, err = New(testUsers, referenceRootSecret, limiter, locks, store, nil)
+		require.EqualError(t, err, "login audit recorder is nil")
 	})
 
 	t.Run("accepts valid dependencies", func(t *testing.T) {
@@ -550,4 +581,99 @@ func TestLogin(t *testing.T) {
 		})
 		require.ErrorIs(t, err, ErrDenied)
 	})
+}
+
+func TestRateLimitAuditEvents(t *testing.T) {
+	// listEvents returns the recorded audit events, newest first.
+	listEvents := func(t *testing.T, service testService) []audit.Event {
+		t.Helper()
+		events, err := service.audit.List(context.Background(), 10)
+		require.NoError(t, err)
+		return events
+	}
+
+	// exhaust budgets every failed attempt of the key so the next login is
+	// throttled before any verification.
+	exhaust := func(t *testing.T, service testService, key string, maxAttempts int) {
+		t.Helper()
+		for range maxAttempts {
+			require.NoError(t, service.limiter.RecordFailure(context.Background(), key, testNow))
+		}
+	}
+
+	t.Run("records a throttled known user with its stable subject and key", func(t *testing.T) {
+		service := newTestService(t, testUsers, 3, 5*time.Minute)
+		exhaust(t, service, testSubject, 3)
+
+		_, err := service.service.Login(context.Background(), Params{
+			Identifier: testLogin,
+			Code:       codeFor(t, testSubject, 0, testNow),
+			Now:        testNow,
+		})
+		require.ErrorIs(t, err, ErrDenied)
+
+		events := listEvents(t, service)
+		require.Len(t, events, 1)
+		require.Equal(t, audit.CategoryRateLimit, events[0].Category)
+		require.Equal(t, testSubject, events[0].Subject)
+		require.JSONEq(t, `{"key":"alice"}`, events[0].Details)
+	})
+
+	t.Run("records a throttled unknown identifier with its exact key", func(t *testing.T) {
+		service := newTestService(t, testUsers, 3, 5*time.Minute)
+		exhaust(t, service, "mallory", 3)
+
+		_, err := service.service.Login(context.Background(), Params{
+			Identifier: "mallory",
+			Code:       "123456",
+			Now:        testNow,
+		})
+		require.ErrorIs(t, err, ErrDenied)
+
+		events := listEvents(t, service)
+		require.Len(t, events, 1)
+		require.Equal(t, audit.CategoryRateLimit, events[0].Category)
+		require.Empty(t, events[0].Subject)
+		require.JSONEq(t, `{"key":"mallory"}`, events[0].Details)
+	})
+
+	t.Run("does not record events for ordinary failed attempts", func(t *testing.T) {
+		service := newTestService(t, testUsers, 5, 5*time.Minute)
+		code := codeFor(t, testSubject, 0, testNow)
+
+		for _, params := range []Params{
+			{Identifier: testSubject, Code: wrongCode(code), Now: testNow},
+			{Identifier: testSubject, Code: "12ab", Now: testNow},
+			{Identifier: "mallory", Code: "123456", Now: testNow},
+		} {
+			_, err := service.service.Login(context.Background(), params)
+			require.ErrorIs(t, err, ErrDenied)
+		}
+
+		require.Empty(t, listEvents(t, service))
+	})
+
+	t.Run("propagates audit failures on throttled attempts", func(t *testing.T) {
+		service := newTestService(t, testUsers, 3, 5*time.Minute)
+		exhaust(t, service, testSubject, 3)
+		service.service.audit = failingAuditRecorder{err: errors.New("boom")}
+
+		_, err := service.service.Login(context.Background(), Params{
+			Identifier: testSubject,
+			Code:       "123456",
+			Now:        testNow,
+		})
+
+		require.ErrorContains(t, err, "record rate limit event: boom")
+	})
+}
+
+// failingAuditRecorder is an audit recorder stub that always fails.
+type failingAuditRecorder struct {
+	err error
+}
+
+// Record fails with the stub error.
+func (stub failingAuditRecorder) Record(context.Context, audit.RecordParams) error {
+	return stub.err
 }
