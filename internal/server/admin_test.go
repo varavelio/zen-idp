@@ -12,7 +12,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/varavelio/zen-idp/internal/audit"
+	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/csrf"
+	"github.com/varavelio/zen-idp/internal/onetoken"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/statestore"
 	"github.com/varavelio/zen-idp/internal/totp"
@@ -88,6 +90,49 @@ func adminSessionCookie(t *testing.T, response *httptest.ResponseRecorder) strin
 		}
 	}
 	return ""
+}
+
+// enrollmentTokenRequest signs in as the test administrator, obtains the
+// anti-forgery token, and posts the given form values to the
+// enrollment-token creation endpoint, returning the response.
+func enrollmentTokenRequest(
+	t *testing.T,
+	app *testApp,
+	form url.Values,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	loginResponse := adminLoginRequest(t, app, testAdminPassword)
+	require.Equal(t, http.StatusSeeOther, loginResponse.Code)
+	adminToken := adminSessionCookie(t, loginResponse)
+	require.NotEmpty(t, adminToken)
+
+	csrfToken := adminCSRFToken(t, app)
+	form.Set(csrf.FieldName, csrfToken)
+
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		adminTokensAction,
+		strings.NewReader(form.Encode()),
+	)
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(&http.Cookie{Name: adminSessionCookieName, Value: adminToken})
+	request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
+	response := httptest.NewRecorder()
+	app.server.Handler().ServeHTTP(response, request)
+	return response
+}
+
+// enrollmentTokenFromBody extracts the tok_{id}_{secret} credential shown
+// by an enrollment-token creation response.
+func enrollmentTokenFromBody(t *testing.T, body string) string {
+	t.Helper()
+	start := strings.Index(body, "tok_")
+	require.NotEqual(t, -1, start, "no enrollment token in response body")
+	rest := body[start:]
+	end := strings.IndexByte(rest, '<')
+	require.NotEqual(t, -1, end, "enrollment token is not terminated")
+	return rest[:end]
 }
 
 func TestAdminForm(t *testing.T) {
@@ -337,6 +382,388 @@ func TestProcessAdminLogin(t *testing.T) {
 		require.Equal(t, `{"outcome":"success"}`, records[0].Details)
 		require.Equal(t, string(audit.CategoryAdminAuthentication), records[1].Category)
 		require.Equal(t, `{"outcome":"failure"}`, records[1].Details)
+	})
+}
+
+func TestProcessEnrollmentToken(t *testing.T) {
+	t.Run("renders the enrollment-token creation form on the home page", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		loginResponse := adminLoginRequest(t, app, testAdminPassword)
+		require.Equal(t, http.StatusSeeOther, loginResponse.Code)
+		adminToken := adminSessionCookie(t, loginResponse)
+		require.NotEmpty(t, adminToken)
+
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			adminLoginPath,
+			nil,
+		)
+		request.AddCookie(&http.Cookie{Name: adminSessionCookieName, Value: adminToken})
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		body := response.Body.String()
+		require.Contains(t, body, "Create enrollment token")
+		require.Contains(t, body, `action="/admin/tokens"`)
+		require.Contains(t, body, `name="subject"`)
+		require.Contains(t, body, `name="duration"`)
+		require.Contains(t, body, `name="deadline"`)
+		require.Contains(t, body, `name="csrf_token"`)
+	})
+
+	t.Run("creates a token with a relative duration", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"alice"},
+			"duration": {"24h"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+		body := response.Body.String()
+		require.Contains(t, body, "Enrollment token created.")
+		require.Contains(t, body, "Subject: alice")
+		require.Contains(t, body, "Copy this token now. It will not be shown again.")
+		require.Contains(t, body, `href="/admin"`)
+
+		token := enrollmentTokenFromBody(t, body)
+		require.True(t, strings.HasPrefix(token, "tok_"))
+
+		// The shown credential redeems the enrollment exactly once, bound
+		// to the configured subject and revision with the normalized
+		// absolute expiration.
+		enrollment, err := app.codes.ConsumeEnrollment(
+			context.Background(), token, time.Now().Add(23*time.Hour),
+		)
+		require.NoError(t, err)
+		require.Equal(t, "alice", enrollment.Subject)
+		require.Zero(t, enrollment.TOTPRev)
+		require.WithinDuration(t, time.Now().Add(24*time.Hour), enrollment.ExpiresAt, time.Minute)
+	})
+
+	t.Run("uses the configured TOTP revision of the subject", func(t *testing.T) {
+		users := []config.User{{Subject: "alice", TOTPRevision: 3}}
+		app := newTestApp(t, users)
+		form := url.Values{
+			"subject":  {"alice"},
+			"duration": {"24h"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		token := enrollmentTokenFromBody(t, response.Body.String())
+		enrollment, err := app.codes.ConsumeEnrollment(
+			context.Background(), token, time.Now().Add(23*time.Hour),
+		)
+		require.NoError(t, err)
+		require.Equal(t, uint64(3), enrollment.TOTPRev)
+	})
+
+	t.Run("creates a token with an absolute deadline", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"alice"},
+			"deadline": {"2099-01-02T15:04:05Z"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		token := enrollmentTokenFromBody(t, response.Body.String())
+		enrollment, err := app.codes.ConsumeEnrollment(
+			context.Background(), token, time.Now().Add(time.Hour),
+		)
+		require.NoError(t, err)
+		require.Equal(
+			t,
+			time.Date(2099, 1, 2, 15, 4, 5, 0, time.UTC),
+			enrollment.ExpiresAt,
+		)
+	})
+
+	t.Run("normalizes an offset deadline to UTC", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"alice"},
+			"deadline": {"2099-01-02T17:04:05+02:00"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		token := enrollmentTokenFromBody(t, response.Body.String())
+		enrollment, err := app.codes.ConsumeEnrollment(
+			context.Background(), token, time.Now().Add(time.Hour),
+		)
+		require.NoError(t, err)
+		require.Equal(
+			t,
+			time.Date(2099, 1, 2, 15, 4, 5, 0, time.UTC),
+			enrollment.ExpiresAt,
+		)
+	})
+
+	t.Run("records an audit event with the absolute expiration only", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"alice"},
+			"deadline": {"2099-01-02T15:04:05Z"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+		require.Equal(t, http.StatusOK, response.Code)
+
+		queries := statestore.New(app.db)
+		records, err := queries.ListAuditRecords(context.Background(), 10)
+		require.NoError(t, err)
+		require.Len(t, records, 2)
+		require.Equal(t, string(audit.CategoryEnrollmentTokenCreated), records[0].Category)
+		require.Equal(t, "alice", records[0].Sub.String)
+		require.Equal(t, `{"expires_at":"2099-01-02T15:04:05Z"}`, records[0].Details)
+		require.NotContains(t, records[0].Details, "tok_")
+	})
+
+	t.Run("rejects an unknown subject", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"mallory"},
+			"duration": {"24h"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), enrollmentUnknownSubject)
+		require.Contains(t, response.Body.String(), `name="csrf_token"`)
+	})
+
+	t.Run("rejects an empty subject", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{"duration": {"24h"}}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), enrollmentUnknownSubject)
+	})
+
+	t.Run("rejects both a duration and a deadline", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"alice"},
+			"duration": {"24h"},
+			"deadline": {"2099-01-02T15:04:05Z"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), enrollmentBothExpirations)
+	})
+
+	t.Run("rejects neither a duration nor a deadline", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{"subject": {"alice"}}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), enrollmentMissingExpiration)
+	})
+
+	t.Run("rejects a malformed duration", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"alice"},
+			"duration": {"not-a-duration"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), enrollmentInvalidDuration)
+	})
+
+	t.Run("rejects a non-positive duration", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"alice"},
+			"duration": {"0s"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), enrollmentInvalidDuration)
+	})
+
+	t.Run("rejects a malformed deadline", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"alice"},
+			"deadline": {"next week"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), enrollmentInvalidDeadline)
+	})
+
+	t.Run("rejects a past deadline", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"alice"},
+			"deadline": {"2020-01-01T00:00:00Z"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), enrollmentPastDeadline)
+	})
+
+	t.Run("rejected submissions record no enrollment event", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		form := url.Values{
+			"subject":  {"mallory"},
+			"duration": {"24h"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+		require.Equal(t, http.StatusOK, response.Code)
+
+		queries := statestore.New(app.db)
+		records, err := queries.ListAuditRecords(context.Background(), 10)
+		require.NoError(t, err)
+		require.Len(t, records, 1)
+		require.Equal(t, string(audit.CategoryAdminAuthentication), records[0].Category)
+	})
+
+	t.Run("rejects a submission without a CSRF token", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		loginResponse := adminLoginRequest(t, app, testAdminPassword)
+		adminToken := adminSessionCookie(t, loginResponse)
+		require.NotEmpty(t, adminToken)
+
+		form := url.Values{
+			"subject":  {"alice"},
+			"duration": {"24h"},
+		}
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			adminTokensAction,
+			strings.NewReader(form.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: adminSessionCookieName, Value: adminToken})
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusForbidden, response.Code)
+		require.Contains(t, response.Body.String(), "Forbidden")
+	})
+
+	t.Run("redirects to the sign-in form without an admin session", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		csrfToken := adminCSRFToken(t, app)
+		form := url.Values{
+			"subject":      {"alice"},
+			"duration":     {"24h"},
+			csrf.FieldName: {csrfToken},
+		}
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			adminTokensAction,
+			strings.NewReader(form.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusSeeOther, response.Code)
+		require.Equal(t, adminLoginPath, response.Header().Get("Location"))
+	})
+
+	t.Run("rejects a user SSO cookie as the admin session", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		userToken, err := app.sessions.Create(context.Background(), session.CreateParams{
+			Subject: "alice",
+			Now:     time.Now(),
+		})
+		require.NoError(t, err)
+		csrfToken := adminCSRFToken(t, app)
+		form := url.Values{
+			"subject":      {"alice"},
+			"duration":     {"24h"},
+			csrf.FieldName: {csrfToken},
+		}
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			adminTokensAction,
+			strings.NewReader(form.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: userToken})
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusSeeOther, response.Code)
+		require.Equal(t, adminLoginPath, response.Header().Get("Location"))
+	})
+
+	t.Run("returns 405 for GET requests", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			adminTokensAction,
+			nil,
+		)
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusMethodNotAllowed, response.Code)
+	})
+
+	t.Run("propagates enrollment creation failures", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.admin.Enrollments = failingEnrollmentCreator{err: errors.New("boom")}
+		form := url.Values{
+			"subject":  {"alice"},
+			"duration": {"24h"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusInternalServerError, response.Code)
+	})
+
+	t.Run("propagates audit recording failures", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.admin.Audit = failingAuditRecorder{err: errors.New("boom")}
+		form := url.Values{
+			"subject":  {"alice"},
+			"duration": {"24h"},
+		}
+
+		response := enrollmentTokenRequest(t, app, form)
+
+		require.Equal(t, http.StatusInternalServerError, response.Code)
 	})
 }
 
@@ -661,5 +1088,22 @@ func (stub failingAdminSessions) ValidateAdmin(
 }
 
 func (stub failingAdminSessions) Revoke(context.Context, string) error {
+	return stub.err
+}
+
+// failingEnrollmentCreator and failingAuditRecorder are stub
+// implementations that always return the configured error.
+type failingEnrollmentCreator struct{ err error }
+
+func (stub failingEnrollmentCreator) CreateEnrollment(
+	context.Context,
+	onetoken.EnrollmentParams,
+) (string, error) {
+	return "", stub.err
+}
+
+type failingAuditRecorder struct{ err error }
+
+func (stub failingAuditRecorder) Record(context.Context, audit.RecordParams) error {
 	return stub.err
 }

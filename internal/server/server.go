@@ -77,6 +77,7 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("GET /admin", handle(server.adminForm))
 	mux.Handle("POST /admin/login", handle(server.processAdminLogin))
 	mux.Handle("POST /admin/logout", handle(server.adminLogOut))
+	mux.Handle("POST /admin/tokens", handle(server.processEnrollmentToken))
 
 	return securityHeaders(mux)
 }
