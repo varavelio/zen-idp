@@ -188,6 +188,15 @@ func runServe(envFile string, dependencies dependencies) error {
 		return fmt.Errorf("build admin rate limiter: %w", err)
 	}
 
+	clientRateLimiter, err := ratelimit.New(
+		queries,
+		configuration.Security.RateLimits.MaxClientAuthAttempts,
+		configuration.Security.RateLimits.ClientAuthAttemptsWindow,
+	)
+	if err != nil {
+		return fmt.Errorf("build client auth rate limiter: %w", err)
+	}
+
 	auditRecorder, err := audit.NewRecorder(queries, id.NewIDGenerator())
 	if err != nil {
 		return fmt.Errorf("build audit recorder: %w", err)
@@ -239,6 +248,7 @@ func runServe(envFile string, dependencies dependencies) error {
 		server.TokenDependencies{
 			Codes:                  codeStore,
 			Issuer:                 tokenIssuer,
+			ClientAuth:             clientRateLimiter,
 			RequireClientSecretTLS: strings.HasPrefix(configuration.Issuer, "https://"),
 		},
 		server.UserinfoDependencies{
