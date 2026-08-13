@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/varavelio/zen-idp/internal/clock"
 	"github.com/varavelio/zen-idp/internal/statestore"
 )
 
@@ -27,25 +28,87 @@ func newTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+// testTxRunner runs functions inside transactions of the test database,
+// satisfying the package's transaction-runner interface.
+type testTxRunner struct {
+	db *sql.DB
+}
+
+// WithTx runs fn inside one database transaction of the test database.
+func (runner testTxRunner) WithTx(
+	ctx context.Context,
+	fn func(*statestore.Queries) error,
+) error {
+	return statestore.WithTx(ctx, runner.db, fn)
+}
+
 // newTestLocks returns a manager backed by a migrated temporary SQLite
 // database and its sqlc queries.
 func newTestLocks(t *testing.T) (*Locks, *statestore.Queries) {
 	t.Helper()
-	queries := statestore.New(newTestDB(t))
-	locks, err := NewLocks(queries)
+	db := newTestDB(t)
+	queries := statestore.New(db)
+	locks, err := NewLocks(queries, testTxRunner{db: db})
 	require.NoError(t, err)
 	return locks, queries
 }
 
+// createPanicLock records a panic lock for the subject directly, without
+// going through the manager, for tests of the remaining operations.
+func createPanicLock(t *testing.T, queries *statestore.Queries, sub string) {
+	t.Helper()
+	require.NoError(
+		t,
+		queries.CreatePanicLock(context.Background(), statestore.CreatePanicLockParams{
+			Sub:       sub,
+			CreatedAt: clock.Format(testNow),
+		}),
+	)
+}
+
+// createAdminLock records an administrative lock for the subject directly,
+// without going through the manager, for tests of the remaining operations.
+func createAdminLock(t *testing.T, queries *statestore.Queries, sub string) {
+	t.Helper()
+	require.NoError(
+		t,
+		queries.CreateAdminLock(context.Background(), statestore.CreateAdminLockParams{
+			Sub:       sub,
+			CreatedAt: clock.Format(testNow),
+		}),
+	)
+}
+
+// insertSession records a user session row directly, without going through
+// the session store, for the atomic-revocation tests.
+func insertSession(t *testing.T, queries *statestore.Queries, id, sub string) {
+	t.Helper()
+	require.NoError(t, queries.CreateSession(context.Background(), statestore.CreateSessionParams{
+		ID:         id,
+		Kind:       "user",
+		SecretHash: []byte("hash"),
+		Sub:        sub,
+		TotpRev:    0,
+		CreatedAt:  clock.Format(testNow),
+		ExpiresAt:  clock.Format(testNow.Add(time.Hour)),
+	}))
+}
+
 func TestNewLocks(t *testing.T) {
 	t.Run("rejects nil queries", func(t *testing.T) {
-		_, err := NewLocks(nil)
+		_, err := NewLocks(nil, testTxRunner{})
 		require.Error(t, err)
 	})
 
-	t.Run("accepts valid queries", func(t *testing.T) {
+	t.Run("rejects a nil transaction runner", func(t *testing.T) {
+		queries := statestore.New(newTestDB(t))
+		_, err := NewLocks(queries, nil)
+		require.Error(t, err)
+	})
+
+	t.Run("accepts valid queries and runner", func(t *testing.T) {
 		_, queries := newTestLocks(t)
-		locks, err := NewLocks(queries)
+		locks, err := NewLocks(queries, testTxRunner{})
 		require.NoError(t, err)
 		require.NotNil(t, locks)
 	})
@@ -60,8 +123,8 @@ func TestIsLocked(t *testing.T) {
 	})
 
 	t.Run("reports locked when only the panic lock exists", func(t *testing.T) {
-		locks, _ := newTestLocks(t)
-		require.NoError(t, locks.LockPanic(context.Background(), testSubject, testNow))
+		locks, queries := newTestLocks(t)
+		createPanicLock(t, queries, testSubject)
 
 		locked, err := locks.IsLocked(context.Background(), testSubject)
 		require.NoError(t, err)
@@ -69,8 +132,8 @@ func TestIsLocked(t *testing.T) {
 	})
 
 	t.Run("reports locked when only the administrative lock exists", func(t *testing.T) {
-		locks, _ := newTestLocks(t)
-		require.NoError(t, locks.LockAdmin(context.Background(), testSubject, testNow))
+		locks, queries := newTestLocks(t)
+		createAdminLock(t, queries, testSubject)
 
 		locked, err := locks.IsLocked(context.Background(), testSubject)
 		require.NoError(t, err)
@@ -78,9 +141,9 @@ func TestIsLocked(t *testing.T) {
 	})
 
 	t.Run("reports locked when both locks exist", func(t *testing.T) {
-		locks, _ := newTestLocks(t)
-		require.NoError(t, locks.LockPanic(context.Background(), testSubject, testNow))
-		require.NoError(t, locks.LockAdmin(context.Background(), testSubject, testNow))
+		locks, queries := newTestLocks(t)
+		createPanicLock(t, queries, testSubject)
+		createAdminLock(t, queries, testSubject)
 
 		locked, err := locks.IsLocked(context.Background(), testSubject)
 		require.NoError(t, err)
@@ -88,10 +151,10 @@ func TestIsLocked(t *testing.T) {
 	})
 
 	t.Run("clearing one lock does not unlock a subject holding the other", func(t *testing.T) {
-		locks, _ := newTestLocks(t)
-		require.NoError(t, locks.LockPanic(context.Background(), testSubject, testNow))
-		require.NoError(t, locks.LockAdmin(context.Background(), testSubject, testNow))
-		require.NoError(t, locks.ClearAdmin(context.Background(), testSubject))
+		locks, queries := newTestLocks(t)
+		createPanicLock(t, queries, testSubject)
+		createAdminLock(t, queries, testSubject)
+		require.NoError(t, locks.UnlockSubject(context.Background(), testSubject))
 
 		locked, err := locks.IsLocked(context.Background(), testSubject)
 		require.NoError(t, err)
@@ -99,8 +162,8 @@ func TestIsLocked(t *testing.T) {
 	})
 
 	t.Run("does not leak locks across subjects", func(t *testing.T) {
-		locks, _ := newTestLocks(t)
-		require.NoError(t, locks.LockPanic(context.Background(), testSubject, testNow))
+		locks, queries := newTestLocks(t)
+		createPanicLock(t, queries, testSubject)
 
 		locked, err := locks.IsLocked(context.Background(), "other-subject")
 		require.NoError(t, err)

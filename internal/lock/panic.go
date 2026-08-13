@@ -5,29 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
-
-	"github.com/varavelio/zen-idp/internal/clock"
-	"github.com/varavelio/zen-idp/internal/statestore"
 )
-
-// LockPanic creates the panic lock for sub at the given instant, recording
-// it as the time the emergency action was taken. Creating an existing lock
-// is not an error and keeps the original creation instant, so repeated
-// actions cannot extend the lock.
-func (locks *Locks) LockPanic(ctx context.Context, sub string, now time.Time) error {
-	if err := validateSub(sub); err != nil {
-		return err
-	}
-	err := locks.queries.CreatePanicLock(ctx, statestore.CreatePanicLockParams{
-		Sub:       sub,
-		CreatedAt: clock.Format(now),
-	})
-	if err != nil {
-		return fmt.Errorf("create panic lock: %w", err)
-	}
-	return nil
-}
 
 // IsPanicked reports whether a panic lock is present for sub.
 func (locks *Locks) IsPanicked(ctx context.Context, sub string) (bool, error) {
