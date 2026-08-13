@@ -45,6 +45,19 @@ func (q *Queries) CreateAuditRecord(ctx context.Context, arg CreateAuditRecordPa
 	return err
 }
 
+const deleteAuditRecordsBefore = `-- name: DeleteAuditRecordsBefore :execrows
+DELETE FROM audit_records
+WHERE created_at <= ?1
+`
+
+func (q *Queries) DeleteAuditRecordsBefore(ctx context.Context, before string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteAuditRecordsBefore, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const listAuditRecords = `-- name: ListAuditRecords :many
 SELECT id, created_at, category, sub, details
 FROM audit_records
