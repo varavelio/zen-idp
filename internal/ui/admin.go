@@ -322,6 +322,15 @@ func AdminHomePage(
 						)
 					}),
 				),
+				nodx.A(
+					nodx.Href(adminAuditPath),
+					nodx.Class(
+						"block w-full rounded-md border border-base-400 bg-base-100 text-content",
+						"text-center font-medium py-2 px-3 hover:opacity-90 focus:outline-none",
+						"focus:ring-2 focus:ring-content",
+					),
+					nodx.Text("View audit log"),
+				),
 				nodx.FormEl(
 					nodx.Action(adminLogoutAction),
 					nodx.Method("post"),
