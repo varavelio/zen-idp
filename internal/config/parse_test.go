@@ -28,6 +28,8 @@ config:
     rate_limits:
       max_user_login_attempts: 8
       user_login_attempts_window_seconds: 120
+      max_client_auth_attempts: 6
+      client_auth_attempts_window_seconds: 60
     session:
       max_age_hours: 24
 clients:
@@ -63,6 +65,8 @@ users:
 			2*time.Minute,
 			configuration.Security.RateLimits.UserLoginAttemptsWindow,
 		)
+		require.Equal(t, 6, configuration.Security.RateLimits.MaxClientAuthAttempts)
+		require.Equal(t, time.Minute, configuration.Security.RateLimits.ClientAuthAttemptsWindow)
 		require.Equal(t, 24*time.Hour, configuration.Security.Session.MaxAge)
 		require.Equal(t, []Client{{
 			ID:           "grafana",
@@ -105,6 +109,16 @@ users:
 			t,
 			defaultUserLoginAttemptsWindow,
 			configuration.Security.RateLimits.UserLoginAttemptsWindow,
+		)
+		require.Equal(
+			t,
+			defaultMaxClientAuthAttempts,
+			configuration.Security.RateLimits.MaxClientAuthAttempts,
+		)
+		require.Equal(
+			t,
+			defaultClientAuthAttemptsWindow,
+			configuration.Security.RateLimits.ClientAuthAttemptsWindow,
 		)
 		require.Equal(t, defaultSessionMaxAge, configuration.Security.Session.MaxAge)
 		require.Equal(
@@ -543,6 +557,28 @@ config:
     admin_password_hash: admin-hash
     rate_limits:
       user_login_attempts_window_seconds: 86401
+`),
+			errorText: "must be between 1 and 86400",
+		},
+		"excessive client authentication attempts": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+    rate_limits:
+      max_client_auth_attempts: 101
+`),
+			errorText: "must be between 1 and 100",
+		},
+		"excessive client authentication window": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+    rate_limits:
+      client_auth_attempts_window_seconds: 86401
 `),
 			errorText: "must be between 1 and 86400",
 		},

@@ -44,15 +44,23 @@ config:
     # The `zen-idp generate-secrets` command prints a compatible plain/hash pair.
     admin_password_hash: "$argon2id$......"
 
-    # Optional failed-login limits. Both identifiers (sub and idp_login) of a known
-    # user share one counter keyed by sub. Unknown identifiers are bounded separately.
-    # Source IP is never used; configure IP limits at your edge (CDN, reverse proxy, etc).
+    # Optional failed-login and client-authentication limits. Both identifiers (sub and
+    # idp_login) of a known user share one counter keyed by sub. Unknown identifiers are
+    # bounded separately. Source IP is never used; configure IP limits at your edge
+    # (CDN, reverse proxy, etc).
     rate_limits:
       # Failed attempts allowed per login identifier. Range 1-100; default 5.
       max_user_login_attempts: 5
 
       # Counting window in seconds. Range 1-86400; default 300 (5 minutes).
       user_login_attempts_window_seconds: 300
+
+      # Failed client authentication attempts allowed per client id, protecting
+      # confidential client secrets from brute force. Range 1-100; default 5.
+      max_client_auth_attempts: 5
+
+      # Counting window in seconds. Range 1-86400; default 300 (5 minutes).
+      client_auth_attempts_window_seconds: 300
 
     # Optional Zen IdP browser session settings.
     session:

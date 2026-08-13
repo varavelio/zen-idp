@@ -95,6 +95,20 @@ func validateDocument(document configurationDocument) error {
 		return err
 	}
 	if err := validateOptionalInteger(
+		"config.security.rate_limits.max_client_auth_attempts",
+		security.RateLimits.MaxClientAuthAttempts,
+		maximumClientAuthAttempts,
+	); err != nil {
+		return err
+	}
+	if err := validateOptionalInteger(
+		"config.security.rate_limits.client_auth_attempts_window_seconds",
+		security.RateLimits.ClientAuthAttemptsWindowSeconds,
+		int(maximumClientAuthAttemptsWindow/time.Second),
+	); err != nil {
+		return err
+	}
+	if err := validateOptionalInteger(
 		"config.security.session.max_age_hours",
 		security.Session.MaxAgeHours,
 		int(maximumSessionMaxAge/time.Hour),

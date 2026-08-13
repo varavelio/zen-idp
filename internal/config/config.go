@@ -48,7 +48,7 @@ type Security struct {
 	Session Session
 }
 
-// RateLimits contains resolved user login rate-limit settings.
+// RateLimits contains resolved brute-force protection settings.
 type RateLimits struct {
 	// MaxUserLoginAttempts is the maximum number of failed login attempts allowed
 	// for one user during the configured window.
@@ -56,6 +56,13 @@ type RateLimits struct {
 	// UserLoginAttemptsWindow is the period over which one user's failed login
 	// attempts are counted.
 	UserLoginAttemptsWindow time.Duration
+	// MaxClientAuthAttempts is the maximum number of failed client
+	// authentication attempts allowed for one client during the configured
+	// window.
+	MaxClientAuthAttempts int
+	// ClientAuthAttemptsWindow is the period over which one client's failed
+	// authentication attempts are counted.
+	ClientAuthAttemptsWindow time.Duration
 }
 
 // Session contains resolved Zen IdP browser session settings.
