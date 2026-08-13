@@ -102,5 +102,8 @@ USER nonroot
 
 EXPOSE 8080
 
+VOLUME ["/data/config", "/data/db"]
+
 ENTRYPOINT ["/usr/local/bin/zen-idp"]
+
 CMD ["serve"]
