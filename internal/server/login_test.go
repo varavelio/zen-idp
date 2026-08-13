@@ -144,6 +144,14 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			SecureCookies: true,
 			SessionMaxAge: testMaxAge,
 		},
+		PanicDependencies{
+			Sessions:      store,
+			Locks:         locks,
+			Audit:         recorder,
+			CSRF:          csrfGuard,
+			UI:            config.UI{Name: "Example Auth"},
+			SecureCookies: true,
+		},
 	)
 	return &testApp{server: server, db: db, sessions: store, codes: codes, locks: locks}
 }

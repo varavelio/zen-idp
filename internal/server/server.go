@@ -21,6 +21,7 @@ type Server struct {
 	logout        LogoutDependencies
 	enroll        EnrollDependencies
 	admin         AdminDependencies
+	panics        PanicDependencies
 }
 
 // New returns a server that publishes the given public signing identity and
@@ -28,8 +29,8 @@ type Server struct {
 // static asset tree at literal paths under /build/ and /vendor/, and runs the
 // discovery metadata, the login interaction, the authorization continuation,
 // the token exchange, the /userinfo resolution, the local logout
-// interaction, the user enrollment interaction, and the administration
-// interaction with the given injected dependencies.
+// interaction, the user enrollment interaction, the user panic interaction,
+// and the administration interaction with the given injected dependencies.
 func New(
 	publicJWK jwk.PublicJWK,
 	issuer string,
@@ -42,6 +43,7 @@ func New(
 	logout LogoutDependencies,
 	enroll EnrollDependencies,
 	admin AdminDependencies,
+	panics PanicDependencies,
 ) *Server {
 	return &Server{
 		publicJWK:     publicJWK,
@@ -55,6 +57,7 @@ func New(
 		logout:        logout,
 		enroll:        enroll,
 		admin:         admin,
+		panics:        panics,
 	}
 }
 
@@ -76,6 +79,9 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("GET /userinfo", handle(server.userInfo))
 	mux.Handle("GET /logout", handle(server.logoutForm))
 	mux.Handle("POST /logout", handle(server.processLogout))
+
+	mux.Handle("GET /panic", handle(server.panicForm))
+	mux.Handle("POST /panic", handle(server.processPanic))
 
 	mux.Handle("GET /enroll", handle(server.enrollForm))
 	mux.Handle("POST /enroll", handle(server.processEnroll))

@@ -43,6 +43,7 @@ func TestDiscovery(t *testing.T) {
 			LogoutDependencies{},
 			EnrollDependencies{},
 			AdminDependencies{},
+			PanicDependencies{},
 		).Handler()
 	}
 
