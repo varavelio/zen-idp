@@ -47,7 +47,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/id: Generates prefix-less TypeID identifiers for state records
 - internal/jwk: Derives the public RSA JWK and the stable RFC 7638 key identifier of the signing identity
 - internal/jwt: Signs and verifies RS256 JSON Web Tokens with the deterministic signing identity
-- internal/lock: Manages the disposable panic and administrative locks that gate login and SSO use; administrative locking atomically revokes the subject's sessions with the lock creation
+- internal/lock: Manages the disposable panic and administrative locks that gate login and SSO use; administrative locking and the user panic action atomically revoke the subject's sessions with the lock creation
 - internal/login: Orchestrates identifier resolution, rate limiting, lock enforcement, TOTP verification, and authoritative session creation
 - internal/onetoken: Creates and atomically consumes disposable SQLite-backed one-use tokens, covering enrollment tokens and OIDC authorization-code bindings
 - internal/qr: Renders QR codes as inline PNG data URIs for the enrollment interaction
