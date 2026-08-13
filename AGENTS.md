@@ -40,6 +40,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/audit: Records security-relevant operational events as disposable SQLite-backed audit records
 - internal/cli: Parses Zen IdP command-line invocations into typed commands
 - internal/clock: Formats and parses the canonical UTC RFC 3339 timestamps used by the state database
+- internal/clockcheck: Rejects implausible system clock conditions at startup so the service fails safely
 - internal/config: Parses, defaults, and validates a unified YAML document into typed configuration
 - internal/configloader: Discovers, composes, parses, and validates the configured YAML source
 - internal/crypto: Provides cryptographic primitives and utilities
