@@ -7,12 +7,12 @@
 // Both kinds are independent gates: clearing one never clears the other, and
 // because they live in SQLite, losing the state file clears both.
 //
-// Administrative locking is atomic: LockSubject creates the administrative
-// lock and revokes every active session of the subject in one database
-// transaction, so the lock blocks SSO use immediately. Creation is
-// idempotent and records the first creation instant; checks report whether
-// a gate is present; removal succeeds even when no gate exists, so recovery
-// flows never fail on absent locks. IsLocked reports either gate and is the
-// single check that login and session validation apply before granting
-// access.
+// Both lock kinds are created atomically: LockSubject and PanicSubject
+// create the corresponding lock and revoke every active session of the
+// subject in one database transaction, so the gate blocks SSO use
+// immediately. Creation is idempotent and records the first creation
+// instant; checks report whether a gate is present; removal succeeds even
+// when no gate exists, so recovery flows never fail on absent locks.
+// IsLocked reports either gate and is the single check that login and
+// session validation apply before granting access.
 package lock
