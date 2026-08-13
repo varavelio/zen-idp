@@ -1,6 +1,7 @@
 {
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "../Dockerfile",
+    "target": "devcontainer"
   },
   "remoteUser": "root",
   "postCreateCommand": "bash ./.devcontainer/post-create.sh",

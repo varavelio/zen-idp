@@ -7,7 +7,6 @@ cat << 'EOF' >> /root/.bashrc
 alias ll='ls -alh'
 alias c='clear'
 alias t='task'
-alias n='npm'
 
 # Set the user file-creation mode mask to 000
 umask 000
