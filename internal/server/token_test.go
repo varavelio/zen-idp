@@ -482,7 +482,7 @@ func TestToken(t *testing.T) {
 
 	t.Run("rejects a code whose subject is locked", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
-		require.NoError(t, app.locks.LockAdmin(context.Background(), "alice", time.Now()))
+		require.NoError(t, app.locks.LockSubject(context.Background(), "alice", time.Now()))
 		code := createCode(t, app, nil)
 		response := tokenRequest(t, app.server.Handler(), validExchangeForm(code), "")
 

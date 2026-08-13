@@ -91,6 +91,17 @@ type AuditRecorder interface {
 	Record(context.Context, audit.RecordParams) error
 }
 
+// SubjectLocks manages the disposable locks that gate a subject's login and
+// SSO use, satisfied by lock.Locks. LockSubject additionally revokes every
+// active session of the subject atomically with the lock creation.
+type SubjectLocks interface {
+	LockSubject(context.Context, string, time.Time) error
+	UnlockSubject(context.Context, string) error
+	ClearPanic(context.Context, string) error
+	IsAdminLocked(context.Context, string) (bool, error)
+	IsPanicked(context.Context, string) (bool, error)
+}
+
 // AdminDependencies carries the injected pieces of the administration
 // interaction.
 type AdminDependencies struct {
@@ -105,6 +116,9 @@ type AdminDependencies struct {
 	Enrollments EnrollmentCreator
 	// Audit appends administration events to the audit log.
 	Audit AuditRecorder
+	// Locks manages the disposable locks that gate subjects and the
+	// atomic lock actions that revoke their sessions.
+	Locks SubjectLocks
 	// Users lists every configured user, the only subjects enrollment
 	// tokens may be created for.
 	Users []config.User
@@ -134,7 +148,7 @@ func (server *Server) adminForm(w http.ResponseWriter, r *http.Request) error {
 			cookie.Value,
 			time.Now(),
 		); err == nil {
-			return server.renderAdminHomePage(w, token, "")
+			return server.renderAdminHomePage(w, r, token, "")
 		} else if !errors.Is(
 			err,
 			session.ErrMalformedToken,
@@ -230,10 +244,19 @@ func (server *Server) renderAdminLoginPage(
 }
 
 // renderAdminHomePage writes the administration landing page for an
-// authenticated administrator, carrying the given anti-forgery token and an
-// optional failure message from a rejected enrollment-token creation.
-func (server *Server) renderAdminHomePage(w http.ResponseWriter, token, failure string) error {
-	html, err := ui.AdminHomePage(server.admin.UI, token, failure).RenderString()
+// authenticated administrator, carrying the given anti-forgery token, an
+// optional failure message from a rejected administration action, and the
+// disposable lock state of every configured user.
+func (server *Server) renderAdminHomePage(
+	w http.ResponseWriter,
+	r *http.Request,
+	token, failure string,
+) error {
+	statuses, err := server.lockStatuses(r.Context())
+	if err != nil {
+		return err
+	}
+	html, err := ui.AdminHomePage(server.admin.UI, token, failure, statuses).RenderString()
 	if err != nil {
 		return fmt.Errorf("render admin home page: %w", err)
 	}
@@ -279,9 +302,9 @@ func (server *Server) processEnrollmentToken(w http.ResponseWriter, r *http.Requ
 	}
 
 	now := time.Now()
-	user, ok := server.resolveEnrollmentUser(r.FormValue("subject"))
+	user, ok := server.resolveUser(r.FormValue("subject"))
 	if !ok {
-		return server.renderAdminHomeFailure(w, r, enrollmentUnknownSubject)
+		return server.renderAdminHomeRefresh(w, r, enrollmentUnknownSubject)
 	}
 
 	expiresAt, failure := enrollmentExpiration(
@@ -290,7 +313,7 @@ func (server *Server) processEnrollmentToken(w http.ResponseWriter, r *http.Requ
 		now,
 	)
 	if failure != "" {
-		return server.renderAdminHomeFailure(w, r, failure)
+		return server.renderAdminHomeRefresh(w, r, failure)
 	}
 
 	enrollmentToken, err := server.admin.Enrollments.CreateEnrollment(
@@ -324,10 +347,10 @@ func (server *Server) processEnrollmentToken(w http.ResponseWriter, r *http.Requ
 	)
 }
 
-// renderAdminHomeFailure re-renders the administration home with the given
+// renderAdminHomeRefresh re-renders the administration home with the given
 // failure message, refreshing the anti-forgery token of the re-rendered
 // form from the request's cookie.
-func (server *Server) renderAdminHomeFailure(
+func (server *Server) renderAdminHomeRefresh(
 	w http.ResponseWriter,
 	r *http.Request,
 	failure string,
@@ -336,7 +359,7 @@ func (server *Server) renderAdminHomeFailure(
 	if err != nil {
 		return fmt.Errorf("get CSRF token: %w", err)
 	}
-	return server.renderAdminHomePage(w, token, failure)
+	return server.renderAdminHomePage(w, r, token, failure)
 }
 
 // renderEnrollmentTokenPage writes the one-time display of a freshly
@@ -362,16 +385,39 @@ func (server *Server) renderEnrollmentTokenPage(
 	return err
 }
 
-// resolveEnrollmentUser returns the configured user declared with exactly
-// the given subject. Configuration validation guarantees that subjects are
-// unique, so the first match is the only match.
-func (server *Server) resolveEnrollmentUser(subject string) (config.User, bool) {
+// resolveUser returns the configured user declared with exactly the given
+// subject. Configuration validation guarantees that subjects are unique, so
+// the first match is the only match.
+func (server *Server) resolveUser(subject string) (config.User, bool) {
 	for _, user := range server.admin.Users {
 		if user.Subject == subject {
 			return user, true
 		}
 	}
 	return config.User{}, false
+}
+
+// lockStatuses returns the disposable lock state of every configured user,
+// in configuration order.
+func (server *Server) lockStatuses(ctx context.Context) ([]ui.LockStatus, error) {
+	statuses := make([]ui.LockStatus, 0, len(server.admin.Users))
+	for _, user := range server.admin.Users {
+		adminLocked, err := server.admin.Locks.IsAdminLocked(ctx, user.Subject)
+		if err != nil {
+			return nil, fmt.Errorf("check admin lock of %q: %w", user.Subject, err)
+		}
+		panicked, err := server.admin.Locks.IsPanicked(ctx, user.Subject)
+		if err != nil {
+			return nil, fmt.Errorf("check panic lock of %q: %w", user.Subject, err)
+		}
+		statuses = append(statuses, ui.LockStatus{
+			Subject:     user.Subject,
+			Login:       user.Login,
+			AdminLocked: adminLocked,
+			Panicked:    panicked,
+		})
+	}
+	return statuses, nil
 }
 
 // enrollmentExpiration normalizes the submitted relative duration or

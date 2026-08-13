@@ -224,7 +224,7 @@ func TestUserInfo(t *testing.T) {
 	t.Run("rejects a token whose subject is locked", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		accessToken := obtainAccessToken(t, app)
-		require.NoError(t, app.locks.LockAdmin(context.Background(), "alice", time.Now()))
+		require.NoError(t, app.locks.LockSubject(context.Background(), "alice", time.Now()))
 
 		response := userinfoRequest(t, app.server.Handler(), "Bearer "+accessToken)
 

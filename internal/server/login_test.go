@@ -70,7 +70,7 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 	queries := statestore.New(db)
 	limiter, err := ratelimit.New(queries, 5, 5*time.Minute)
 	require.NoError(t, err)
-	locks, err := lock.NewLocks(queries)
+	locks, err := lock.NewLocks(queries, testStateStoreTx{db: db})
 	require.NoError(t, err)
 	store, err := session.NewStore(queries, id.NewIDGenerator(), referenceRootSecret, testMaxAge)
 	require.NoError(t, err)
@@ -138,6 +138,7 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			CSRF:          csrfGuard,
 			Enrollments:   codes,
 			Audit:         recorder,
+			Locks:         locks,
 			Users:         users,
 			UI:            config.UI{Name: "Example Auth"},
 			SecureCookies: true,
@@ -169,6 +170,21 @@ type testTOTPDeriver struct {
 // the given revision.
 func (deriver testTOTPDeriver) DeriveTOTPSecret(subject string, revision uint64) (string, error) {
 	return totp.DeriveSharedSecret(deriver.rootSecret, subject, revision)
+}
+
+// testStateStoreTx runs sqlc functions inside transactions of the test
+// database, satisfying the transaction-runner interfaces of the domain
+// packages.
+type testStateStoreTx struct {
+	db *sql.DB
+}
+
+// WithTx runs fn inside one database transaction of the test database.
+func (runner testStateStoreTx) WithTx(
+	ctx context.Context,
+	fn func(*statestore.Queries) error,
+) error {
+	return statestore.WithTx(ctx, runner.db, fn)
 }
 
 // loginQuery builds a valid pending authorization request for the public-app
