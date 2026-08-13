@@ -144,6 +144,7 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			CSRF:          csrfGuard,
 			Enrollments:   codes,
 			Audit:         recorder,
+			AuditLog:      recorder,
 			Locks:         locks,
 			Users:         users,
 			UI:            config.UI{Name: "Example Auth"},

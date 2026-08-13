@@ -281,6 +281,7 @@ func runServe(envFile string, dependencies dependencies) error {
 			CSRF:          csrfGuard,
 			Enrollments:   codeStore,
 			Audit:         auditRecorder,
+			AuditLog:      auditRecorder,
 			Locks:         locks,
 			Users:         configuration.Users,
 			UI:            configuration.UI,

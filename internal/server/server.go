@@ -87,6 +87,7 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("POST /enroll", handle(server.processEnroll))
 
 	mux.Handle("GET /admin", handle(server.adminForm))
+	mux.Handle("GET /admin/audit", handle(server.auditLog))
 	mux.Handle("POST /admin/login", handle(server.processAdminLogin))
 	mux.Handle("POST /admin/logout", handle(server.adminLogOut))
 	mux.Handle("POST /admin/tokens", handle(server.processEnrollmentToken))

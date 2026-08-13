@@ -116,6 +116,9 @@ type AdminDependencies struct {
 	Enrollments EnrollmentCreator
 	// Audit appends administration events to the audit log.
 	Audit AuditRecorder
+	// AuditLog lists the most recent security-relevant events for the
+	// audit log page.
+	AuditLog AuditLister
 	// Locks manages the disposable locks that gate subjects and the
 	// atomic lock actions that revoke their sessions.
 	Locks SubjectLocks
