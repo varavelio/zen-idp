@@ -26,9 +26,26 @@ const adminLogoutAction = "/admin/logout"
 // form.
 const adminTokensAction = "/admin/tokens"
 
+// adminLocksAction is the form target of the lock-management form.
+const adminLocksAction = "/admin/locks"
+
 // adminHomePath is the administration landing page, the destination of the
 // link shown after an enrollment token is created.
 const adminHomePath = "/admin"
+
+// LockStatus describes the disposable lock state of one configured user on
+// the administration home.
+type LockStatus struct {
+	// Subject is the user's stable subject.
+	Subject string
+	// Login is the user's optional additional login identifier, empty when
+	// the user has none.
+	Login string
+	// AdminLocked reports whether an administrative lock gates the user.
+	AdminLocked bool
+	// Panicked reports whether a panic lock gates the user.
+	Panicked bool
+}
 
 // csrfField renders the hidden anti-forgery field that every
 // state-changing administration form must carry.
@@ -116,11 +133,17 @@ func AdminLoginPage(settings config.UI, token, failure string) nodx.Node {
 }
 
 // AdminHomePage renders the administration landing page shown to an
-// authenticated administrator: the enrollment-token creation form and the
+// authenticated administrator: the enrollment-token creation form, the
+// lock-management list with one action form per configured user, and the
 // protected sign-out form. token is the anti-forgery token that protects
 // the form submissions; failure is an optional message shown when the last
-// enrollment-token creation was rejected.
-func AdminHomePage(settings config.UI, token, failure string) nodx.Node {
+// administration action was rejected; locks carries the disposable lock
+// state of every configured user.
+func AdminHomePage(
+	settings config.UI,
+	token, failure string,
+	locks []LockStatus,
+) nodx.Node {
 	name := settings.Name
 	if name == "" {
 		name = adminTitle
@@ -240,6 +263,65 @@ func AdminHomePage(settings config.UI, token, failure string) nodx.Node {
 						),
 					),
 				),
+				nodx.Div(
+					nodx.Class("space-y-3"),
+					nodx.H2(
+						nodx.Class("text-sm font-semibold text-content"),
+						nodx.Text("Lock management"),
+					),
+					nodx.If(
+						len(locks) == 0,
+						nodx.P(
+							nodx.Class("text-sm text-content-muted"),
+							nodx.Text("No users are configured."),
+						),
+					),
+					nodx.Map(locks, func(lock LockStatus) nodx.Node {
+						return nodx.Div(
+							nodx.Class(
+								"space-y-3 rounded-md border border-base-400 bg-base-100 p-3",
+							),
+							nodx.Div(
+								nodx.Class("flex items-center justify-between gap-2"),
+								nodx.P(
+									nodx.Class("text-sm font-medium text-content"),
+									nodx.Text(lock.Subject),
+								),
+								nodx.SpanEl(
+									nodx.Class(lockStatusClass(lock)),
+									nodx.Text(lockStatusText(lock)),
+								),
+							),
+							nodx.If(
+								lock.Login != "",
+								nodx.P(
+									nodx.Class("text-xs text-content-muted break-all"),
+									nodx.Text(lock.Login),
+								),
+							),
+							nodx.FormEl(
+								nodx.Action(adminLocksAction),
+								nodx.Method("post"),
+								nodx.Class("flex flex-wrap gap-2"),
+								csrfField(token),
+								nodx.Input(
+									nodx.Attr("type", "hidden"),
+									nodx.Name("subject"),
+									nodx.Value(lock.Subject),
+								),
+								nodx.If(!lock.AdminLocked, lockActionButton("lock", "Lock", true)),
+								nodx.If(
+									lock.AdminLocked,
+									lockActionButton("unlock", "Unlock", false),
+								),
+								nodx.If(
+									lock.Panicked,
+									lockActionButton("clear-panic", "Clear panic", false),
+								),
+							),
+						)
+					}),
+				),
 				nodx.FormEl(
 					nodx.Action(adminLogoutAction),
 					nodx.Method("post"),
@@ -346,6 +428,50 @@ func EnrollmentTokenPage(
 				),
 			),
 		),
+	)
+}
+
+// lockStatusText returns the status label of the given user's disposable
+// lock state.
+func lockStatusText(lock LockStatus) string {
+	switch {
+	case lock.Panicked:
+		return "Panic locked"
+	case lock.AdminLocked:
+		return "Admin locked"
+	default:
+		return "Active"
+	}
+}
+
+// lockStatusClass returns the status style of the given user's disposable
+// lock state: error for a panic lock, warning for an administrative lock,
+// and muted for an active user.
+func lockStatusClass(lock LockStatus) string {
+	switch {
+	case lock.Panicked:
+		return "text-xs font-medium text-error"
+	case lock.AdminLocked:
+		return "text-xs font-medium text-warning"
+	default:
+		return "text-xs font-medium text-content-muted"
+	}
+}
+
+// lockActionButton renders a lock-management submit button carrying the
+// given action value and label, styled as the primary action when primary
+// is true.
+func lockActionButton(action, label string, primary bool) nodx.Node {
+	class := "rounded-md border border-base-400 bg-base-100 text-content font-medium py-1.5 px-3 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-content"
+	if primary {
+		class = "rounded-md bg-content text-base-100 font-medium py-1.5 px-3 text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-content"
+	}
+	return nodx.Button(
+		nodx.Attr("type", "submit"),
+		nodx.Name("action"),
+		nodx.Value(action),
+		nodx.Class(class),
+		nodx.Text(label),
 	)
 }
 
