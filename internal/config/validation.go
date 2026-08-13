@@ -116,6 +116,24 @@ func validateDocument(document configurationDocument) error {
 		return err
 	}
 
+	maintenance := document.Settings.Maintenance
+	if err := validateOptionalIntegerRange(
+		"config.maintenance.cleanup_interval_seconds",
+		maintenance.CleanupIntervalSeconds,
+		int(minimumCleanupInterval/time.Second),
+		int(maximumCleanupInterval/time.Second),
+	); err != nil {
+		return err
+	}
+	if err := validateOptionalIntegerRange(
+		"config.maintenance.audit_retention_hours",
+		maintenance.AuditRetentionHours,
+		0,
+		int(maximumAuditRetention/time.Hour),
+	); err != nil {
+		return err
+	}
+
 	for index, client := range document.Clients {
 		if client.SecretHash.Set && strings.TrimSpace(string(client.SecretHash.Value)) == "" {
 			return fmt.Errorf(
@@ -128,13 +146,22 @@ func validateDocument(document configurationDocument) error {
 }
 
 func validateOptionalInteger(path string, value optionalInt, maximum int) error {
+	return validateOptionalIntegerRange(path, value, 1, maximum)
+}
+
+func validateOptionalIntegerRange(
+	path string,
+	value optionalInt,
+	minimum, maximum int,
+) error {
 	if !value.Set {
 		return nil
 	}
-	if value.Value < 1 || int(value.Value) > maximum {
+	if int(value.Value) < minimum || int(value.Value) > maximum {
 		return fmt.Errorf(
-			"validate configuration: %s must be between 1 and %d",
+			"validate configuration: %s must be between %d and %d",
 			path,
+			minimum,
 			maximum,
 		)
 	}

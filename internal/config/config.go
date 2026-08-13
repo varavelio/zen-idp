@@ -14,6 +14,8 @@ type Config struct {
 	UI UI
 	// Security contains authentication and session policy settings.
 	Security Security
+	// Maintenance contains periodic state-cleanup settings.
+	Maintenance Maintenance
 	// Clients contains every OIDC client from the composed source.
 	Clients []Client
 	// Users contains every normalized user from the composed source.
@@ -69,6 +71,16 @@ type RateLimits struct {
 type Session struct {
 	// MaxAge is the absolute maximum lifetime of an SSO session.
 	MaxAge time.Duration
+}
+
+// Maintenance contains resolved periodic state-cleanup settings.
+type Maintenance struct {
+	// CleanupInterval is the period between automatic cleanup passes over
+	// the disposable state database.
+	CleanupInterval time.Duration
+	// AuditRetention is how long audit records are kept before cleanup
+	// removes them. A zero value keeps audit records indefinitely.
+	AuditRetention time.Duration
 }
 
 // Client is a configured OIDC client.

@@ -32,6 +32,9 @@ config:
       client_auth_attempts_window_seconds: 60
     session:
       max_age_hours: 24
+  maintenance:
+    cleanup_interval_seconds: 1800
+    audit_retention_hours: 48
 clients:
   - id: grafana
     name: Grafana
@@ -68,6 +71,8 @@ users:
 		require.Equal(t, 6, configuration.Security.RateLimits.MaxClientAuthAttempts)
 		require.Equal(t, time.Minute, configuration.Security.RateLimits.ClientAuthAttemptsWindow)
 		require.Equal(t, 24*time.Hour, configuration.Security.Session.MaxAge)
+		require.Equal(t, 30*time.Minute, configuration.Maintenance.CleanupInterval)
+		require.Equal(t, 48*time.Hour, configuration.Maintenance.AuditRetention)
 		require.Equal(t, []Client{{
 			ID:           "grafana",
 			Name:         "Grafana",
@@ -121,6 +126,8 @@ users:
 			configuration.Security.RateLimits.ClientAuthAttemptsWindow,
 		)
 		require.Equal(t, defaultSessionMaxAge, configuration.Security.Session.MaxAge)
+		require.Equal(t, defaultCleanupInterval, configuration.Maintenance.CleanupInterval)
+		require.Equal(t, defaultAuditRetention, configuration.Maintenance.AuditRetention)
 		require.Equal(
 			t,
 			Server{Host: defaultServerHost, Port: defaultServerPort},
@@ -581,6 +588,39 @@ config:
       client_auth_attempts_window_seconds: 86401
 `),
 			errorText: "must be between 1 and 86400",
+		},
+		"cleanup interval below the minimum": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+  maintenance:
+    cleanup_interval_seconds: 30
+`),
+			errorText: "cleanup_interval_seconds must be between 60 and 86400",
+		},
+		"cleanup interval above the maximum": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+  maintenance:
+    cleanup_interval_seconds: 86401
+`),
+			errorText: "cleanup_interval_seconds must be between 60 and 86400",
+		},
+		"audit retention above the maximum": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  security:
+    admin_password_hash: admin-hash
+  maintenance:
+    audit_retention_hours: 87601
+`),
+			errorText: "audit_retention_hours must be between 0 and 87600",
 		},
 		"excessive session lifetime": {
 			contents: validConfigurationYAML(`

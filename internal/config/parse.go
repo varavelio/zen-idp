@@ -21,11 +21,16 @@ const (
 	defaultMaxClientAuthAttempts    = 5
 	defaultClientAuthAttemptsWindow = 5 * time.Minute
 	defaultSessionMaxAge            = 72 * time.Hour
+	defaultCleanupInterval          = time.Hour
+	defaultAuditRetention           = 30 * 24 * time.Hour
 	maximumUserLoginAttempts        = 100
 	maximumUserLoginAttemptsWindow  = 24 * time.Hour
 	maximumClientAuthAttempts       = 100
 	maximumClientAuthAttemptsWindow = 24 * time.Hour
 	maximumSessionMaxAge            = 365 * 24 * time.Hour
+	minimumCleanupInterval          = time.Minute
+	maximumCleanupInterval          = 24 * time.Hour
+	maximumAuditRetention           = 10 * 365 * 24 * time.Hour
 	maximumSubjectLength            = 255
 )
 
@@ -61,10 +66,11 @@ type configurationDocument struct {
 
 // settingsDocument represents values nested below the YAML config field.
 type settingsDocument struct {
-	Issuer   strictString     `yaml:"issuer"`
-	Server   serverDocument   `yaml:"server"`
-	UI       uiDocument       `yaml:"ui"`
-	Security securityDocument `yaml:"security"`
+	Issuer      strictString        `yaml:"issuer"`
+	Server      serverDocument      `yaml:"server"`
+	UI          uiDocument          `yaml:"ui"`
+	Security    securityDocument    `yaml:"security"`
+	Maintenance maintenanceDocument `yaml:"maintenance"`
 }
 
 // serverDocument contains HTTP listener settings from YAML.
@@ -106,6 +112,13 @@ type rateLimitsDocument struct {
 // sessionDocument preserves an omitted SSO session lifetime for defaulting.
 type sessionDocument struct {
 	MaxAgeHours optionalInt `yaml:"max_age_hours"`
+}
+
+// maintenanceDocument preserves omitted periodic state-cleanup values for
+// defaulting.
+type maintenanceDocument struct {
+	CleanupIntervalSeconds optionalInt `yaml:"cleanup_interval_seconds"`
+	AuditRetentionHours    optionalInt `yaml:"audit_retention_hours"`
 }
 
 // strictInt rejects YAML values that are not explicitly represented as
@@ -340,6 +353,18 @@ func resolve(document configurationDocument) *Config {
 				),
 			},
 		},
+		Maintenance: Maintenance{
+			CleanupInterval: durationValue(
+				settings.Maintenance.CleanupIntervalSeconds,
+				defaultCleanupInterval,
+				time.Second,
+			),
+			AuditRetention: durationValue(
+				settings.Maintenance.AuditRetentionHours,
+				defaultAuditRetention,
+				time.Hour,
+			),
+		},
 		Clients: make([]Client, 0, len(document.Clients)),
 		Users:   make([]User, 0, len(document.Users)),
 	}
@@ -450,6 +475,18 @@ func validate(configuration *Config) error {
 		configuration.Security.Session.MaxAge > maximumSessionMaxAge {
 		return fmt.Errorf(
 			"validate configuration: config.security.session.max_age_hours must be between 1 and 8760",
+		)
+	}
+	if configuration.Maintenance.CleanupInterval < minimumCleanupInterval ||
+		configuration.Maintenance.CleanupInterval > maximumCleanupInterval {
+		return fmt.Errorf(
+			"validate configuration: config.maintenance.cleanup_interval_seconds must be between 60 and 86400",
+		)
+	}
+	if configuration.Maintenance.AuditRetention < 0 ||
+		configuration.Maintenance.AuditRetention > maximumAuditRetention {
+		return fmt.Errorf(
+			"validate configuration: config.maintenance.audit_retention_hours must be between 0 and 87600",
 		)
 	}
 	if err := validateClients(configuration.Clients); err != nil {
