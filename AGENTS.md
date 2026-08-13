@@ -50,6 +50,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/lock: Manages the disposable panic and administrative locks that gate login and SSO use
 - internal/login: Orchestrates identifier resolution, rate limiting, lock enforcement, TOTP verification, and authoritative session creation
 - internal/onetoken: Creates and atomically consumes disposable SQLite-backed one-use tokens, covering enrollment tokens and OIDC authorization-code bindings
+- internal/qr: Renders QR codes as inline PNG data URIs for the enrollment interaction
 - internal/rsakeygen: Derives the deterministic RSA-2048 signing key pair from the normalized root secret
 - internal/ratelimit: Enforces per-key failed-attempt limits over fixed windows with SQLite-backed atomic counters
 - internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including an explicitly selected env file
@@ -57,7 +58,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/session: Creates, validates, and revokes authoritative SQLite-backed SSO sessions and distinct administrator sessions from sess_{id}_{secret} browser tokens, with per-kind domain-separated secret digests
 - internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
 - internal/token: Issues the RS256-signed ID and access tokens of the deterministic signing identity with fixed 900-second lifetimes
-- internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret and verifies authenticator codes
+- internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret, builds their otpauth enrollment URIs, and verifies authenticator codes
 - internal/ui: Renders the HTML pages served by Zen IdP with NodX and embeds the static assets (compiled stylesheet, vendored fonts, and scripts)
 - internal/userinfo: Validates access tokens and resolves the current claims of their subject from the active configuration
 - internal/yamlmerge: Merges YAML documents into one unified document
