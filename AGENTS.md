@@ -37,10 +37,11 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 
 - cmd/zen-idp: The entry point of the program
 - internal/admin: Authenticates the administrator, creates the distinct administrator sessions that gate the administrative interfaces, and records authentication and rate-limit events
-- internal/audit: Records security-relevant operational events as disposable SQLite-backed audit records
+- internal/audit: Records security-relevant operational events as disposable SQLite-backed audit records and enforces their retention by purging records older than the configured deadline
 - internal/cli: Parses Zen IdP command-line invocations into typed commands
 - internal/clock: Formats and parses the canonical UTC RFC 3339 timestamps used by the state database
 - internal/clockcheck: Rejects implausible system clock conditions at startup so the service fails safely
+- internal/cleanup: Periodically removes disposable state that can never become usable again (expired rate-limit counters, one-use tokens, sessions, and retained audit records), never touching locks
 - internal/config: Parses, defaults, and validates a unified YAML document into typed configuration
 - internal/configloader: Discovers, composes, parses, and validates the configured YAML source
 - internal/crypto: Provides cryptographic primitives and utilities
@@ -56,7 +57,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/ratelimit: Enforces per-key failed-attempt limits over fixed windows with SQLite-backed atomic counters
 - internal/runtimeconfig: Loads and validates environment-backed runtime configuration, including an explicitly selected env file
 - internal/server: Exposes Zen IdP's HTTP endpoints with injected dependencies and centralized error handling
-- internal/session: Creates, validates, and revokes authoritative SQLite-backed SSO sessions and distinct administrator sessions from sess_{id}_{secret} browser tokens, with per-kind domain-separated secret digests
+- internal/session: Creates, validates, revokes, and purges authoritative SQLite-backed SSO sessions and distinct administrator sessions from sess_{id}_{secret} browser tokens, with per-kind domain-separated secret digests
 - internal/statestore: Opens and migrates the embedded SQLite state database with goose migrations and sqlc-generated queries, and runs sqlc functions inside database transactions with WithTx; SQL migrations live in internal/statestore/migrations and query sources in internal/statestore/queries
 - internal/token: Issues the RS256-signed ID and access tokens of the deterministic signing identity with fixed 900-second lifetimes
 - internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret, builds their otpauth enrollment URIs, and verifies authenticator codes
