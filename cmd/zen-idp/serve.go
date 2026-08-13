@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,6 +28,7 @@ import (
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/statestore"
 	"github.com/varavelio/zen-idp/internal/token"
+	"github.com/varavelio/zen-idp/internal/totp"
 	"github.com/varavelio/zen-idp/internal/ui"
 	"github.com/varavelio/zen-idp/internal/userinfo"
 )
@@ -40,6 +42,18 @@ const (
 	// idleTimeout drops keep-alive connections idle longer than this.
 	idleTimeout = 60 * time.Second
 )
+
+// totpSecretDeriver derives deterministic TOTP shared secrets with the
+// normalized root secret, satisfying server.TOTPSecretDeriver.
+type totpSecretDeriver struct {
+	rootSecret [sha256.Size]byte
+}
+
+// DeriveTOTPSecret derives the TOTP shared secret of the given subject at
+// the given revision.
+func (deriver totpSecretDeriver) DeriveTOTPSecret(subject string, revision uint64) (string, error) {
+	return totp.DeriveSharedSecret(deriver.rootSecret, subject, revision)
+}
 
 // runServe bootstraps the OIDC service and serves until a failure or a
 // termination signal.
@@ -219,6 +233,13 @@ func runServe(envFile string, dependencies dependencies) error {
 			CSRF:          csrfGuard,
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
+		},
+		server.EnrollDependencies{
+			Consume: codeStore,
+			Deriver: totpSecretDeriver{rootSecret: runtime.RootSecret},
+			CSRF:    csrfGuard,
+			Users:   configuration.Users,
+			UI:      configuration.UI,
 		},
 		server.AdminDependencies{
 			Service:       adminService,
