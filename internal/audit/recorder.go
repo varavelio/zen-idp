@@ -18,6 +18,7 @@ import (
 type auditQueries interface {
 	CreateAuditRecord(context.Context, statestore.CreateAuditRecordParams) error
 	ListAuditRecords(context.Context, int64) ([]statestore.AuditRecord, error)
+	DeleteAuditRecordsBefore(context.Context, string) (int64, error)
 }
 
 // idGenerator creates the opaque record identifiers, satisfied by
@@ -114,6 +115,17 @@ func (recorder *Recorder) List(ctx context.Context, limit int) ([]Event, error) 
 		})
 	}
 	return events, nil
+}
+
+// PurgeExpired deletes every audit record created at or before the given
+// instant and returns how many records were removed. It keeps the audit
+// table bounded by enforcing the operator's retention policy.
+func (recorder *Recorder) PurgeExpired(ctx context.Context, before time.Time) (int64, error) {
+	deleted, err := recorder.queries.DeleteAuditRecordsBefore(ctx, clock.Format(before))
+	if err != nil {
+		return 0, fmt.Errorf("purge expired audit records: %w", err)
+	}
+	return deleted, nil
 }
 
 // encodeDetails renders the details object as deterministic JSON with

@@ -269,3 +269,40 @@ func TestRecordListRoundTrip(t *testing.T) {
 		require.Equal(t, testNow, events[0].CreatedAt)
 	})
 }
+
+func TestPurgeExpired(t *testing.T) {
+	t.Run("deletes only records at or before the given instant", func(t *testing.T) {
+		recorder, _ := newTestRecorder(t, &sequenceID{ids: []string{"first", "second"}})
+
+		require.NoError(t, recorder.Record(context.Background(), RecordParams{
+			Category: CategoryLockChanged,
+			Now:      testNow.Add(-time.Hour),
+		}))
+		require.NoError(t, recorder.Record(context.Background(), RecordParams{
+			Category: CategoryLockChanged,
+			Now:      testNow.Add(time.Hour),
+		}))
+
+		deleted, err := recorder.PurgeExpired(context.Background(), testNow)
+		require.NoError(t, err)
+		require.Equal(t, int64(1), deleted)
+
+		events, err := recorder.List(context.Background(), 10)
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+		require.Equal(t, testNow.Add(time.Hour), events[0].CreatedAt)
+	})
+
+	t.Run("reports zero when nothing is old enough", func(t *testing.T) {
+		recorder, _ := newTestRecorder(t, fixedID{id: "fixed"})
+
+		require.NoError(t, recorder.Record(context.Background(), RecordParams{
+			Category: CategoryLockChanged,
+			Now:      testNow,
+		}))
+
+		deleted, err := recorder.PurgeExpired(context.Background(), testNow.Add(-time.Hour))
+		require.NoError(t, err)
+		require.Zero(t, deleted)
+	})
+}
