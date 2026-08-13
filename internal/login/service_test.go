@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/varavelio/zen-idp/internal/clock"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/id"
 	"github.com/varavelio/zen-idp/internal/lock"
@@ -64,6 +65,20 @@ func newTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+// testTxRunner runs functions inside transactions of the test database,
+// satisfying the transaction-runner interface of the lock package.
+type testTxRunner struct {
+	db *sql.DB
+}
+
+// WithTx runs fn inside one database transaction of the test database.
+func (runner testTxRunner) WithTx(
+	ctx context.Context,
+	fn func(*statestore.Queries) error,
+) error {
+	return statestore.WithTx(ctx, runner.db, fn)
+}
+
 // testService bundles a login service with its real dependencies so tests
 // can inspect counters, locks, and sessions directly.
 type testService struct {
@@ -83,10 +98,11 @@ func newTestService(
 	window time.Duration,
 ) testService {
 	t.Helper()
-	queries := statestore.New(newTestDB(t))
+	db := newTestDB(t)
+	queries := statestore.New(db)
 	limiter, err := ratelimit.New(queries, maxAttempts, window)
 	require.NoError(t, err)
-	locks, err := lock.NewLocks(queries)
+	locks, err := lock.NewLocks(queries, testTxRunner{db: db})
 	require.NoError(t, err)
 	store, err := session.NewStore(queries, id.NewIDGenerator(), referenceRootSecret, testMaxAge)
 	require.NoError(t, err)
@@ -140,8 +156,9 @@ func wrongCode(code string) string {
 
 func TestNew(t *testing.T) {
 	t.Run("rejects nil rate limiter", func(t *testing.T) {
-		queries := statestore.New(newTestDB(t))
-		locks, err := lock.NewLocks(queries)
+		db := newTestDB(t)
+		queries := statestore.New(db)
+		locks, err := lock.NewLocks(queries, testTxRunner{db: db})
 		require.NoError(t, err)
 		store, err := session.NewStore(
 			queries,
@@ -172,10 +189,11 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("rejects nil session creator", func(t *testing.T) {
-		queries := statestore.New(newTestDB(t))
+		db := newTestDB(t)
+		queries := statestore.New(db)
 		limiter, err := ratelimit.New(queries, 5, 5*time.Minute)
 		require.NoError(t, err)
-		locks, err := lock.NewLocks(queries)
+		locks, err := lock.NewLocks(queries, testTxRunner{db: db})
 		require.NoError(t, err)
 
 		_, err = New(testUsers, referenceRootSecret, limiter, locks, nil)
@@ -389,7 +407,10 @@ func TestLogin(t *testing.T) {
 	t.Run("denies a user with an active panic lock", func(t *testing.T) {
 		service := newTestService(t, testUsers, 5, 5*time.Minute)
 		ctx := context.Background()
-		require.NoError(t, service.locks.LockPanic(ctx, testSubject, testNow))
+		require.NoError(t, service.queries.CreatePanicLock(ctx, statestore.CreatePanicLockParams{
+			Sub:       testSubject,
+			CreatedAt: clock.Format(testNow),
+		}))
 
 		_, err := service.service.Login(ctx, Params{
 			Identifier: testSubject,
@@ -402,7 +423,7 @@ func TestLogin(t *testing.T) {
 	t.Run("denies an administratively locked user", func(t *testing.T) {
 		service := newTestService(t, testUsers, 5, 5*time.Minute)
 		ctx := context.Background()
-		require.NoError(t, service.locks.LockAdmin(ctx, testSubject, testNow))
+		require.NoError(t, service.locks.LockSubject(ctx, testSubject, testNow))
 
 		_, err := service.service.Login(ctx, Params{
 			Identifier: testSubject,
@@ -492,7 +513,10 @@ func TestLogin(t *testing.T) {
 		service := newTestService(t, users, 2, 5*time.Minute)
 		ctx := context.Background()
 		code := codeFor(t, "alice", 0, testNow)
-		require.NoError(t, service.locks.LockPanic(ctx, "bob", testNow))
+		require.NoError(t, service.queries.CreatePanicLock(ctx, statestore.CreatePanicLockParams{
+			Sub:       "bob",
+			CreatedAt: clock.Format(testNow),
+		}))
 
 		cases := map[string]Params{
 			"unknown identifier": {Identifier: "mallory", Code: "123456", Now: testNow},
