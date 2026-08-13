@@ -36,7 +36,7 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
 
 - cmd/zen-idp: The entry point of the program
-- internal/admin: Authenticates the administrator and creates the distinct administrator sessions that gate the administrative interfaces
+- internal/admin: Authenticates the administrator, creates the distinct administrator sessions that gate the administrative interfaces, and records authentication and rate-limit events
 - internal/audit: Records security-relevant operational events as disposable SQLite-backed audit records
 - internal/cli: Parses Zen IdP command-line invocations into typed commands
 - internal/clock: Formats and parses the canonical UTC RFC 3339 timestamps used by the state database
@@ -48,7 +48,7 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/jwk: Derives the public RSA JWK and the stable RFC 7638 key identifier of the signing identity
 - internal/jwt: Signs and verifies RS256 JSON Web Tokens with the deterministic signing identity
 - internal/lock: Manages the disposable panic and administrative locks that gate login and SSO use; administrative locking and the user panic action atomically revoke the subject's sessions with the lock creation
-- internal/login: Orchestrates identifier resolution, rate limiting, lock enforcement, TOTP verification, and authoritative session creation
+- internal/login: Orchestrates identifier resolution, rate limiting, lock enforcement, TOTP verification, authoritative session creation, and rate-limit audit events
 - internal/onetoken: Creates and atomically consumes disposable SQLite-backed one-use tokens, covering enrollment tokens and OIDC authorization-code bindings
 - internal/qr: Renders QR codes as inline PNG data URIs for the enrollment interaction
 - internal/rsakeygen: Derives the deterministic RSA-2048 signing key pair from the normalized root secret
