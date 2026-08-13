@@ -356,3 +356,23 @@ type failingTOTPDeriver struct {
 func (stub failingTOTPDeriver) DeriveTOTPSecret(string, uint64) (string, error) {
 	return "", stub.err
 }
+
+func TestEnrollmentURL(t *testing.T) {
+	t.Run("derives the link from an issuer without a trailing slash", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.issuer = referenceIssuer
+
+		link := app.server.enrollmentURL("tok_test")
+
+		require.Equal(t, referenceIssuer+enrollPath+"?token=tok_test", link)
+	})
+
+	t.Run("trims a trailing slash from the issuer", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.issuer = referenceIssuer + "/"
+
+		link := app.server.enrollmentURL("tok_test")
+
+		require.Equal(t, referenceIssuer+enrollPath+"?token=tok_test", link)
+	})
+}

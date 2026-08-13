@@ -93,5 +93,5 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("POST /admin/tokens", handle(server.processEnrollmentToken))
 	mux.Handle("POST /admin/locks", handle(server.processLockChange))
 
-	return securityHeaders(mux)
+	return securityHeaders(limitRequestBody(mux))
 }

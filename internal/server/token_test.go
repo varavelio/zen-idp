@@ -219,6 +219,42 @@ func TestToken(t *testing.T) {
 		require.Equal(t, "confidential-app", claims["aud"])
 	})
 
+	t.Run("accepts a lowercase client_secret_basic scheme", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		code := createCode(t, app, func(params *onetoken.CodeParams) {
+			params.ClientID = "confidential-app"
+		})
+		credentials := base64.StdEncoding.EncodeToString(
+			[]byte("confidential-app:" + testClientSecret),
+		)
+		response := tokenRequest(
+			t,
+			app.server.Handler(),
+			validExchangeForm(code),
+			"basic "+credentials,
+		)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		body := decodeTokenResponse(t, response)
+		require.NotEmpty(t, body.AccessToken)
+	})
+
+	t.Run("rejects an oversized request body", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			"/token",
+			strings.NewReader(strings.Repeat("a", maxRequestBodyBytes+1)),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		response := httptest.NewRecorder()
+
+		app.server.Handler().ServeHTTP(response, request)
+
+		requireTokenError(t, response, http.StatusBadRequest, "invalid_request")
+	})
+
 	t.Run("accepts a confidential client secret over HTTPS in production", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		app.server.tokens.RequireClientSecretTLS = true

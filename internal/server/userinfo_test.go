@@ -189,6 +189,24 @@ func TestUserInfo(t *testing.T) {
 		requireUserinfoError(t, response, http.StatusBadRequest, "invalid_request")
 	})
 
+	t.Run("accepts a lowercase bearer scheme", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		accessToken := obtainAccessToken(t, app)
+
+		response := userinfoRequest(t, app.server.Handler(), "bearer "+accessToken)
+
+		require.Equal(t, http.StatusOK, response.Code)
+	})
+
+	t.Run("accepts a mixed-case bearer scheme", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		accessToken := obtainAccessToken(t, app)
+
+		response := userinfoRequest(t, app.server.Handler(), "BeArEr "+accessToken)
+
+		require.Equal(t, http.StatusOK, response.Code)
+	})
+
 	t.Run("rejects an empty bearer token", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		response := userinfoRequest(t, app.server.Handler(), "Bearer ")

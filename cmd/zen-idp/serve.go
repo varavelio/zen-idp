@@ -41,6 +41,12 @@ const (
 	gracefulShutdownTimeout = 10 * time.Second
 	// readHeaderTimeout bounds how long serve waits for a request header.
 	readHeaderTimeout = 5 * time.Second
+	// readTimeout bounds how long serve waits for a complete request,
+	// including its body, protecting against slow request bodies.
+	readTimeout = 10 * time.Second
+	// writeTimeout bounds how long serve waits for a response to be
+	// written.
+	writeTimeout = 10 * time.Second
 	// idleTimeout drops keep-alive connections idle longer than this.
 	idleTimeout = 60 * time.Second
 )
@@ -319,6 +325,8 @@ func runServe(envFile string, dependencies dependencies) error {
 	httpServer := &http.Server{
 		Handler:           app.Handler(),
 		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
 	}
 

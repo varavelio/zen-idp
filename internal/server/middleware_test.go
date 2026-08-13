@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -43,5 +45,42 @@ func TestContentSecurityPolicy(t *testing.T) {
 	t.Run("never relaxes to inline or eval execution", func(t *testing.T) {
 		require.NotContains(t, contentSecurityPolicy, "unsafe-inline")
 		require.NotContains(t, contentSecurityPolicy, "unsafe-eval")
+	})
+}
+
+func TestLimitRequestBody(t *testing.T) {
+	t.Run("passes request bodies within the limit", func(t *testing.T) {
+		handler := limitRequestBody(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			require.Equal(t, "hello", string(body))
+			w.WriteHeader(http.StatusOK)
+		}))
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			"/",
+			strings.NewReader("hello"),
+		)
+
+		handler.ServeHTTP(httptest.NewRecorder(), request)
+	})
+
+	t.Run("fails reads beyond the limit", func(t *testing.T) {
+		handler := limitRequestBody(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, err := io.ReadAll(r.Body)
+			var limitErr *http.MaxBytesError
+			require.ErrorAs(t, err, &limitErr)
+			require.Equal(t, int64(maxRequestBodyBytes), limitErr.Limit)
+			w.WriteHeader(http.StatusOK)
+		}))
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			"/",
+			strings.NewReader(strings.Repeat("a", maxRequestBodyBytes+1)),
+		)
+
+		handler.ServeHTTP(httptest.NewRecorder(), request)
 	})
 }

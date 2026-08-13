@@ -73,7 +73,7 @@ func bearerToken(r *http.Request) (string, error) {
 	if authorization == "" {
 		return "", errors.New("the Authorization header is required")
 	}
-	if !strings.HasPrefix(authorization, bearerScheme) {
+	if !hasAuthScheme(authorization, bearerScheme) {
 		return "", errors.New("only bearer token authentication is supported")
 	}
 	token := strings.TrimSpace(authorization[len(bearerScheme):])

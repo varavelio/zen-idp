@@ -25,10 +25,6 @@ const tokenGrantType = "authorization_code"
 // bearerTokenType is the token type of every successful token response.
 const bearerTokenType = "Bearer"
 
-// maxTokenBodyBytes bounds the token request form body; a legitimate token
-// request carries only a handful of short parameters.
-const maxTokenBodyBytes = 1 << 20
-
 // CodeConsumer redeems the one-use authorization code of a token request,
 // satisfied by onetoken.Store.
 type CodeConsumer interface {
@@ -84,7 +80,6 @@ func (server *Server) token(w http.ResponseWriter, r *http.Request) error {
 			"token parameters must be sent in the request body",
 		)
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxTokenBodyBytes)
 	if err := r.ParseForm(); err != nil {
 		return writeTokenError(
 			w,
@@ -353,7 +348,7 @@ func parseClientCredentials(
 		return r.FormValue("client_id"), "", false, nil
 	}
 	const basicScheme = "Basic "
-	if !strings.HasPrefix(authorization, basicScheme) {
+	if !hasAuthScheme(authorization, basicScheme) {
 		return "", "", false, clientError("unsupported client authentication method")
 	}
 	decoded, err := base64.StdEncoding.DecodeString(

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/varavelio/zen-idp/internal/audit"
@@ -236,9 +237,10 @@ func (server *Server) enrollmentIssuerName() string {
 }
 
 // enrollmentURL returns the shareable enrollment link that carries the
-// given enrollment token, derived from the configured issuer.
+// given enrollment token, derived from the configured issuer with any
+// trailing slash trimmed.
 func (server *Server) enrollmentURL(token string) string {
-	return server.issuer + enrollPath + "?" + url.Values{
+	return strings.TrimSuffix(server.issuer, "/") + enrollPath + "?" + url.Values{
 		enrollTokenParam: {token},
 	}.Encode()
 }
