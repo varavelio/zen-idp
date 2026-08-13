@@ -512,3 +512,56 @@ func TestRevokeAllForSubject(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestPurgeExpired(t *testing.T) {
+	t.Run("deletes only sessions expired at the given instant", func(t *testing.T) {
+		store, queries := newTestStore(t, time.Hour)
+
+		// An expired session, recorded two hours ago with a one-hour
+		// lifetime, and an active session recorded just now.
+		expiredToken, err := store.Create(context.Background(), CreateParams{
+			Subject: testSubject,
+			TOTPRev: testTOTPRev,
+			Now:     testNow.Add(-2 * time.Hour),
+		})
+		require.NoError(t, err)
+		activeToken, err := store.Create(context.Background(), CreateParams{
+			Subject: testSubject,
+			TOTPRev: testTOTPRev,
+			Now:     testNow,
+		})
+		require.NoError(t, err)
+
+		deleted, err := store.PurgeExpired(context.Background(), testNow)
+		require.NoError(t, err)
+		require.Equal(t, int64(1), deleted)
+
+		_, err = queries.GetSession(context.Background(), sessionID(t, expiredToken))
+		require.ErrorIs(t, err, sql.ErrNoRows)
+		_, err = queries.GetSession(context.Background(), sessionID(t, activeToken))
+		require.NoError(t, err)
+	})
+
+	t.Run("reports zero when nothing is expired", func(t *testing.T) {
+		store, _ := newTestStore(t, testMaxAge)
+		_, err := store.Create(context.Background(), CreateParams{
+			Subject: testSubject,
+			TOTPRev: testTOTPRev,
+			Now:     testNow,
+		})
+		require.NoError(t, err)
+
+		deleted, err := store.PurgeExpired(context.Background(), testNow)
+		require.NoError(t, err)
+		require.Zero(t, deleted)
+	})
+}
+
+// sessionID extracts the record identifier of a sess_{id}_{secret} browser
+// token.
+func sessionID(t *testing.T, token string) string {
+	t.Helper()
+	id, _, ok := strings.Cut(strings.TrimPrefix(token, "sess_"), "_")
+	require.True(t, ok)
+	return id
+}

@@ -22,6 +22,7 @@ type sessionQueries interface {
 	GetSession(context.Context, string) (statestore.Session, error)
 	RevokeSession(context.Context, string) error
 	RevokeSessionsBySubject(context.Context, string) error
+	DeleteExpiredSessions(context.Context, string) (int64, error)
 }
 
 // idGenerator creates the opaque record identifiers embedded in browser
@@ -304,6 +305,18 @@ func (store *Store) RevokeAllForSubject(ctx context.Context, sub string) error {
 		return fmt.Errorf("revoke sessions for subject: %w", err)
 	}
 	return nil
+}
+
+// PurgeExpired deletes every session record whose absolute expiration has
+// passed at the given instant and returns how many records were removed. It
+// keeps the sessions table bounded by reclaiming rows that can never become
+// usable again.
+func (store *Store) PurgeExpired(ctx context.Context, now time.Time) (int64, error) {
+	deleted, err := store.queries.DeleteExpiredSessions(ctx, clock.Format(now))
+	if err != nil {
+		return 0, fmt.Errorf("purge expired sessions: %w", err)
+	}
+	return deleted, nil
 }
 
 // nullString maps an empty value to SQL NULL.
