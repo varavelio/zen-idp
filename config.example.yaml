@@ -67,6 +67,20 @@ config:
       # Absolute session lifetime in hours. Range 1-8760; default 72.
       max_age_hours: 72
 
+  # Optional periodic state-cleanup settings. A background cleaner runs at the
+  # configured interval and removes disposable state that can never become
+  # usable again: expired rate-limit counters, expired one-use tokens, expired
+  # sessions, and audit records older than the configured retention.
+  maintenance:
+    # Seconds between cleanup passes. Range 60-86400; default 3600 (1 hour).
+    # A pass also runs once at startup.
+    cleanup_interval_seconds: 3600
+
+    # Hours that audit records are retained before cleanup removes them.
+    # Range 0-87600; default 720 (30 days). Set 0 to keep audit records
+    # indefinitely.
+    audit_retention_hours: 720
+
 # OIDC clients. Use one list item per application.
 clients:
   - # Required nonblank, unique client identifier sent by the application.
