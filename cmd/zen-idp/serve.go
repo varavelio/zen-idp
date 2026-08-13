@@ -18,6 +18,7 @@ import (
 
 	"github.com/varavelio/zen-idp/internal/admin"
 	"github.com/varavelio/zen-idp/internal/audit"
+	"github.com/varavelio/zen-idp/internal/cleanup"
 	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/id"
 	"github.com/varavelio/zen-idp/internal/jwt"
@@ -225,6 +226,21 @@ func runServe(envFile string, dependencies dependencies) error {
 		return fmt.Errorf("build CSRF guard: %w", err)
 	}
 
+	cleaner, err := cleanup.New(
+		rateLimiter,
+		codeStore,
+		sessionStore,
+		auditRecorder,
+		configuration.Maintenance.AuditRetention,
+	)
+	if err != nil {
+		return fmt.Errorf("build state cleaner: %w", err)
+	}
+
+	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
+	defer stopCleanup()
+	go runCleanupLoop(cleanupCtx, cleaner, configuration.Maintenance.CleanupInterval)
+
 	address := net.JoinHostPort(configuration.Server.Host, strconv.Itoa(configuration.Server.Port))
 	listener, err := dependencies.listen("tcp", address)
 	if err != nil {
@@ -335,5 +351,30 @@ func serveWithGracefulShutdown(listener net.Listener, httpServer *http.Server) e
 			return fmt.Errorf("graceful shutdown: %w", err)
 		}
 		return nil
+	}
+}
+
+// runCleanupLoop runs one cleanup pass immediately and then every interval
+// until ctx is canceled. A failed pass is logged and never stops the loop:
+// cleanup is best-effort maintenance, not a service-critical path.
+func runCleanupLoop(
+	ctx context.Context,
+	cleaner *cleanup.Cleaner,
+	interval time.Duration,
+) {
+	if err := cleaner.Clean(ctx, time.Now()); err != nil {
+		slog.ErrorContext(ctx, "state cleanup failed", slog.Any("error", err))
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := cleaner.Clean(ctx, time.Now()); err != nil {
+				slog.ErrorContext(ctx, "state cleanup failed", slog.Any("error", err))
+			}
+		}
 	}
 }
