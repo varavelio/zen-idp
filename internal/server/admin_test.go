@@ -433,6 +433,10 @@ func TestProcessEnrollmentToken(t *testing.T) {
 		token := enrollmentTokenFromBody(t, body)
 		require.True(t, strings.HasPrefix(token, "tok_"))
 
+		// The page shows the shareable enrollment link that carries the
+		// token, derived from the configured issuer.
+		require.Contains(t, body, referenceIssuer+enrollPath+"?token="+token)
+
 		// The shown credential redeems the enrollment exactly once, bound
 		// to the configured subject and revision with the normalized
 		// absolute expiration.

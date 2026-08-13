@@ -518,6 +518,7 @@ func TestToken(t *testing.T) {
 			},
 			UserinfoDependencies{},
 			LogoutDependencies{},
+			EnrollDependencies{},
 			AdminDependencies{},
 		).Handler()
 		response := tokenRequest(t, handler, validExchangeForm("anything"), "")
@@ -542,6 +543,7 @@ func TestToken(t *testing.T) {
 			},
 			UserinfoDependencies{},
 			LogoutDependencies{},
+			EnrollDependencies{},
 			AdminDependencies{},
 		).Handler()
 		response := tokenRequest(t, handler, validExchangeForm(code), "")

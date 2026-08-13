@@ -125,6 +125,13 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			UI:            config.UI{Name: "Example Auth"},
 			SecureCookies: true,
 		},
+		EnrollDependencies{
+			Consume: codes,
+			Deriver: testTOTPDeriver{rootSecret: referenceRootSecret},
+			CSRF:    csrfGuard,
+			Users:   users,
+			UI:      config.UI{Name: "Example Auth"},
+		},
 		AdminDependencies{
 			Service:       adminService,
 			Sessions:      store,
@@ -150,6 +157,18 @@ func newLoginTestDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { _ = db.Close() })
 	require.NoError(t, statestore.Migrate(ctx, db))
 	return db
+}
+
+// testTOTPDeriver derives deterministic TOTP shared secrets with the
+// reference root secret, satisfying server.TOTPSecretDeriver.
+type testTOTPDeriver struct {
+	rootSecret [sha256.Size]byte
+}
+
+// DeriveTOTPSecret derives the TOTP shared secret of the given subject at
+// the given revision.
+func (deriver testTOTPDeriver) DeriveTOTPSecret(subject string, revision uint64) (string, error) {
+	return totp.DeriveSharedSecret(deriver.rootSecret, subject, revision)
 }
 
 // loginQuery builds a valid pending authorization request for the public-app

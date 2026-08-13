@@ -320,6 +320,7 @@ func (server *Server) processEnrollmentToken(w http.ResponseWriter, r *http.Requ
 		user.Subject,
 		clock.Format(expiresAt),
 		enrollmentToken,
+		server.enrollmentURL(enrollmentToken),
 	)
 }
 
@@ -339,16 +340,18 @@ func (server *Server) renderAdminHomeFailure(
 }
 
 // renderEnrollmentTokenPage writes the one-time display of a freshly
-// created enrollment token. The page must never be cached.
+// created enrollment token and its shareable enrollment link. The page must
+// never be cached.
 func (server *Server) renderEnrollmentTokenPage(
 	w http.ResponseWriter,
-	subject, expiresAt, enrollmentToken string,
+	subject, expiresAt, enrollmentToken, enrollURL string,
 ) error {
 	html, err := ui.EnrollmentTokenPage(
 		server.admin.UI,
 		subject,
 		expiresAt,
 		enrollmentToken,
+		enrollURL,
 	).RenderString()
 	if err != nil {
 		return fmt.Errorf("render enrollment token page: %w", err)

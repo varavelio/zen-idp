@@ -41,6 +41,7 @@ func TestDiscovery(t *testing.T) {
 			TokenDependencies{},
 			UserinfoDependencies{},
 			LogoutDependencies{},
+			EnrollDependencies{},
 			AdminDependencies{},
 		).Handler()
 	}

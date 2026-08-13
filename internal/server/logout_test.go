@@ -263,6 +263,7 @@ func TestLogout(t *testing.T) {
 				Sessions: failingSessionRevoker{},
 				CSRF:     csrfGuard,
 			},
+			EnrollDependencies{},
 			AdminDependencies{},
 		).Handler()
 

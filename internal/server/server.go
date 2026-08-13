@@ -19,6 +19,7 @@ type Server struct {
 	tokens        TokenDependencies
 	userinfo      UserinfoDependencies
 	logout        LogoutDependencies
+	enroll        EnrollDependencies
 	admin         AdminDependencies
 }
 
@@ -27,8 +28,8 @@ type Server struct {
 // static asset tree at literal paths under /build/ and /vendor/, and runs the
 // discovery metadata, the login interaction, the authorization continuation,
 // the token exchange, the /userinfo resolution, the local logout
-// interaction, and the administration interaction with the given injected
-// dependencies.
+// interaction, the user enrollment interaction, and the administration
+// interaction with the given injected dependencies.
 func New(
 	publicJWK jwk.PublicJWK,
 	issuer string,
@@ -39,6 +40,7 @@ func New(
 	tokens TokenDependencies,
 	userinfo UserinfoDependencies,
 	logout LogoutDependencies,
+	enroll EnrollDependencies,
 	admin AdminDependencies,
 ) *Server {
 	return &Server{
@@ -51,6 +53,7 @@ func New(
 		tokens:        tokens,
 		userinfo:      userinfo,
 		logout:        logout,
+		enroll:        enroll,
 		admin:         admin,
 	}
 }
@@ -73,6 +76,9 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("GET /userinfo", handle(server.userInfo))
 	mux.Handle("GET /logout", handle(server.logoutForm))
 	mux.Handle("POST /logout", handle(server.processLogout))
+
+	mux.Handle("GET /enroll", handle(server.enrollForm))
+	mux.Handle("POST /enroll", handle(server.processEnroll))
 
 	mux.Handle("GET /admin", handle(server.adminForm))
 	mux.Handle("POST /admin/login", handle(server.processAdminLogin))

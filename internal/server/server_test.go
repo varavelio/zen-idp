@@ -23,6 +23,7 @@ func TestNew(t *testing.T) {
 			TokenDependencies{},
 			UserinfoDependencies{},
 			LogoutDependencies{},
+			EnrollDependencies{},
 			AdminDependencies{},
 		).Handler()
 
@@ -47,6 +48,7 @@ func TestServeAssets(t *testing.T) {
 			TokenDependencies{},
 			UserinfoDependencies{},
 			LogoutDependencies{},
+			EnrollDependencies{},
 			AdminDependencies{},
 		).Handler()
 	}
@@ -119,6 +121,7 @@ func TestServeAssets(t *testing.T) {
 			TokenDependencies{},
 			UserinfoDependencies{},
 			LogoutDependencies{},
+			EnrollDependencies{},
 			AdminDependencies{},
 		).Handler()
 
@@ -146,6 +149,7 @@ func TestServeAssets(t *testing.T) {
 			TokenDependencies{},
 			UserinfoDependencies{},
 			LogoutDependencies{},
+			EnrollDependencies{},
 			AdminDependencies{},
 		).Handler()
 
