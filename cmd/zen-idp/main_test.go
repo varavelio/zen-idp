@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/varavelio/zen-idp/internal/config"
@@ -73,6 +74,7 @@ func testDependencies(t *testing.T) dependencies {
 	runtime, err := runtimeconfig.Load("")
 	require.NoError(t, err)
 	return dependencies{
+		checkClock: func(time.Time) error { return nil },
 		loadRuntime: func(string) (runtimeconfig.RuntimeConfig, error) {
 			return runtime, nil
 		},

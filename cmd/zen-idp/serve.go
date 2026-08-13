@@ -74,6 +74,10 @@ func (runner stateStoreTx) WithTx(
 // runServe bootstraps the OIDC service and serves until a failure or a
 // termination signal.
 func runServe(envFile string, dependencies dependencies) error {
+	if err := dependencies.checkClock(time.Now()); err != nil {
+		return fmt.Errorf("check system clock: %w", err)
+	}
+
 	runtime, err := dependencies.loadRuntime(envFile)
 	if err != nil {
 		return fmt.Errorf("load runtime configuration: %w", err)

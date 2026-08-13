@@ -266,6 +266,54 @@ func TestRunServe(t *testing.T) {
 		require.Empty(t, stdout.String())
 		require.Contains(t, stderr.String(), "invalid runtime")
 	})
+
+	t.Run("fails when the system clock is implausible", func(t *testing.T) {
+		dependencies := testDependencies(t)
+		dependencies.checkClock = func(time.Time) error {
+			return errors.New("implausible clock")
+		}
+		dependencies.loadRuntime = func(string) (runtimeconfig.RuntimeConfig, error) {
+			t.Fatal("runtime must not be loaded when the clock is implausible")
+			return runtimeconfig.RuntimeConfig{}, nil
+		}
+		dependencies.loadConfiguration = func(string) (*config.Config, error) {
+			t.Fatal("YAML must not be loaded when the clock is implausible")
+			return nil, nil
+		}
+		dependencies.openStateStore = func(context.Context, string) (*sql.DB, error) {
+			t.Fatal("state database must not be opened when the clock is implausible")
+			return nil, nil
+		}
+		dependencies.migrateStateStore = func(context.Context, *sql.DB) error {
+			t.Fatal("migrations must not run when the clock is implausible")
+			return nil
+		}
+		dependencies.deriveSigningKey = func([sha256.Size]byte) (*rsa.PrivateKey, error) {
+			t.Fatal("signing identity must not be derived when the clock is implausible")
+			return nil, nil
+		}
+		dependencies.derivePublicJWK = func(*rsa.PublicKey) (jwk.PublicJWK, error) {
+			t.Fatal("public JWK must not be derived when the clock is implausible")
+			return jwk.PublicJWK{}, nil
+		}
+		dependencies.listen = func(string, string) (net.Listener, error) {
+			t.Fatal("listener must not be created when the clock is implausible")
+			return nil, nil
+		}
+		dependencies.serve = func(net.Listener, *http.Server) error {
+			t.Fatal("HTTP server must not start when the clock is implausible")
+			return nil
+		}
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+
+		exitCode := run([]string{"serve"}, &stdout, &stderr, dependencies)
+
+		require.Equal(t, 1, exitCode)
+		require.Empty(t, stdout.String())
+		require.Contains(t, stderr.String(), "check system clock")
+		require.Contains(t, stderr.String(), "implausible clock")
+	})
 }
 
 func listenOnRandomPort(t *testing.T) net.Listener {

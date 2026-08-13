@@ -12,8 +12,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/varavelio/zen-idp/internal/cli"
+	"github.com/varavelio/zen-idp/internal/clockcheck"
 	"github.com/varavelio/zen-idp/internal/config"
 	"github.com/varavelio/zen-idp/internal/configloader"
 	"github.com/varavelio/zen-idp/internal/crypto"
@@ -26,6 +28,7 @@ import (
 // dependencies wires every capability the commands need, so tests can replace
 // each piece individually.
 type dependencies struct {
+	checkClock        func(time.Time) error
 	loadRuntime       func(string) (runtimeconfig.RuntimeConfig, error)
 	loadConfigPath    func(string) (string, error)
 	loadConfiguration func(string) (*config.Config, error)
@@ -40,6 +43,7 @@ type dependencies struct {
 
 func main() {
 	dependencies := dependencies{
+		checkClock:        clockcheck.Check,
 		loadRuntime:       runtimeconfig.Load,
 		loadConfigPath:    runtimeconfig.LoadConfigPath,
 		loadConfiguration: configloader.Load,
