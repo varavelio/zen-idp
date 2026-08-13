@@ -269,6 +269,14 @@ func runServe(envFile string, dependencies dependencies) error {
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
 			SessionMaxAge: configuration.Security.Session.MaxAge,
 		},
+		server.PanicDependencies{
+			Sessions:      sessionStore,
+			Locks:         locks,
+			Audit:         auditRecorder,
+			CSRF:          csrfGuard,
+			UI:            configuration.UI,
+			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
+		},
 	)
 	httpServer := &http.Server{
 		Handler:           app.Handler(),
