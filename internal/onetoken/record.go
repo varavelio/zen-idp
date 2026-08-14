@@ -56,6 +56,9 @@ type Code struct {
 	Scope string
 	// Nonce is the request nonce, empty when the request carried none.
 	Nonce string
+	// AuthTime is the instant the subject authenticated, carried into
+	// the ID token as the auth_time claim.
+	AuthTime time.Time
 	// PKCEChallenge is the S256 challenge the code is bound to, empty when
 	// the authorization request used no PKCE.
 	PKCEChallenge string

@@ -139,6 +139,9 @@ type CodeParams struct {
 	Scope string
 	// Nonce is the request nonce, empty when the request carried none.
 	Nonce string
+	// AuthTime is the instant the subject authenticated, carried into
+	// the ID token as the auth_time claim.
+	AuthTime time.Time
 	// PKCEChallenge is the S256 challenge the code is bound to. PKCE is
 	// optional: either both PKCEChallenge and PKCEMethod are empty, or both
 	// are present with method "S256".
@@ -169,6 +172,9 @@ func (store *Store) CreateCode(ctx context.Context, params CodeParams) (string, 
 	if params.Scope == "" {
 		return "", errors.New("code scope must not be empty")
 	}
+	if params.AuthTime.IsZero() {
+		return "", errors.New("code auth time must not be zero")
+	}
 	if err := validatePKCE(params.PKCEChallenge, params.PKCEMethod); err != nil {
 		return "", err
 	}
@@ -187,6 +193,7 @@ func (store *Store) CreateCode(ctx context.Context, params CodeParams) (string, 
 			redirectURI:   params.RedirectURI,
 			scope:         params.Scope,
 			nonce:         params.Nonce,
+			authTime:      params.AuthTime,
 			pkceChallenge: params.PKCEChallenge,
 			pkceMethod:    params.PKCEMethod,
 		},
@@ -215,6 +222,7 @@ func (store *Store) ConsumeCode(ctx context.Context, token string, now time.Time
 		RedirectURI:   record.CodeRedirectUri.String,
 		Scope:         record.CodeScope.String,
 		Nonce:         record.CodeNonce.String,
+		AuthTime:      mustParseCodeAuthTime(record.CodeAuthTime),
 		PKCEChallenge: record.CodePkceChallenge.String,
 		PKCEMethod:    record.CodePkceMethod.String,
 		ExpiresAt:     expiresAt,
@@ -239,6 +247,7 @@ type codeBindings struct {
 	redirectURI   string
 	scope         string
 	nonce         string
+	authTime      time.Time
 	pkceChallenge string
 	pkceMethod    string
 }
@@ -271,6 +280,7 @@ func (store *Store) create(
 		CodeRedirectUri:   nullString(bindings.redirectURI),
 		CodeScope:         nullString(bindings.scope),
 		CodeNonce:         nullString(bindings.nonce),
+		CodeAuthTime:      nullString(clock.Format(bindings.authTime)),
 		CodePkceChallenge: nullString(bindings.pkceChallenge),
 		CodePkceMethod:    nullString(bindings.pkceMethod),
 	})
@@ -354,6 +364,20 @@ func validatePKCE(challenge, method string) error {
 		return fmt.Errorf("unsupported PKCE method %q", method)
 	}
 	return nil
+}
+
+// mustParseCodeAuthTime parses the canonical authentication time of a code
+// record. The column is guaranteed canonical by the creation path, so a
+// parse failure is a programming error.
+func mustParseCodeAuthTime(value sql.NullString) time.Time {
+	if !value.Valid {
+		panic("onetoken: code record carries no authentication time")
+	}
+	parsed, err := clock.Parse(value.String)
+	if err != nil {
+		panic("onetoken: parse code authentication time: " + err.Error())
+	}
+	return parsed
 }
 
 // nullString maps an empty value to SQL NULL.

@@ -70,16 +70,7 @@ func createEnrollmentToken(t *testing.T, store *Store) string {
 // and returns its redeemable token.
 func createCode(t *testing.T, store *Store) string {
 	t.Helper()
-	token, err := store.CreateCode(context.Background(), CodeParams{
-		Subject:     testSubject,
-		TOTPRev:     testTOTPRev,
-		ClientID:    testClientID,
-		RedirectURI: testRedirectURI,
-		Scope:       testScope,
-		Nonce:       testNonce,
-		ExpiresAt:   testNow.Add(5 * time.Minute),
-		Now:         testNow,
-	})
+	token, err := store.CreateCode(context.Background(), codeParams())
 	require.NoError(t, err)
 	return token
 }
@@ -275,8 +266,19 @@ func TestCreateCode(t *testing.T) {
 		require.Equal(t, testRedirectURI, record.CodeRedirectUri.String)
 		require.Equal(t, testScope, record.CodeScope.String)
 		require.Equal(t, testNonce, record.CodeNonce.String)
+		require.Equal(t, clock.Format(testNow.Add(-2*time.Hour)), record.CodeAuthTime.String)
 		require.False(t, record.CodePkceChallenge.Valid, "no PKCE bindings were requested")
 		require.False(t, record.CodePkceMethod.Valid)
+	})
+
+	t.Run("rejects a zero authentication time", func(t *testing.T) {
+		store, _ := newTestStore(t)
+		params := codeParams()
+		params.AuthTime = time.Time{}
+
+		_, err := store.CreateCode(context.Background(), params)
+
+		require.ErrorContains(t, err, "auth time")
 	})
 
 	t.Run("persists PKCE bindings when supplied", func(t *testing.T) {
@@ -499,15 +501,9 @@ func TestPurgeExpired(t *testing.T) {
 		require.ErrorIs(t, err, sql.ErrNoRows)
 
 		// A token still inside its window survives the purge.
-		token, err := store.CreateCode(context.Background(), CodeParams{
-			Subject:     testSubject,
-			TOTPRev:     testTOTPRev,
-			ClientID:    testClientID,
-			RedirectURI: testRedirectURI,
-			Scope:       testScope,
-			ExpiresAt:   testNow.Add(time.Hour),
-			Now:         testNow,
-		})
+		params := codeParams()
+		params.ExpiresAt = testNow.Add(time.Hour)
+		token, err := store.CreateCode(context.Background(), params)
 		require.NoError(t, err)
 		id, _ := splitToken(t, token)
 
@@ -574,6 +570,7 @@ func codeParams() CodeParams {
 		RedirectURI: testRedirectURI,
 		Scope:       testScope,
 		Nonce:       testNonce,
+		AuthTime:    testNow.Add(-2 * time.Hour),
 		ExpiresAt:   testNow.Add(5 * time.Minute),
 		Now:         testNow,
 	}
