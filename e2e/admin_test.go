@@ -118,7 +118,19 @@ func TestAdminLifecycle(t *testing.T) {
 	}).RequireStatus(t, 200)
 	require.Empty(t, c.Cookie("zen_idp_session"))
 
-	// The panic lock blocks login until the administrator clears it.
+	// The panic lock blocks login until the administrator clears it, and
+	// an unlock never clears a distinct panic lock: only clear_panic does.
+	c.PostForm(t, "/login?"+query, url.Values{
+		"identifier": {"alice"},
+		"code":       {harness.TOTPCode(aliceSecret, time.Now())},
+	}).RequireStatus(t, 200).Contains(t, "Sign-in failed")
+	home = c.Get(t, "/admin")
+	home.RequireStatus(t, 200)
+	c.PostForm(t, "/admin/locks", url.Values{
+		"subject":    {"alice"},
+		"action":     {"unlock"},
+		"csrf_token": {harness.FormValue(home.Body, "csrf_token")},
+	}).RequireStatus(t, 200)
 	c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {harness.TOTPCode(aliceSecret, time.Now())},
