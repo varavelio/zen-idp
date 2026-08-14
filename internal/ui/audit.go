@@ -37,12 +37,12 @@ func AuditLogPage(settings config.UI, records []AuditRecord, csrfToken string) n
 	if name == "" {
 		name = adminTitle
 	}
-	return Page(settings, auditTitle,
+	return page(settings, auditTitle,
 		adminHeader(settings, name, csrfToken),
 		nodx.Main(
 			nodx.Class("flex-1"),
 			nodx.Div(
-				nodx.Class("mx-auto w-full max-w-3xl space-y-6 px-4 py-8"),
+				nodx.Class("mx-auto w-full max-w-5xl space-y-6 px-4 py-8"),
 				nodx.Div(
 					nodx.Class("flex flex-wrap items-center justify-between gap-3"),
 					nodx.Div(

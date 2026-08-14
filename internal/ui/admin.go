@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	nodx "github.com/varavelio/nodxgo"
 	lucide "github.com/varavelio/nodxgo-lucide"
 	"github.com/varavelio/zen-idp/internal/config"
@@ -60,7 +62,6 @@ var enrollmentDurationOptions = []struct {
 	{"3 days", "72h"},
 	{"1 week", "168h"},
 	{"30 days", "720h"},
-	{"1 year", "8760h"},
 	{"No expiration", "999999h"},
 }
 
@@ -99,7 +100,7 @@ func AdminLoginPage(settings config.UI, token, failure string) nodx.Node {
 	if name == "" {
 		name = adminTitle
 	}
-	return Page(settings, adminTitle,
+	return page(settings, adminTitle,
 		standalonePage(settings, name, "Administrator sign-in", "max-w-md",
 			nodx.If(failure != "", errorAlert(failure)),
 			nodx.FormEl(
@@ -114,6 +115,7 @@ func AdminLoginPage(settings config.UI, token, failure string) nodx.Node {
 					"current-password",
 					"password",
 					lucide.KeyRound(nodx.Class("size-4")),
+					nodx.Placeholder("Enter your password"),
 					nodx.Required(true),
 					nodx.Autofocus(true),
 				),
@@ -135,11 +137,14 @@ func adminHeader(cfg config.UI, name, csrfToken string) nodx.Node {
 			),
 			nodx.A(
 				nodx.Href(adminHomePath),
-				nodx.Class("flex min-w-0 items-center gap-2.5"),
+				nodx.Class("flex min-w-0 items-end gap-2.5"),
 				brandMark(cfg, "h-7 w-auto shrink-0"),
-				nodx.SpanEl(
-					nodx.Class("truncate font-semibold text-content"),
-					nodx.Text(name),
+				nodx.If(
+					strings.TrimSpace(name) != "",
+					nodx.SpanEl(
+						nodx.Class("truncate font-semibold text-content text-xl"),
+						nodx.Text(name),
+					),
 				),
 			),
 			nodx.Div(
@@ -189,7 +194,7 @@ func AdminHomePage(
 	if name == "" {
 		name = adminTitle
 	}
-	return Page(settings, adminTitle,
+	return page(settings, adminTitle,
 		adminHeader(settings, name, token),
 		nodx.Main(
 			nodx.Class("flex-1"),
@@ -258,13 +263,13 @@ func userCard(lock LockStatus, token string) nodx.Node {
 			nodx.Div(
 				nodx.Class("min-w-0 space-y-0.5"),
 				nodx.P(
-					nodx.Class("truncate font-mono text-sm font-medium text-content"),
+					nodx.Class("truncate font-mono text-lg font-medium text-content"),
 					nodx.Text(lock.Subject),
 				),
 				nodx.If(
 					lock.Login != "",
 					nodx.P(
-						nodx.Class("truncate text-xs text-content-muted"),
+						nodx.Class("truncate text-md text-content-muted"),
 						nodx.Text(lock.Login),
 					),
 				),
@@ -290,7 +295,7 @@ func statusBadge(lock LockStatus) nodx.Node {
 		class = "bg-warning/15 text-warning"
 	default:
 		icon = lucide.BadgeCheck(nodx.Class("size-3"))
-		class = "bg-base-300 text-content-muted"
+		class = "bg-base-300 text-success"
 	}
 	return nodx.SpanEl(
 		nodx.Class(
@@ -307,7 +312,6 @@ func statusBadge(lock LockStatus) nodx.Node {
 // closes the dialog.
 func enrollmentDialog(subject, token string) nodx.Node {
 	return nodx.Div(
-		nodx.Class("space-y-3"),
 		nodx.Button(
 			nodx.Attr("type", "button"),
 			nodx.Attr("data-dialog-open", "enroll-"+subject),
@@ -480,33 +484,28 @@ func EnrollmentTokenPage(
 	if name == "" {
 		name = adminTitle
 	}
-	return Page(settings, enrollmentTokenTitle,
+	return page(settings, enrollmentTokenTitle,
 		adminHeader(settings, name, csrfToken),
 		nodx.Main(
 			nodx.Class("flex-1"),
 			nodx.Div(
 				nodx.Class("mx-auto w-full max-w-lg space-y-6 px-4 py-8"),
 				nodx.Div(
-					nodx.Class(
-						"space-y-5 rounded-lg border border-base-400 bg-base-200 p-8",
-					),
+					nodx.Class("space-y-5"),
+					lucide.ClockCheck(nodx.Class("size-16 mx-auto shrink-0 text-success")),
 					nodx.Div(
-						nodx.Class("flex items-start gap-3"),
-						lucide.BadgeCheck(nodx.Class("mt-0.5 size-5 shrink-0 text-success")),
-						nodx.Div(
-							nodx.Class("space-y-0.5"),
-							nodx.H1(
-								nodx.Class("text-lg font-semibold text-content"),
-								nodx.Text("Enrollment token created."),
-							),
-							nodx.P(
-								nodx.Class("text-sm text-content-muted"),
-								nodx.Text("Subject: "+subject),
-							),
-							nodx.P(
-								nodx.Class("text-sm text-content-muted"),
-								nodx.Text("Expires: "+expiresAt),
-							),
+						nodx.Class("space-y-0.5 text-center"),
+						nodx.H1(
+							nodx.Class("text-lg font-semibold text-content"),
+							nodx.Text("Enrollment token created."),
+						),
+						nodx.P(
+							nodx.Class("text-sm text-content-muted"),
+							nodx.Text("Subject: "+subject),
+						),
+						nodx.P(
+							nodx.Class("text-sm text-content-muted"),
+							nodx.Text("Expires: "+expiresAt),
 						),
 					),
 					nodx.Div(
@@ -536,21 +535,10 @@ func EnrollmentTokenPage(
 									"working after it is used once.",
 							),
 						),
-						nodx.Div(
-							nodx.Class(
-								"flex items-start gap-2 rounded-md border border-warning/25",
-								"bg-warning/10 p-3 text-sm text-warning",
-							),
-							nodx.Role("alert"),
-							lucide.TriangleAlert(nodx.Class("mt-0.5 size-4 shrink-0")),
-							nodx.P(
-								nodx.Text("Copy this link now. It will not be shown again."),
-							),
-						),
 						nodx.A(
 							nodx.Href(adminHomePath),
 							nodx.Class(
-								"inline-flex w-full items-center justify-center gap-2 rounded-md",
+								"mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md",
 								"border border-base-400 bg-base-100 px-3 py-2 text-sm font-medium",
 								"text-content transition-opacity hover:opacity-90 focus:outline-none",
 								"focus:ring-2 focus:ring-content",

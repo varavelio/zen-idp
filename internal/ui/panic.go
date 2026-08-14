@@ -22,7 +22,7 @@ func PanicConfirmationPage(settings config.UI, token string) nodx.Node {
 	if name == "" {
 		name = loginTitle
 	}
-	return Page(settings, panicTitle,
+	return page(settings, panicTitle,
 		standalonePage(settings, name, "Trigger the panic action?", "max-w-sm",
 			nodx.Div(
 				nodx.Class(
@@ -62,7 +62,7 @@ func PanicCompletePage(settings config.UI) nodx.Node {
 	if name == "" {
 		name = loginTitle
 	}
-	return Page(settings, panicTitle,
+	return page(settings, panicTitle,
 		standalonePage(settings, name, "The panic action was triggered.", "max-w-sm",
 			nodx.Div(
 				nodx.Class(
@@ -90,7 +90,7 @@ func PanicSessionRequiredPage(settings config.UI) nodx.Node {
 	if name == "" {
 		name = loginTitle
 	}
-	return Page(
+	return page(
 		settings,
 		panicTitle,
 		standalonePage(

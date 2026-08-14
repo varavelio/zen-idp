@@ -19,7 +19,7 @@ func LoginPage(settings config.UI, action, failure string) nodx.Node {
 	if name == "" {
 		name = loginTitle
 	}
-	return Page(settings, loginTitle,
+	return page(settings, loginTitle,
 		standalonePage(settings, name, "Sign in with your one-time code", "max-w-md",
 			nodx.If(failure != "", errorAlert(failure)),
 			nodx.FormEl(
@@ -29,6 +29,7 @@ func LoginPage(settings config.UI, action, failure string) nodx.Node {
 				textInput(
 					"identifier", "identifier", "Login identifier", "username", "text",
 					lucide.User(nodx.Class("size-4")),
+					nodx.Placeholder("Your identifier"),
 					nodx.Required(true),
 					nodx.Autofocus(true),
 				),
@@ -36,9 +37,11 @@ func LoginPage(settings config.UI, action, failure string) nodx.Node {
 					"code", "code", "One-time code", "one-time-code", "text",
 					lucide.KeyRound(nodx.Class("size-4")),
 					nodx.Required(true),
+					nodx.Placeholder("XXX XXX"),
 					nodx.Attr("inputmode", "numeric"),
 					nodx.Attr("pattern", "[0-9]{6}"),
 					nodx.Maxlength("6"),
+					nodx.Minlength("6"),
 				),
 				actionButton(buttonPrimary, loginTitle, lucide.LogIn(nodx.Class("size-4"))),
 			),

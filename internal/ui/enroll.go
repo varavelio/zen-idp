@@ -26,36 +26,24 @@ func EnrollPage(settings config.UI, token, csrfToken, failure string) nodx.Node 
 	if name == "" {
 		name = loginTitle
 	}
-	return Page(settings, enrollTitle,
-		standalonePage(settings, name, "Set up your authenticator app.", "max-w-md",
+	return page(settings, enrollTitle,
+		standalonePage(settings, name, "Set up your authenticator app", "max-w-md",
 			nodx.If(failure != "", errorAlert(failure)),
 			nodx.FormEl(
 				nodx.Action(enrollAction),
 				nodx.Method("post"),
 				nodx.Class("space-y-5"),
 				csrfField(csrfToken),
-				nodx.If(
-					token != "",
-					nodx.Input(
-						nodx.Attr("type", "hidden"),
-						nodx.Name("token"),
-						nodx.Value(token),
-					),
-				),
-				nodx.If(
-					token == "",
-					textInput(
-						"token", "token", "Enrollment token", "off", "text",
-						lucide.KeyRound(nodx.Class("size-4")),
-						nodx.Required(true),
-						nodx.Autofocus(true),
-					),
+				nodx.Input(
+					nodx.Attr("type", "hidden"),
+					nodx.Name("token"),
+					nodx.Value(token),
 				),
 				actionButton(buttonPrimary, "Show QR", lucide.QrCode(nodx.Class("size-4"))),
 			),
 			nodx.P(
-				nodx.Class("text-xs text-content-muted"),
-				nodx.Text("The code is revealed only once, after this step."),
+				nodx.Class("text-xs text-content-muted text-center"),
+				nodx.Text("The code is revealed only once"),
 			),
 		),
 	)
@@ -72,8 +60,8 @@ func EnrollmentReadyPage(
 	if name == "" {
 		name = loginTitle
 	}
-	return Page(settings, enrollTitle,
-		standalonePage(settings, name, "Scan the code with your authenticator app.", "max-w-md",
+	return page(settings, enrollTitle,
+		standalonePage(settings, name, "Scan the code with your authenticator app", "max-w-md",
 			nodx.Div(
 				nodx.Class("mx-auto w-fit rounded-lg bg-white p-3"),
 				nodx.Img(
@@ -91,7 +79,7 @@ func EnrollmentReadyPage(
 				),
 				nodx.Role("alert"),
 				lucide.TriangleAlert(nodx.Class("mt-0.5 size-4 shrink-0")),
-				nodx.P(nodx.Text("Copy this code now. It will not be shown again.")),
+				nodx.P(nodx.Text("This will not be shown again.")),
 			),
 			nodx.P(
 				nodx.Class("text-sm text-content-muted"),

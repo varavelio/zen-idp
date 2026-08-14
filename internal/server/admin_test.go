@@ -433,7 +433,6 @@ func TestProcessEnrollmentToken(t *testing.T) {
 		body := response.Body.String()
 		require.Contains(t, body, "Enrollment token created.")
 		require.Contains(t, body, "Subject: alice")
-		require.Contains(t, body, "Copy this link now. It will not be shown again.")
 		require.Contains(t, body, `href="/admin"`)
 
 		token := enrollmentTokenFromBody(t, body)

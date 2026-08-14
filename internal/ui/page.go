@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	nodx "github.com/varavelio/nodxgo"
 	lucide "github.com/varavelio/nodxgo-lucide"
 	"github.com/varavelio/zen-idp/internal/config"
@@ -26,11 +28,11 @@ const (
 // the native modal dialogs, and the copy buttons.
 const themeScriptPath = "/vendor/app.js"
 
-// Page renders the document shell shared by every Zen IdP page: the
+// page renders the document shell shared by every Zen IdP page: the
 // document declaration, the head with the product title, the favicon
 // (configured or bundled), the theme bootstrap script, and the compiled
 // stylesheet, and the body with the given content and the shared footer.
-func Page(cfg config.UI, title string, body ...nodx.Node) nodx.Node {
+func page(cfg config.UI, title string, body ...nodx.Node) nodx.Node {
 	return nodx.Group(
 		nodx.DocType(),
 		nodx.Html(
@@ -174,34 +176,18 @@ func themeOption(theme, label string, icon nodx.Node) nodx.Node {
 // wrapping.
 func identityHeader(cfg config.UI, name, subtitle string) nodx.Node {
 	return nodx.Div(
-		nodx.Class("flex w-full max-w-full flex-col items-center gap-2 text-center"),
-		nodx.Div(
-			nodx.Class("flex min-w-0 max-w-full items-center gap-2.5"),
-			brandMark(cfg, "h-8 w-auto shrink-0"),
+		nodx.Class("flex w-full max-w-full flex-col items-center gap-2"),
+		brandMark(cfg, "h-8 w-auto shrink-0"),
+		nodx.If(
+			strings.TrimSpace(name) != "",
 			nodx.H1(
-				nodx.Class("min-w-0 truncate text-lg font-semibold text-content"),
+				nodx.Class("min-w-0 truncate text-xl font-semibold text-content"),
 				nodx.Text(name),
 			),
 		),
 		nodx.If(
-			subtitle != "",
+			strings.TrimSpace(subtitle) != "",
 			nodx.P(nodx.Class("text-sm text-content-muted"), nodx.Text(subtitle)),
-		),
-	)
-}
-
-// zenBackdrop renders the decorative giant product mark shown behind the
-// centered cards on desktop screens; it is purely visual and never
-// interactive.
-func zenBackdrop() nodx.Node {
-	return nodx.Div(
-		nodx.Class("pointer-events-none fixed bottom-0 right-0 z-0 hidden select-none desk:block"),
-		nodx.P(
-			nodx.Class(
-				"flex items-start pb-3 pr-8 text-[19rem] font-semibold leading-none tracking-tighter",
-			),
-			nodx.SpanEl(nodx.Class("text-content opacity-[0.04]"), nodx.Text("Zen")),
-			nodx.SpanEl(nodx.Class("text-brand opacity-40"), nodx.Text(".")),
 		),
 	)
 }
@@ -217,13 +203,9 @@ func standalonePage(
 ) nodx.Node {
 	return nodx.Main(
 		nodx.Class("flex flex-1 items-center justify-center px-4 py-10"),
-		zenBackdrop(),
 		nodx.Div(nodx.Class("fixed right-4 top-4 z-50"), themeToggle()),
 		nodx.Div(
-			nodx.Class(
-				"relative w-full "+widthClass+" space-y-6 rounded-lg border border-base-400",
-				"bg-base-200 p-8",
-			),
+			nodx.Class("relative w-full "+widthClass+" space-y-6 p-8"),
 			identityHeader(cfg, name, subtitle),
 			nodx.Group(content...),
 		),
@@ -234,7 +216,7 @@ func standalonePage(
 // notice pages: a heading and a short message, without the product
 // identity.
 func noticePage(title, heading, message string) nodx.Node {
-	return Page(config.UI{}, title,
+	return page(config.UI{}, title,
 		nodx.Main(
 			nodx.Class("flex flex-1 items-center justify-center px-4 py-10"),
 			nodx.Div(nodx.Class("fixed right-4 top-4 z-50"), themeToggle()),

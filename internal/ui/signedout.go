@@ -21,7 +21,7 @@ func LoggedOutPage(settings config.UI) nodx.Node {
 	if name == "" {
 		name = loginTitle
 	}
-	return Page(settings, signedOutTitle,
+	return page(settings, signedOutTitle,
 		standalonePage(settings, name, "You have been signed out.", "max-w-sm",
 			nodx.Div(
 				nodx.Class(
@@ -47,7 +47,7 @@ func LogOutConfirmationPage(settings config.UI, token, action string) nodx.Node 
 	if name == "" {
 		name = loginTitle
 	}
-	return Page(settings, signOutTitle,
+	return page(settings, signOutTitle,
 		standalonePage(settings, name, "End your session on this device?", "max-w-sm",
 			nodx.FormEl(
 				nodx.Action(action),
