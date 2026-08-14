@@ -8,13 +8,13 @@ tasks:
     cmd: task --list-all
 
   ci:
-    desc: Run full CI pipeline (deps, format, build, test, lint)
+    desc: Run full CI pipeline (deps, format, lint, build, test, e2e)
     cmds:
       - task: deps
       - task: format
+      - task: lint
       - task: build
       - task: test
-      - task: lint
       - task: e2e
 
   deps:
