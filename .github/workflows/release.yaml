@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      version: ${{ steps.vars.outputs.version }}
+      docker_version: ${{ steps.vars.outputs.docker_version }}
       update_latest: ${{ steps.vars.outputs.update_latest }}
     steps:
       - id: vars
@@ -20,17 +20,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Strip the leading "v" from the release tag.
-          VERSION="${TAG#v}"
+          # Release tags must start with a lowercase "v" followed by a digit
+          # (e.g. v1.2.3) to keep them consistent.
+          if [[ "${TAG}" != v[0-9]* ]]; then
+            echo "::error::Release tag must start with a lowercase \"v\" followed by a digit, got \"${TAG}\""
+            exit 1
+          fi
+
+          # Version used to tag the Docker images, without the leading "v".
+          DOCKER_VERSION="${TAG#v}"
 
           # Only stable versions (no pre-release suffix) update the `latest` tag.
-          if [[ "${VERSION}" != *"-"* ]]; then
+          if [[ "${DOCKER_VERSION}" != *"-"* ]]; then
             UPDATE_LATEST="true"
           else
             UPDATE_LATEST="false"
           fi
 
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "docker_version=${DOCKER_VERSION}" >> "$GITHUB_OUTPUT"
           echo "update_latest=${UPDATE_LATEST}" >> "$GITHUB_OUTPUT"
 
   build-and-push-images:
@@ -47,7 +54,7 @@ jobs:
           - { os: ubuntu-24.04, platform: amd64 }
           - { os: ubuntu-24.04-arm, platform: arm64 }
     env:
-      VERSION: ${{ needs.setup.outputs.version }}
+      DOCKER_VERSION: ${{ needs.setup.outputs.docker_version }}
       PLATFORM: ${{ matrix.vars.platform }}
 
     steps:
@@ -73,14 +80,14 @@ jobs:
         run: >
           docker build
           --target production
-          --tag varavel/zen-idp:${VERSION}-${PLATFORM}
-          --tag ghcr.io/varavelio/zen-idp:${VERSION}-${PLATFORM}
+          --tag varavel/zen-idp:${DOCKER_VERSION}-${PLATFORM}
+          --tag ghcr.io/varavelio/zen-idp:${DOCKER_VERSION}-${PLATFORM}
           .
 
       - name: Push the Docker images
         run: |
-          docker push varavel/zen-idp:${VERSION}-${PLATFORM}
-          docker push ghcr.io/varavelio/zen-idp:${VERSION}-${PLATFORM}
+          docker push varavel/zen-idp:${DOCKER_VERSION}-${PLATFORM}
+          docker push ghcr.io/varavelio/zen-idp:${DOCKER_VERSION}-${PLATFORM}
 
   merge-and-push-manifest:
     name: Merge and push manifest
@@ -91,7 +98,7 @@ jobs:
       packages: write
     timeout-minutes: 10
     env:
-      VERSION: ${{ needs.setup.outputs.version }}
+      DOCKER_VERSION: ${{ needs.setup.outputs.docker_version }}
       UPDATE_LATEST: ${{ needs.setup.outputs.update_latest }}
 
     steps:
@@ -110,25 +117,25 @@ jobs:
 
       - name: Merge and push manifests
         run: |
-          docker manifest create varavel/zen-idp:${VERSION} \
-            --amend varavel/zen-idp:${VERSION}-amd64 \
-            --amend varavel/zen-idp:${VERSION}-arm64
-          docker manifest push varavel/zen-idp:${VERSION}
+          docker manifest create varavel/zen-idp:${DOCKER_VERSION} \
+            --amend varavel/zen-idp:${DOCKER_VERSION}-amd64 \
+            --amend varavel/zen-idp:${DOCKER_VERSION}-arm64
+          docker manifest push varavel/zen-idp:${DOCKER_VERSION}
 
-          docker manifest create ghcr.io/varavelio/zen-idp:${VERSION} \
-            --amend ghcr.io/varavelio/zen-idp:${VERSION}-amd64 \
-            --amend ghcr.io/varavelio/zen-idp:${VERSION}-arm64
-          docker manifest push ghcr.io/varavelio/zen-idp:${VERSION}
+          docker manifest create ghcr.io/varavelio/zen-idp:${DOCKER_VERSION} \
+            --amend ghcr.io/varavelio/zen-idp:${DOCKER_VERSION}-amd64 \
+            --amend ghcr.io/varavelio/zen-idp:${DOCKER_VERSION}-arm64
+          docker manifest push ghcr.io/varavelio/zen-idp:${DOCKER_VERSION}
 
           if [[ "${UPDATE_LATEST}" == "true" ]]; then
             docker manifest create varavel/zen-idp:latest \
-              --amend varavel/zen-idp:${VERSION}-amd64 \
-              --amend varavel/zen-idp:${VERSION}-arm64
+              --amend varavel/zen-idp:${DOCKER_VERSION}-amd64 \
+              --amend varavel/zen-idp:${DOCKER_VERSION}-arm64
             docker manifest push varavel/zen-idp:latest
 
             docker manifest create ghcr.io/varavelio/zen-idp:latest \
-              --amend ghcr.io/varavelio/zen-idp:${VERSION}-amd64 \
-              --amend ghcr.io/varavelio/zen-idp:${VERSION}-arm64
+              --amend ghcr.io/varavelio/zen-idp:${DOCKER_VERSION}-amd64 \
+              --amend ghcr.io/varavelio/zen-idp:${DOCKER_VERSION}-arm64
             docker manifest push ghcr.io/varavelio/zen-idp:latest
           fi
 
