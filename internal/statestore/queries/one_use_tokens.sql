@@ -12,7 +12,8 @@ INSERT INTO one_use_tokens (
     code_scope,
     code_nonce,
     code_pkce_challenge,
-    code_pkce_method
+    code_pkce_method,
+    code_auth_time
 ) VALUES (
     sqlc.arg(id),
     sqlc.arg(kind),
@@ -26,13 +27,14 @@ INSERT INTO one_use_tokens (
     sqlc.arg(code_scope),
     sqlc.arg(code_nonce),
     sqlc.arg(code_pkce_challenge),
-    sqlc.arg(code_pkce_method)
+    sqlc.arg(code_pkce_method),
+    sqlc.arg(code_auth_time)
 );
 
 -- name: GetOneUseToken :one
 SELECT id, kind, secret_hash, sub, totp_rev, expires_at, consumed_at, created_at,
        code_client_id, code_redirect_uri, code_scope, code_nonce,
-       code_pkce_challenge, code_pkce_method
+       code_pkce_challenge, code_pkce_method, code_auth_time
 FROM one_use_tokens
 WHERE id = sqlc.arg(id);
 

@@ -44,7 +44,8 @@ INSERT INTO one_use_tokens (
     code_scope,
     code_nonce,
     code_pkce_challenge,
-    code_pkce_method
+    code_pkce_method,
+    code_auth_time
 ) VALUES (
     ?1,
     ?2,
@@ -58,7 +59,8 @@ INSERT INTO one_use_tokens (
     ?10,
     ?11,
     ?12,
-    ?13
+    ?13,
+    ?14
 )
 `
 
@@ -76,6 +78,7 @@ type CreateOneUseTokenParams struct {
 	CodeNonce         sql.NullString
 	CodePkceChallenge sql.NullString
 	CodePkceMethod    sql.NullString
+	CodeAuthTime      sql.NullString
 }
 
 func (q *Queries) CreateOneUseToken(ctx context.Context, arg CreateOneUseTokenParams) error {
@@ -93,6 +96,7 @@ func (q *Queries) CreateOneUseToken(ctx context.Context, arg CreateOneUseTokenPa
 		arg.CodeNonce,
 		arg.CodePkceChallenge,
 		arg.CodePkceMethod,
+		arg.CodeAuthTime,
 	)
 	return err
 }
@@ -123,7 +127,7 @@ func (q *Queries) DeleteOneUseToken(ctx context.Context, id string) error {
 const getOneUseToken = `-- name: GetOneUseToken :one
 SELECT id, kind, secret_hash, sub, totp_rev, expires_at, consumed_at, created_at,
        code_client_id, code_redirect_uri, code_scope, code_nonce,
-       code_pkce_challenge, code_pkce_method
+       code_pkce_challenge, code_pkce_method, code_auth_time
 FROM one_use_tokens
 WHERE id = ?1
 `
@@ -146,6 +150,7 @@ func (q *Queries) GetOneUseToken(ctx context.Context, id string) (OneUseToken, e
 		&i.CodeNonce,
 		&i.CodePkceChallenge,
 		&i.CodePkceMethod,
+		&i.CodeAuthTime,
 	)
 	return i, err
 }

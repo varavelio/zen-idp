@@ -36,6 +36,7 @@ type OneUseToken struct {
 	CodeNonce         sql.NullString
 	CodePkceChallenge sql.NullString
 	CodePkceMethod    sql.NullString
+	CodeAuthTime      sql.NullString
 }
 
 type PanicLock struct {

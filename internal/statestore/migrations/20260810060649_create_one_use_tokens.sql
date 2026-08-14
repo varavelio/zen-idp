@@ -15,6 +15,7 @@ CREATE TABLE one_use_tokens (
     code_nonce          TEXT,             -- authorization-code binding: request nonce, when present
     code_pkce_challenge TEXT,             -- authorization-code binding: PKCE S256 challenge, when PKCE was used
     code_pkce_method    TEXT,             -- authorization-code binding: PKCE method ("S256"), when PKCE was used
+    code_auth_time      TEXT,             -- authorization-code binding: session authentication time, UTC RFC 3339; NULL for enrollment tokens
     CHECK (
         (kind = 'enrollment' AND code_client_id IS NULL) OR
         (kind = 'code' AND code_client_id IS NOT NULL)
