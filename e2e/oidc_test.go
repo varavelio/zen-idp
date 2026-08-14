@@ -217,6 +217,7 @@ func TestOIDCGoldenPath(t *testing.T) {
 	require.Equal(t, "alice", claims["sub"])
 	require.Equal(t, "public-app", claims["aud"])
 	require.Equal(t, "nonce-456", claims["nonce"])
+	require.InDelta(t, float64(time.Now().Unix()), claims["auth_time"].(float64), 60)
 	require.Equal(t, float64(900), claims["exp"].(float64)-claims["iat"].(float64))
 	require.Equal(t, "Alice Example", claims["name"])
 	require.Equal(t, []any{"engineering", "operators"}, claims["groups"])
@@ -233,12 +234,12 @@ func TestOIDCGoldenPath(t *testing.T) {
 
 	// /userinfo resolves the current claims of the bearer token.
 	var userinfo map[string]any
-	c.GetAuth(t, "/userinfo", "Bearer "+tokens.AccessToken).
-		RequireStatus(t, 200).
-		JSON(t, &userinfo)
+	response = c.GetAuth(t, "/userinfo", "Bearer "+tokens.AccessToken)
+	response.RequireStatus(t, 200).JSON(t, &userinfo)
 	require.Equal(t, "alice", userinfo["sub"])
 	require.Equal(t, "Alice Example", userinfo["name"])
 	require.Equal(t, []any{"engineering", "operators"}, userinfo["groups"])
+	require.Equal(t, "*", response.Header.Get("Access-Control-Allow-Origin"))
 
 	// Logout requires confirmation and a valid anti-forgery token, then
 	// revokes the session and clears the cookie.
@@ -299,6 +300,22 @@ func TestOIDCDenials(t *testing.T) {
 	}.Encode())
 	response.RequireStatus(t, 302)
 	require.Equal(t, "invalid_request", response.Location(t).Query().Get("error"))
+
+	// prompt=none without a session fails with login_required instead of
+	// showing the login interaction.
+	response = c.Get(t, "/authorize?"+url.Values{
+		"client_id":             {"public-app"},
+		"redirect_uri":          {"http://127.0.0.1:9999/callback"},
+		"response_type":         {"code"},
+		"scope":                 {"openid"},
+		"state":                 {"state-123"},
+		"prompt":                {"none"},
+		"code_challenge":        {harness.PKCEChallenge()},
+		"code_challenge_method": {"S256"},
+	}.Encode())
+	response.RequireStatus(t, 302)
+	require.Equal(t, "login_required", response.Location(t).Query().Get("error"))
+	require.Equal(t, "state-123", response.Location(t).Query().Get("state"))
 
 	// An unknown identifier and a wrong code are denied with exactly the
 	// same response, so failure causes cannot be distinguished.
