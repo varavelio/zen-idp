@@ -121,7 +121,11 @@ func TestOIDCGoldenPath(t *testing.T) {
 	require.Equal(t, app.BaseURL()+"/logout", discovery.EndSessionEndpoint)
 	require.Equal(t, app.BaseURL()+"/.well-known/jwks.json", discovery.JWKSURI)
 	require.Equal(t, []string{"code"}, discovery.ResponseTypes)
-	require.Equal(t, []string{"none", "client_secret_basic"}, discovery.AuthMethods)
+	require.Equal(
+		t,
+		[]string{"none", "client_secret_basic", "client_secret_post"},
+		discovery.AuthMethods,
+	)
 	require.Equal(t, []string{"S256"}, discovery.CodeChallengeMethods)
 
 	// JWKS publishes the public signing identity.
@@ -481,6 +485,25 @@ func TestConfidentialClient(t *testing.T) {
 	require.NotEmpty(t, tokens.AccessToken)
 	require.NotEmpty(t, tokens.IDToken)
 
+	// The same client also authenticates with client_secret_post, the
+	// credentials traveling in the form body.
+	code = c.Get(t, "/authorize?"+query).
+		RequireStatus(t, 302).
+		Location(t).Query().Get("code")
+	response = c.PostForm(t, "/token", url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {redirectURI},
+		"client_id":     {"confidential-app"},
+		"client_secret": {testClientSecret},
+	})
+	response.RequireStatus(t, 200)
+	var postTokens struct {
+		AccessToken string `json:"access_token"`
+	}
+	response.JSON(t, &postTokens)
+	require.NotEmpty(t, postTokens.AccessToken)
+
 	// A confidential client without credentials is rejected.
 	response = c.PostForm(t, "/token", url.Values{
 		"grant_type":   {"authorization_code"},
@@ -595,4 +618,67 @@ func TestSSOAcrossClients(t *testing.T) {
 		"code_challenge_method": {"S256"},
 	}.Encode())
 	response.RequireStatus(t, 400)
+}
+
+// TestRPInitiatedLogout verifies the relying-party logout redirect: after
+// confirmation, a signed-out user with a valid id_token_hint returns to a
+// registered post_logout_redirect_uri with the state echoed, while
+// unregistered URIs are never followed.
+func TestRPInitiatedLogout(t *testing.T) {
+	app := testApp(t)
+	c := app.Browser()
+	query := authorizeQuery("public-app", "http://127.0.0.1:9999/callback")
+
+	// Sign in and obtain an ID token to use as the hint.
+	require.Equal(t, 303, login(t, c, query, "alice").Status)
+	code := c.Get(t, "/authorize?"+query).
+		RequireStatus(t, 302).
+		Location(t).Query().Get("code")
+	response := c.PostForm(t, "/token", url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {"http://127.0.0.1:9999/callback"},
+		"client_id":     {"public-app"},
+		"code_verifier": {harness.PKCEVerifier},
+	})
+	response.RequireStatus(t, 200)
+	var tokens struct {
+		IDToken string `json:"id_token"`
+	}
+	response.JSON(t, &tokens)
+	require.NotEmpty(t, tokens.IDToken)
+
+	// A registered post-logout redirect is confirmed and followed with
+	// the state echoed back, and the session ends.
+	logoutQuery := url.Values{
+		"id_token_hint":            {tokens.IDToken},
+		"post_logout_redirect_uri": {"http://127.0.0.1:9999/callback"},
+		"state":                    {"rp-state"},
+	}.Encode()
+	confirmation := c.Get(t, "/logout?"+logoutQuery)
+	confirmation.RequireStatus(t, 200).Contains(t, "Sign out")
+	csrf := harness.FormValue(confirmation.Body, "csrf_token")
+	require.NotEmpty(t, csrf)
+	response = c.PostForm(t, "/logout?"+logoutQuery, url.Values{"csrf_token": {csrf}})
+	response.RequireStatus(t, 303)
+	require.Equal(
+		t,
+		"http://127.0.0.1:9999/callback?state=rp-state",
+		response.Location(t).String(),
+	)
+	require.Empty(t, c.Cookie("zen_idp_session"))
+
+	// An unregistered redirect URI is never followed: the logout
+	// completes on the signed-out page.
+	require.Equal(t, 303, login(t, c, query, "alice").Status)
+	logoutQuery = url.Values{
+		"id_token_hint":            {tokens.IDToken},
+		"post_logout_redirect_uri": {"http://127.0.0.1:9999/evil"},
+	}.Encode()
+	confirmation = c.Get(t, "/logout?"+logoutQuery)
+	confirmation.RequireStatus(t, 200)
+	csrf = harness.FormValue(confirmation.Body, "csrf_token")
+	require.NotEmpty(t, csrf)
+	response = c.PostForm(t, "/logout?"+logoutQuery, url.Values{"csrf_token": {csrf}})
+	response.RequireStatus(t, 200).Contains(t, "You have been signed out")
 }
