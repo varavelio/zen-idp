@@ -3,9 +3,11 @@
 package e2e
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -116,4 +118,88 @@ func TestServeFailsClosed(t *testing.T) {
 	}, "serve")
 	require.Equal(t, 1, code)
 	require.Contains(t, stderr, "ZEN_IDP_SECRET")
+}
+
+// TestValidateConfigComposition verifies the multi-file configuration
+// pipeline: a directory selector composes its YAML sources deterministically
+// and a conflicting duplicate value fails validation.
+func TestValidateConfigComposition(t *testing.T) {
+	dir := t.TempDir()
+	instance := filepath.Join(dir, "10-instance.yaml")
+	require.NoError(t, os.WriteFile(instance, []byte(
+		"config:\n"+
+			"  issuer: \"https://auth.example.com\"\n"+
+			"  security:\n"+
+			"    admin_password_hash: \""+testAdminHash+"\"\n"+
+			"users:\n"+
+			"  - sub: alice\n",
+	), 0o600))
+	override := filepath.Join(dir, "20-override.yaml")
+	require.NoError(t, os.WriteFile(override, []byte(
+		"config:\n"+
+			"  ui:\n"+
+			"    name: \"Composed\"\n"+
+			"clients:\n"+
+			"  - id: app\n"+
+			"    redirect_uris:\n"+
+			"      - \"http://127.0.0.1:9999/callback\"\n",
+	), 0o600))
+
+	// The directory composes into one valid document.
+	stdout, _, code := harness.Run(t,
+		[]string{"ZEN_IDP_CONFIG_PATH=" + dir},
+		"validate-config",
+	)
+	require.Equal(t, 0, code)
+	require.Contains(t, stdout, "configuration is valid")
+
+	// A second definition of the same scalar conflicts and fails.
+	conflict := filepath.Join(dir, "30-conflict.yaml")
+	require.NoError(t, os.WriteFile(conflict, []byte(
+		"config:\n"+
+			"  issuer: \"https://other.example.com\"\n",
+	), 0o600))
+	_, stderr, code := harness.Run(t,
+		[]string{"ZEN_IDP_CONFIG_PATH=" + dir},
+		"validate-config",
+	)
+	require.Equal(t, 1, code)
+	require.Contains(t, stderr, "config.issuer")
+}
+
+// TestBootstrapWithGeneratedSecrets closes the bootstrap loop: a server
+// configured with the exact bundle printed by generate-secrets accepts the
+// generated administrator credential.
+func TestBootstrapWithGeneratedSecrets(t *testing.T) {
+	stdout, _, code := harness.Run(t, nil, "generate-secrets")
+	require.Equal(t, 0, code)
+
+	root := regexp.MustCompile(`ZEN_IDP_SECRET=([0-9a-zA-Z]+)`).FindStringSubmatch(stdout)
+	require.Len(t, root, 2)
+	adminPlain := regexp.MustCompile(`(?m)^plain: ([0-9a-zA-Z]+)$`).FindStringSubmatch(stdout)
+	require.Len(t, adminPlain, 2)
+	adminHash := regexp.MustCompile(`(?m)^hash: "([^"]+)"$`).FindStringSubmatch(stdout)
+	require.Len(t, adminHash, 2)
+
+	// A server bootstrapped with the generated bundle accepts the
+	// generated administrator credential.
+	app := harness.New(t, harness.Config{
+		RootSecret: root[1],
+		AdminHash:  adminHash[1],
+		Users:      []harness.User{{Sub: "alice"}},
+		Clients: []harness.Client{{ID: "app", RedirectURIs: []string{
+			"http://127.0.0.1:9999/callback",
+		}}},
+	})
+	c := app.Browser()
+	form := c.Get(t, "/admin")
+	form.RequireStatus(t, 200)
+	csrf := harness.FormValue(form.Body, "csrf_token")
+	require.NotEmpty(t, csrf)
+	response := c.PostForm(t, "/admin/login", url.Values{
+		"password":   {adminPlain[1]},
+		"csrf_token": {csrf},
+	})
+	response.RequireStatus(t, 303)
+	require.True(t, strings.HasPrefix(c.Cookie("zen_idp_admin_session"), "sess_"))
 }
