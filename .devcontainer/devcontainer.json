@@ -26,6 +26,12 @@
         "go.useLanguageServer": true,
         "go.testFlags": ["-v"],
 
+        "gopls": {
+          "buildFlags": ["-tags=e2e"]
+        },
+        "go.buildTags": "e2e",
+        "go.testTags": "e2e",
+
         // https://golangci-lint.run/docs/welcome/integrations/#visual-studio-code
         "go.lintTool": "golangci-lint",
         "go.lintFlags": [
