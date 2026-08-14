@@ -11,6 +11,7 @@ require (
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/stretchr/testify v1.11.1
 	github.com/varavelio/nodxgo v1.1.0
+	github.com/varavelio/nodxgo-lucide v1.1.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.56.0
