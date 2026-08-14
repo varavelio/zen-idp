@@ -78,6 +78,9 @@ type IDTokenParams struct {
 	// Nonce is the optional request nonce echoed in the token. It is
 	// omitted when empty.
 	Nonce string
+	// AuthTime is the instant the subject authenticated, stamped as the
+	// auth_time claim.
+	AuthTime time.Time
 	// Now is the issuance instant, in UTC.
 	Now time.Time
 }
@@ -87,9 +90,9 @@ type IDTokenParams struct {
 //
 // The subject must still be declared, unexpired, and unlocked at the
 // issuance instant; otherwise ErrDenied is returned. The token carries iss,
-// sub, aud, iat, exp, the nonce when present, and every current custom
-// claim of the user, while excluding internal user fields and claim keys
-// beginning with idp_.
+// sub, aud, iat, exp, the nonce when present, the authentication time, and
+// every current custom claim of the user, while excluding internal user
+// fields and claim keys beginning with idp_.
 func (issuer *Issuer) IssueIDToken(ctx context.Context, params IDTokenParams) (string, error) {
 	if params.ClientID == "" {
 		return "", errors.New("token client id must not be empty")
@@ -109,6 +112,7 @@ func (issuer *Issuer) IssueIDToken(ctx context.Context, params IDTokenParams) (s
 	claims["iss"] = issuer.issuer
 	claims["sub"] = user.Subject
 	claims["aud"] = params.ClientID
+	claims["auth_time"] = params.AuthTime.Unix()
 	claims["iat"] = params.Now.Unix()
 	claims["exp"] = params.Now.Add(Lifetime).Unix()
 	if params.Nonce != "" {

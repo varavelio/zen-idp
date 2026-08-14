@@ -66,9 +66,10 @@ var testUsers = []config.User{
 // contract: the reference identity must always reproduce the exact same
 // claims for the reference parameters.
 const (
-	referenceIDTokenPayload = `{"aud":"grafana-prod","exp":1767367145,` +
-		`"groups":["ops","oncall"],"iat":1767366245,"iss":"https://auth.example.com",` +
-		`"nonce":"abc123XYZ_-","sub":"dev-01","title":"SRE"}`
+	referenceIDTokenPayload = `{"aud":"grafana-prod","auth_time":1767366245,` +
+		`"exp":1767367145,"groups":["ops","oncall"],"iat":1767366245,` +
+		`"iss":"https://auth.example.com","nonce":"abc123XYZ_-",` +
+		`"sub":"dev-01","title":"SRE"}`
 	referenceAccessTokenPayload = `{"aud":"https://auth.example.com/userinfo",` +
 		`"exp":1767367145,"iat":1767366245,"iss":"https://auth.example.com",` +
 		`"jti":"01JZ0T9QK5V2M7R8X9W4Q6A5B3C","sub":"dev-01"}`
@@ -157,6 +158,7 @@ func TestIssueIDToken(t *testing.T) {
 		Subject:  "dev-01",
 		ClientID: "grafana-prod",
 		Nonce:    "abc123XYZ_-",
+		AuthTime: testNow,
 		Now:      testNow,
 	}
 
@@ -183,6 +185,12 @@ func TestIssueIDToken(t *testing.T) {
 		second, err := issuer.IssueIDToken(context.Background(), params)
 		require.NoError(t, err)
 		require.Equal(t, first, second)
+	})
+
+	t.Run("includes the authentication time", func(t *testing.T) {
+		token, err := issuer.IssueIDToken(context.Background(), params)
+		require.NoError(t, err)
+		require.Contains(t, payloadOf(t, token), `"auth_time":1767366245`)
 	})
 
 	t.Run("omits the nonce when absent", func(t *testing.T) {
