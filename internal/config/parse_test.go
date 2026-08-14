@@ -313,6 +313,15 @@ config:
 `),
 			errorText: "must not contain userinfo, a query, or a fragment",
 		},
+		"issuer ends with a trailing slash": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com/
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "must not end with a trailing slash",
+		},
 		"empty server host": {
 			contents: []byte(`
 config:

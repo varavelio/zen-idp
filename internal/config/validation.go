@@ -179,6 +179,9 @@ func validateIssuerURL(value string) error {
 	if parsed.Host == "" || parsed.Opaque != "" {
 		return fmt.Errorf("must be an absolute URL")
 	}
+	if strings.HasSuffix(value, "/") {
+		return fmt.Errorf("must not end with a trailing slash")
+	}
 
 	switch strings.ToLower(parsed.Scheme) {
 	case "https":
