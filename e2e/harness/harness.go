@@ -31,6 +31,7 @@ const shutdownTimeout = 10 * time.Second
 type Harness struct {
 	dir     string
 	baseURL string
+	port    int
 	cmd     *exec.Cmd
 	logFile *os.File
 	browser *Browser
@@ -62,6 +63,7 @@ func New(t *testing.T, cfg Config) *Harness {
 	harness := &Harness{
 		dir:     dir,
 		baseURL: issuer,
+		port:    port,
 		cfg:     cfg,
 	}
 	harness.browser = &Browser{
@@ -96,6 +98,29 @@ func (h *Harness) BaseURL() string {
 func (h *Harness) Restart(t *testing.T) {
 	t.Helper()
 	h.stop(t)
+	h.start(t)
+}
+
+// Reconfigure stops the server, replaces the instance configuration, and
+// starts again with the same state database and listener port, simulating a
+// configuration change followed by a restart.
+func (h *Harness) Reconfigure(t *testing.T, cfg Config) {
+	t.Helper()
+	cfg.validate(t)
+	h.stop(t)
+	h.cfg = cfg
+	cfg.WriteFile(t, h.dir, h.baseURL, h.port)
+	h.start(t)
+}
+
+// ResetState stops the server, removes the state database, and starts again
+// with a fresh one, simulating state-file loss followed by a restart.
+func (h *Harness) ResetState(t *testing.T) {
+	t.Helper()
+	h.stop(t)
+	for _, name := range []string{"state.db", "state.db-wal", "state.db-shm"} {
+		_ = os.Remove(filepath.Join(h.dir, name))
+	}
 	h.start(t)
 }
 
