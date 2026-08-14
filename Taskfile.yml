@@ -15,6 +15,7 @@ tasks:
       - task: build
       - task: test
       - task: lint
+      - task: e2e
 
   deps:
     desc: Install dependencies for the project
@@ -70,6 +71,12 @@ tasks:
     cmds:
       - go test ./...
       - CGO_ENABLED=1 go test -race ./...
+
+  e2e:
+    desc: Run the black-box end-to-end test suite against the compiled binary
+    cmds:
+      - go test -tags e2e -count=1 -timeout 10m ./e2e/
+      - golangci-lint run --build-tags e2e ./e2e/...
 
   goose:
     desc: Run goose binary (configured for statestore)
