@@ -22,6 +22,8 @@ type discoveryDocument struct {
 	GrantTypesSupported               []string `json:"grant_types_supported"`
 	ResponseModesSupported            []string `json:"response_modes_supported"`
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
+	RequestParameterSupported         bool     `json:"request_parameter_supported"`
+	RequestURIParameterSupported      bool     `json:"request_uri_parameter_supported"`
 }
 
 // discovery serves the OIDC discovery metadata document. Every advertised
@@ -47,6 +49,11 @@ func (server *Server) discovery(w http.ResponseWriter, _ *http.Request) error {
 		GrantTypesSupported:           []string{"authorization_code"},
 		ResponseModesSupported:        []string{"query"},
 		CodeChallengeMethodsSupported: []string{"S256"},
+		// JWT-secured authorization requests are explicitly not supported
+		// because OIDC Discovery defaults both fields to true when they
+		// are omitted.
+		RequestParameterSupported:    false,
+		RequestURIParameterSupported: false,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(document)

@@ -26,7 +26,9 @@ const referenceDiscoveryDocument = `{
 	"token_endpoint_auth_methods_supported": ["none", "client_secret_basic", "client_secret_post"],
 	"grant_types_supported": ["authorization_code"],
 	"response_modes_supported": ["query"],
-	"code_challenge_methods_supported": ["S256"]
+	"code_challenge_methods_supported": ["S256"],
+	"request_parameter_supported": false,
+	"request_uri_parameter_supported": false
 }`
 
 func TestDiscovery(t *testing.T) {
@@ -89,7 +91,9 @@ func TestDiscovery(t *testing.T) {
 			"token_endpoint_auth_methods_supported": ["none", "client_secret_basic", "client_secret_post"],
 			"grant_types_supported": ["authorization_code"],
 			"response_modes_supported": ["query"],
-			"code_challenge_methods_supported": ["S256"]
+			"code_challenge_methods_supported": ["S256"],
+			"request_parameter_supported": false,
+			"request_uri_parameter_supported": false
 		}`, response.Body.String())
 	})
 
