@@ -13,9 +13,6 @@ const signedOutTitle = "Signed out"
 // interaction.
 const signOutTitle = "Sign out"
 
-// signOutAction is the form target of the sign-out confirmation form.
-const signOutAction = "/logout"
-
 // LoggedOutPage renders the local logout completion page: the product
 // identity and a confirmation that this browser is no longer signed in.
 func LoggedOutPage(settings config.UI) nodx.Node {
@@ -49,8 +46,10 @@ func LoggedOutPage(settings config.UI) nodx.Node {
 
 // LogOutConfirmationPage renders the sign-out confirmation interaction: the
 // product identity and a protected form whose submission completes the local
-// logout. token is the anti-forgery token that protects the form submission.
-func LogOutConfirmationPage(settings config.UI, token string) nodx.Node {
+// logout. token is the anti-forgery token that protects the form submission
+// and action is the form target, which carries the original logout request
+// when it requests a post-logout redirect.
+func LogOutConfirmationPage(settings config.UI, token, action string) nodx.Node {
 	name := settings.Name
 	if name == "" {
 		name = loginTitle
@@ -75,7 +74,7 @@ func LogOutConfirmationPage(settings config.UI, token string) nodx.Node {
 					),
 				),
 				nodx.FormEl(
-					nodx.Action(signOutAction),
+					nodx.Action(action),
 					nodx.Method("post"),
 					nodx.Class("space-y-5"),
 					csrfField(token),
