@@ -84,3 +84,84 @@ func TestLimitRequestBody(t *testing.T) {
 		handler.ServeHTTP(httptest.NewRecorder(), request)
 	})
 }
+
+func TestCrossOriginAPI(t *testing.T) {
+	t.Run("allows any origin on JSON API endpoints", func(t *testing.T) {
+		for _, path := range []string{
+			"/.well-known/openid-configuration",
+			"/.well-known/jwks.json",
+			"/token",
+			"/userinfo",
+		} {
+			t.Run(path, func(t *testing.T) {
+				response := httptest.NewRecorder()
+				request := httptest.NewRequestWithContext(
+					context.Background(),
+					http.MethodGet,
+					path,
+					nil,
+				)
+
+				crossOriginAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})).ServeHTTP(response, request)
+
+				require.Equal(t, "*", response.Header().Get("Access-Control-Allow-Origin"))
+			})
+		}
+	})
+
+	t.Run("does not add cross-origin headers to page endpoints", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			"/login",
+			nil,
+		)
+
+		crossOriginAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})).ServeHTTP(response, request)
+
+		require.Empty(t, response.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("answers preflight requests on API endpoints", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodOptions,
+			"/userinfo",
+			nil,
+		)
+		request.Header.Set("Access-Control-Request-Method", "GET")
+		request.Header.Set("Access-Control-Request-Headers", "authorization")
+
+		crossOriginAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Fatal("the preflight must not reach the wrapped handler")
+		})).ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusNoContent, response.Code)
+		require.Equal(t, "*", response.Header().Get("Access-Control-Allow-Origin"))
+		require.Contains(t, response.Header().Get("Access-Control-Allow-Methods"), "GET")
+		require.Contains(t, response.Header().Get("Access-Control-Allow-Headers"), "Authorization")
+	})
+
+	t.Run("leaves preflight on non-API endpoints to the router", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodOptions,
+			"/login",
+			nil,
+		)
+
+		crossOriginAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})).ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Empty(t, response.Header().Get("Access-Control-Allow-Origin"))
+	})
+}

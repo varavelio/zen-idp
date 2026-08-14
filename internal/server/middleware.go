@@ -36,3 +36,36 @@ func limitRequestBody(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// crossOriginAPI allows browser-based clients to call the JSON API
+// endpoints from any origin. The API authenticates with bearer tokens or
+// form credentials that never rely on cookies, so a wildcard origin is
+// safe. Preflight OPTIONS requests are answered without reaching the
+// endpoint handlers.
+func crossOriginAPI(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isAPIEndpoint(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			w.Header().Set("Access-Control-Max-Age", "600")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// isAPIEndpoint reports whether path is a JSON API endpoint that
+// browser-based clients may call cross-origin.
+func isAPIEndpoint(path string) bool {
+	switch path {
+	case "/.well-known/openid-configuration", "/.well-known/jwks.json", "/token", "/userinfo":
+		return true
+	}
+	return false
+}

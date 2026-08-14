@@ -64,6 +64,7 @@ func createCode(t *testing.T, app *testApp, override func(*onetoken.CodeParams))
 		RedirectURI: "https://app.example.com/callback",
 		Scope:       "openid profile",
 		Nonce:       "NONCE",
+		AuthTime:    now,
 		ExpiresAt:   now.Add(time.Hour),
 		Now:         now,
 	}

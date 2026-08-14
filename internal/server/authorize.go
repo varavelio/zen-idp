@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -68,11 +69,16 @@ type authorizeRequest struct {
 	clientID            string
 	redirectURI         string
 	responseType        string
+	responseMode        string
 	scope               string
 	state               string
 	nonce               string
+	prompt              string
+	maxAge              string
 	codeChallenge       string
 	codeChallengeMethod string
+	request             string
+	requestURI          string
 }
 
 // authorize handles the OIDC authorization endpoint. It validates every wire
@@ -80,9 +86,13 @@ type authorizeRequest struct {
 // flow: an active SSO session whose subject is still current in the
 // configuration receives a fresh authorization code and a redirect to the
 // registered redirect URI, and any other request is forwarded to the login
-// interaction with its parameters intact. Requests whose client or redirect
-// URI is not trusted receive a generic error page instead of a redirect,
-// because no safe target exists for them.
+// interaction with its parameters intact. The prompt parameter shapes the
+// flow: prompt=login always forces a fresh authentication, prompt=none never
+// shows an interaction and fails with login_required without a usable
+// session, and the consent and select_account prompts are skipped by design
+// because Zen IdP has no consent or account-selection screens. Requests
+// whose client or redirect URI is not trusted receive a generic error page
+// instead of a redirect, because no safe target exists for them.
 func (server *Server) authorize(w http.ResponseWriter, r *http.Request) error {
 	request, err := server.parseAndValidateAuthorizeRequest(r)
 	if err != nil {
@@ -93,15 +103,55 @@ func (server *Server) authorize(w http.ResponseWriter, r *http.Request) error {
 		return writeInvalidRequestPage(w)
 	}
 
+	if promptRequestsLogin(request.prompt) {
+		http.Redirect(w, r, authorizeLoginPath+"?"+r.URL.RawQuery, http.StatusFound)
+		return nil
+	}
+
 	current, ok, err := server.currentAuthorizeSession(r, time.Now())
 	if err != nil {
 		return err
 	}
-	if ok {
+	if ok && server.sessionWithinMaxAge(current, request.maxAge) {
 		return server.issueCodeAndRedirect(w, r, request, current)
+	}
+	if promptIsNone(request.prompt) {
+		return redirectAuthorizeError(w, r, request, &authorizeError{
+			code:        "login_required",
+			description: "authentication is required",
+		})
 	}
 	http.Redirect(w, r, authorizeLoginPath+"?"+r.URL.RawQuery, http.StatusFound)
 	return nil
+}
+
+// sessionWithinMaxAge reports whether the validated session satisfies the
+// request's maximum authentication age: without a max_age parameter every
+// session qualifies, and with one the session must have authenticated within
+// the allowed number of seconds at the current instant. An older session is
+// sent to the login interaction for a fresh authentication.
+func (server *Server) sessionWithinMaxAge(current session.Session, maxAge string) bool {
+	if maxAge == "" {
+		return true
+	}
+	seconds, err := strconv.ParseInt(maxAge, 10, 64)
+	if err != nil {
+		return false
+	}
+	age := int64(time.Since(current.CreatedAt) / time.Second)
+	return age <= seconds
+}
+
+// promptRequestsLogin reports whether the prompt parameter requests a fresh
+// authentication interaction.
+func promptRequestsLogin(prompt string) bool {
+	return slices.Contains(strings.Fields(prompt), "login")
+}
+
+// promptIsNone reports whether the prompt parameter requests no
+// authentication or consent user interface at all.
+func promptIsNone(prompt string) bool {
+	return slices.Contains(strings.Fields(prompt), "none")
 }
 
 // currentAuthorizeSession authenticates the SSO session cookie presented
@@ -207,6 +257,7 @@ func (server *Server) issueCodeAndRedirect(
 		RedirectURI:   request.redirectURI,
 		Scope:         request.scope,
 		Nonce:         request.nonce,
+		AuthTime:      sessions.CreatedAt,
 		PKCEChallenge: request.codeChallenge,
 		PKCEMethod:    request.codeChallengeMethod,
 		ExpiresAt:     now.Add(authorizationCodeLifetime),
@@ -266,11 +317,16 @@ func parseAuthorizeRequest(values url.Values) (authorizeRequest, error) {
 		{name: "client_id", target: &request.clientID},
 		{name: "redirect_uri", target: &request.redirectURI},
 		{name: "response_type", target: &request.responseType},
+		{name: "response_mode", target: &request.responseMode},
 		{name: "scope", target: &request.scope},
 		{name: "state", target: &request.state},
 		{name: "nonce", target: &request.nonce},
+		{name: "prompt", target: &request.prompt},
+		{name: "max_age", target: &request.maxAge},
 		{name: "code_challenge", target: &request.codeChallenge},
 		{name: "code_challenge_method", target: &request.codeChallengeMethod},
+		{name: "request", target: &request.request},
+		{name: "request_uri", target: &request.requestURI},
 	}
 	for _, parameter := range parameters {
 		entries := values[parameter.name]
@@ -317,14 +373,53 @@ func (err *authorizeError) Error() string {
 
 // validateAuthorizeRequest enforces the OIDC wire contract on a request
 // whose client and redirect URI are already trusted: response_type must be
-// exactly "code", the scope must contain "openid", and PKCE S256 is
-// mandatory for public clients and validated whenever supplied. The optional
-// state parameter is echoed back by error responses when present.
+// exactly "code", the response mode must be the default query mode, the
+// scope must contain "openid", the prompt value none cannot be combined
+// with other prompt values, JAR parameters are not supported, and PKCE S256
+// is mandatory for public clients and validated whenever supplied. The
+// optional state parameter is echoed back by error responses when present.
 func validateAuthorizeRequest(request authorizeRequest, client config.Client) error {
 	if request.responseType != "code" {
 		return &authorizeError{
 			code:        "unsupported_response_type",
 			description: "only response_type=code is supported",
+		}
+	}
+	if request.responseMode != "" && request.responseMode != "query" {
+		return &authorizeError{
+			code:        "invalid_request",
+			description: "only the query response mode is supported",
+		}
+	}
+	if promptIsNone(request.prompt) {
+		for value := range strings.FieldsSeq(request.prompt) {
+			if value != "none" {
+				return &authorizeError{
+					code:        "invalid_request",
+					description: "the prompt value none cannot be combined with other values",
+				}
+			}
+		}
+	}
+	if request.maxAge != "" {
+		seconds, err := strconv.ParseInt(request.maxAge, 10, 64)
+		if err != nil || seconds < 0 {
+			return &authorizeError{
+				code:        "invalid_request",
+				description: "max_age must be a non-negative integer number of seconds",
+			}
+		}
+	}
+	if request.request != "" {
+		return &authorizeError{
+			code:        "request_not_supported",
+			description: "JWT-secured authorization requests are not supported",
+		}
+	}
+	if request.requestURI != "" {
+		return &authorizeError{
+			code:        "request_uri_not_supported",
+			description: "request_uri authorization requests are not supported",
 		}
 	}
 	if !scopeContainsOpenID(request.scope) {

@@ -187,6 +187,7 @@ func (server *Server) token(w http.ResponseWriter, r *http.Request) error {
 		Subject:  code.Subject,
 		ClientID: client.ID,
 		Nonce:    code.Nonce,
+		AuthTime: code.AuthTime,
 		Now:      now,
 	})
 	if errors.Is(err, token.ErrDenied) {

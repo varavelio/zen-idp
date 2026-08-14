@@ -190,6 +190,7 @@ func TestProcessEnroll(t *testing.T) {
 		code, err := app.codes.CreateCode(
 			context.Background(),
 			onetoken.CodeParams{
+				AuthTime:    time.Now(),
 				Subject:     "alice",
 				ClientID:    "public-app",
 				RedirectURI: "https://app.example.com/callback",

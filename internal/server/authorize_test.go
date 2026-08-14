@@ -365,6 +365,112 @@ func TestAuthorize(t *testing.T) {
 		}
 	})
 
+	t.Run("forwards the query response mode", func(t *testing.T) {
+		params := validPublicRequest()
+		params["response_mode"] = "query"
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		require.Equal(t, http.StatusFound, response.Code)
+		require.True(t, strings.HasPrefix(response.Header().Get("Location"), "/login"))
+	})
+
+	t.Run("rejects an unsupported response mode", func(t *testing.T) {
+		params := validPublicRequest()
+		params["response_mode"] = "form_post"
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		requireErrorRedirect(t, response, "invalid_request", "STATE")
+	})
+
+	t.Run("rejects the request parameter", func(t *testing.T) {
+		params := validPublicRequest()
+		params["request"] = "eyJhbGciOiJub25lIn0.eyJzY29wZSI6Im9wZW5pZCJ9."
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		requireErrorRedirect(t, response, "request_not_supported", "STATE")
+	})
+
+	t.Run("rejects the request_uri parameter", func(t *testing.T) {
+		params := validPublicRequest()
+		params["request_uri"] = "https://app.example.com/request.jwt"
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		requireErrorRedirect(t, response, "request_uri_not_supported", "STATE")
+	})
+
+	t.Run("prompt=none without a session fails with login_required", func(t *testing.T) {
+		params := validPublicRequest()
+		params["prompt"] = "none"
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		requireErrorRedirect(t, response, "login_required", "STATE")
+	})
+
+	t.Run("rejects prompt=none combined with another value", func(t *testing.T) {
+		params := validPublicRequest()
+		params["prompt"] = "none login"
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		requireErrorRedirect(t, response, "invalid_request", "STATE")
+	})
+
+	t.Run("prompt=login without a session forwards to the login interaction", func(t *testing.T) {
+		params := validPublicRequest()
+		params["prompt"] = "login"
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		require.Equal(t, http.StatusFound, response.Code)
+		require.True(t, strings.HasPrefix(response.Header().Get("Location"), "/login"))
+	})
+
+	t.Run("prompt=consent without a session forwards to the login interaction", func(t *testing.T) {
+		params := validPublicRequest()
+		params["prompt"] = "consent"
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		require.Equal(t, http.StatusFound, response.Code)
+		require.True(t, strings.HasPrefix(response.Header().Get("Location"), "/login"))
+	})
+
+	t.Run(
+		"prompt=select_account without a session forwards to the login interaction",
+		func(t *testing.T) {
+			params := validPublicRequest()
+			params["prompt"] = "select_account"
+			request := buildAuthorizeRequest(t, params)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			require.Equal(t, http.StatusFound, response.Code)
+			require.True(t, strings.HasPrefix(response.Header().Get("Location"), "/login"))
+		},
+	)
+
+	t.Run("rejects a malformed max_age", func(t *testing.T) {
+		params := validPublicRequest()
+		params["max_age"] = "soon"
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		requireErrorRedirect(t, response, "invalid_request", "STATE")
+	})
+
+	t.Run("rejects a negative max_age", func(t *testing.T) {
+		params := validPublicRequest()
+		params["max_age"] = "-1"
+		request := buildAuthorizeRequest(t, params)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		requireErrorRedirect(t, response, "invalid_request", "STATE")
+	})
+
 	t.Run(
 		"preserves redirect URI query parameters and omits state in error redirects",
 		func(t *testing.T) {
@@ -470,6 +576,118 @@ func TestAuthorizeIssuesCode(t *testing.T) {
 		location := redirectTo(response)
 		require.NotEmpty(t, location.Query().Get("code"))
 		require.Empty(t, location.Query().Get("state"))
+	})
+
+	t.Run("prompt=none with a valid session issues a code silently", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		params := validPublicRequest()
+		params["prompt"] = "none"
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		location := redirectTo(response)
+		require.NotEmpty(t, location.Query().Get("code"))
+		require.Equal(t, "STATE", location.Query().Get("state"))
+	})
+
+	t.Run("prompt=none with an unusable session fails with login_required", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		params := validPublicRequest()
+		params["prompt"] = "none"
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token+"corrupted"),
+		)
+
+		requireErrorRedirect(t, response, "login_required", "STATE")
+	})
+
+	t.Run("prompt=login forces re-authentication despite a valid session", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		params := validPublicRequest()
+		params["prompt"] = "login"
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.True(t, strings.HasPrefix(response.Header().Get("Location"), "/login"))
+	})
+
+	t.Run("prompt=consent with a valid session issues a code", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		params := validPublicRequest()
+		params["prompt"] = "consent"
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		location := redirectTo(response)
+		require.NotEmpty(t, location.Query().Get("code"))
+	})
+
+	t.Run("prompt=select_account with a valid session issues a code", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now())
+		params := validPublicRequest()
+		params["prompt"] = "select_account"
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		location := redirectTo(response)
+		require.NotEmpty(t, location.Query().Get("code"))
+	})
+
+	t.Run("max_age with a session within the limit issues a code", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now().Add(-time.Minute))
+		params := validPublicRequest()
+		params["max_age"] = "3600"
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		location := redirectTo(response)
+		require.NotEmpty(t, location.Query().Get("code"))
+	})
+
+	t.Run("max_age with an older session forces re-authentication", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		token := createSessionToken(t, app, "alice", time.Now().Add(-2*time.Hour))
+		params := validPublicRequest()
+		params["max_age"] = "3600"
+
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(
+			response,
+			authorizeRequestWithSession(queryFor(params), token),
+		)
+
+		require.Equal(t, http.StatusFound, response.Code)
+		require.True(t, strings.HasPrefix(response.Header().Get("Location"), "/login"))
 	})
 
 	t.Run("preserves the redirect URI's own query parameters", func(t *testing.T) {
