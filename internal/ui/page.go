@@ -65,18 +65,20 @@ func page(cfg config.UI, title string, body ...nodx.Node) nodx.Node {
 }
 
 // footer renders the minimal centered footer shared by every page: the
-// bundled project mark and a link to the project repository.
+// bundled project mark, a link to the project repository, and a star
+// call-to-action.
 func footer() nodx.Node {
 	return nodx.Footer(
 		nodx.Class("py-6"),
 		nodx.A(
 			nodx.Href(projectRepoURL),
+			nodx.Target("_blank"),
 			nodx.Class(
-				"mx-auto flex w-fit items-center gap-1.5 text-xs text-content-muted",
+				"mx-auto flex w-fit items-center gap-2 text-sm text-content-muted",
 				"transition-colors hover:text-content",
 			),
-			brandMark(config.UI{}, "h-3.5 w-auto"),
-			nodx.Text("Powered by "+projectName),
+			brandMark(config.UI{}, "h-4 w-auto"),
+			nodx.Textf("Powered by %s • Star on GitHub", projectName),
 		),
 	)
 }
@@ -205,7 +207,7 @@ func standalonePage(
 		nodx.Class("flex flex-1 items-center justify-center px-4 py-10"),
 		nodx.Div(nodx.Class("fixed right-4 top-4 z-50"), themeToggle()),
 		nodx.Div(
-			nodx.Class("relative w-full "+widthClass+" space-y-6 p-8"),
+			nodx.Class("relative w-full "+widthClass+" space-y-6"),
 			identityHeader(cfg, name, subtitle),
 			nodx.Group(content...),
 		),

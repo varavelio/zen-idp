@@ -142,7 +142,7 @@ func (server *Server) processEnroll(w http.ResponseWriter, r *http.Request) erro
 
 	return server.renderEnrollmentReadyPage(
 		w,
-		user.Subject,
+		user,
 		otpauthURI,
 		secret,
 		qrDataURI,
@@ -182,15 +182,17 @@ func (server *Server) renderEnrollPageFailure(
 }
 
 // renderEnrollmentReadyPage writes the one-time reveal of the enrolled TOTP
-// secret: the QR code, the otpauth URI, and the manual entry code. The page
-// must never be cached.
+// secret: the QR code, the sign-in identifiers, the otpauth URI, and the
+// manual entry code. The page must never be cached.
 func (server *Server) renderEnrollmentReadyPage(
 	w http.ResponseWriter,
-	subject, otpauthURI, secret, qrDataURI string,
+	user config.User,
+	otpauthURI, secret, qrDataURI string,
 ) error {
 	html, err := ui.EnrollmentReadyPage(
 		server.enroll.UI,
-		subject,
+		user.Subject,
+		user.Login,
 		otpauthURI,
 		secret,
 		qrDataURI,
