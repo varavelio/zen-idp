@@ -24,10 +24,10 @@ const (
 	testClientHash    = "$argon2id$v=19$m=65536,t=2,p=2$5XEq+R1hozyGGEdvY7KVYA$cEyyXwpgnzm0IMtpsDu3+O6eBxBdO2VaFEpyLHUetIo"
 )
 
-// testApp returns a harness with the shared test users and clients.
-func testApp(t *testing.T) *harness.Harness {
-	t.Helper()
-	return harness.New(t, harness.Config{
+// testConfig returns the shared configuration of the suite: two users and
+// one public and one confidential client.
+func testConfig() harness.Config {
+	return harness.Config{
 		RootSecret: testRootSecret,
 		AdminHash:  testAdminHash,
 		UIName:     "E2E Test Auth",
@@ -55,7 +55,13 @@ func testApp(t *testing.T) *harness.Harness {
 				RedirectURIs: []string{"http://127.0.0.1:9999/confidential-callback"},
 			},
 		},
-	})
+	}
+}
+
+// testApp returns a harness with the shared test configuration.
+func testApp(t *testing.T) *harness.Harness {
+	t.Helper()
+	return harness.New(t, testConfig())
 }
 
 // authorizeQuery builds a valid authorization request for the given client
@@ -142,11 +148,15 @@ func TestOIDCGoldenPath(t *testing.T) {
 	response.RequireStatus(t, 302)
 	require.Equal(t, "/login?"+query, response.Location(t).RequestURI())
 
-	// The login form renders for a valid pending request.
+	// The login form renders for a valid pending request and every page
+	// carries the browser security headers.
 	response = c.Get(t, "/login?"+query)
 	response.RequireStatus(t, 200).
 		Contains(t, `name="identifier"`).
 		Contains(t, `name="code"`)
+	require.Contains(t, response.Header.Get("Content-Security-Policy"), "default-src 'self'")
+	require.Equal(t, "nosniff", response.Header.Get("X-Content-Type-Options"))
+	require.Equal(t, "no-referrer", response.Header.Get("Referrer-Policy"))
 
 	// A wrong code is denied with the single generic message.
 	response = c.PostForm(t, "/login?"+query, url.Values{
@@ -315,6 +325,14 @@ func TestOIDCDenials(t *testing.T) {
 	malformed.RequireStatus(t, 200)
 	require.Equal(t, unknown.Body, malformed.Body)
 
+	// The configured idp_login authenticates the same identity.
+	aliceSecret := harness.DeriveTOTPSecret(testRootSecret, "alice", 0)
+	response = c.PostForm(t, "/login?"+query, url.Values{
+		"identifier": {"alice@example.com"},
+		"code":       {harness.TOTPCode(aliceSecret, time.Now())},
+	})
+	response.RequireStatus(t, 303)
+
 	// Sign in to obtain codes for the redemption denials.
 	require.Equal(t, 303, login(t, c, query, "alice").Status)
 
@@ -347,6 +365,11 @@ func TestOIDCDenials(t *testing.T) {
 
 	// A wrong PKCE verifier is rejected and burns the single-use code.
 	response = redeem(freshCode(), url.Values{"code_verifier": {strings.Repeat("x", 43)}})
+	require.Equal(t, 400, response.Status)
+	requireErrorCode(t, response, "invalid_grant")
+
+	// A missing PKCE verifier is rejected for a PKCE-bound code.
+	response = redeem(freshCode(), url.Values{"code_verifier": {""}})
 	require.Equal(t, 400, response.Status)
 	requireErrorCode(t, response, "invalid_grant")
 
@@ -481,4 +504,78 @@ func TestConfidentialClient(t *testing.T) {
 	require.Equal(t, 401, response.Status)
 	requireErrorCode(t, response, "invalid_client")
 	require.Contains(t, string(response.Body), "blocked")
+}
+
+// TestConfidentialClientPKCE verifies the S256 PKCE path of a confidential
+// client: optional but fully enforced when the client supplies a challenge.
+func TestConfidentialClientPKCE(t *testing.T) {
+	app := testApp(t)
+	c := app.Browser()
+	query := authorizeQuery("confidential-app", "http://127.0.0.1:9999/confidential-callback")
+	redirectURI := "http://127.0.0.1:9999/confidential-callback"
+
+	// Sign in to obtain an authenticated session.
+	require.Equal(t, 303, login(t, c, query, "alice").Status)
+	code := c.Get(t, "/authorize?"+query).
+		RequireStatus(t, 302).
+		Location(t).Query().Get("code")
+	require.True(t, strings.HasPrefix(code, "tok_"))
+
+	// The correct verifier redeems the PKCE-bound code.
+	response := c.PostFormAuth(t, "/token", url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {redirectURI},
+		"client_id":     {"confidential-app"},
+		"code_verifier": {harness.PKCEVerifier},
+	}, harness.BasicAuth("confidential-app", testClientSecret))
+	response.RequireStatus(t, 200)
+
+	// A wrong verifier burns the code and is rejected.
+	code = c.Get(t, "/authorize?"+query).
+		RequireStatus(t, 302).
+		Location(t).Query().Get("code")
+	response = c.PostFormAuth(t, "/token", url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {redirectURI},
+		"client_id":     {"confidential-app"},
+		"code_verifier": {strings.Repeat("x", 43)},
+	}, harness.BasicAuth("confidential-app", testClientSecret))
+	require.Equal(t, 400, response.Status)
+	requireErrorCode(t, response, "invalid_grant")
+}
+
+// TestSSOAcrossClients verifies that one authoritative session continues
+// authorization requests for every registered client without a new login,
+// while a redirect URI registered only for another client stays rejected.
+func TestSSOAcrossClients(t *testing.T) {
+	app := testApp(t)
+	c := app.Browser()
+	queryA := authorizeQuery("public-app", "http://127.0.0.1:9999/callback")
+	queryB := authorizeQuery("confidential-app", "http://127.0.0.1:9999/confidential-callback")
+
+	// One login serves both clients.
+	require.Equal(t, 303, login(t, c, queryA, "alice").Status)
+
+	// The session issues a code for the second client without a new
+	// login, echoing its own state.
+	response := c.Get(t, "/authorize?"+queryB)
+	response.RequireStatus(t, 302)
+	target := response.Location(t)
+	require.True(t, strings.HasPrefix(target.Query().Get("code"), "tok_"))
+	require.Equal(t, "state-123", target.Query().Get("state"))
+
+	// A redirect URI registered only for another client is not accepted
+	// for this client, even with an authenticated session.
+	response = c.Get(t, "/authorize?"+url.Values{
+		"client_id":             {"public-app"},
+		"redirect_uri":          {"http://127.0.0.1:9999/confidential-callback"},
+		"response_type":         {"code"},
+		"scope":                 {"openid"},
+		"state":                 {"state-123"},
+		"code_challenge":        {harness.PKCEChallenge()},
+		"code_challenge_method": {"S256"},
+	}.Encode())
+	response.RequireStatus(t, 400)
 }
