@@ -204,3 +204,50 @@ func TestRateLimitsSurviveRestart(t *testing.T) {
 	})
 	response.RequireStatus(t, 200).Contains(t, "Sign-in failed")
 }
+
+// TestUserRemoval verifies that removing a user from the configuration
+// revokes their sessions and invalidates their outstanding tokens, while
+// leaving the rest of the system untouched.
+func TestUserRemoval(t *testing.T) {
+	app := testApp(t)
+	c := app.Browser()
+	query := authorizeQuery("public-app", "http://127.0.0.1:9999/callback")
+
+	// Sign in and redeem a code into an access token while alice is
+	// declared.
+	require.Equal(t, 303, login(t, c, query, "alice").Status)
+	code := c.Get(t, "/authorize?"+query).
+		RequireStatus(t, 302).
+		Location(t).Query().Get("code")
+	response := c.PostForm(t, "/token", url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {"http://127.0.0.1:9999/callback"},
+		"client_id":     {"public-app"},
+		"code_verifier": {harness.PKCEVerifier},
+	})
+	response.RequireStatus(t, 200)
+	var tokens struct {
+		AccessToken string `json:"access_token"`
+	}
+	response.JSON(t, &tokens)
+	require.NotEmpty(t, tokens.AccessToken)
+
+	// Remove alice from the configuration, keeping bob, and restart.
+	cfg := testConfig()
+	cfg.Users = cfg.Users[1:]
+	app.Reconfigure(t, cfg)
+
+	// The session no longer continues the flow.
+	response = c.Get(t, "/authorize?"+query)
+	response.RequireStatus(t, 302)
+	require.True(t, strings.HasPrefix(response.Location(t).Path, "/login"))
+
+	// The outstanding access token can no longer be resolved.
+	response = c.GetAuth(t, "/userinfo", "Bearer "+tokens.AccessToken)
+	require.Equal(t, 401, response.Status)
+	requireErrorCode(t, response, "invalid_token")
+
+	// bob, who remains declared, still signs in normally.
+	require.Equal(t, 303, login(t, c, query, "bob").Status)
+}
