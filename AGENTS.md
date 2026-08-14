@@ -26,6 +26,17 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 - Treat tests as our primary tool to catch regressions. Write every test to guarantee long-term stability, correctness, functionality, and maintainability as the codebase evolves.
 - Group test cases with subtests (Go): Keep all test cases for a given function inside a single top-level Test function using subtests (t.Run). This maintains a clean structure and avoids file clutter when testing multiple functions in the same file.
 
+## End-to-end testing
+
+The `e2e/` directory holds the black-box end-to-end suite, compiled only under
+the `e2e` build tag and run with `task e2e` (also part of `task ci`). Each
+file covers one complete product scenario and drives the compiled binary
+only through its CLI and HTTP surface; the reusable plumbing lives in the
+`e2e/harness` package, which spawns one isolated instance per test
+(configuration, state database, and loopback port) and reproduces the
+crypto contracts independently. The harness must never import `internal/`
+packages, so the suite always validates the public behavior as a black box.
+
 ## Data Storage
 
 - Generated record identifiers used as SQLite primary keys MUST be TypeID values stored as TEXT.
