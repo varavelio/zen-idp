@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+      update_latest: ${{ steps.vars.outputs.update_latest }}
+    steps:
+      - id: vars
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          # Strip the leading "v" from the release tag.
+          VERSION="${TAG#v}"
+
+          # Only stable versions (no pre-release suffix) update the `latest` tag.
+          if [[ "${VERSION}" != *"-"* ]]; then
+            UPDATE_LATEST="true"
+          else
+            UPDATE_LATEST="false"
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "update_latest=${UPDATE_LATEST}" >> "$GITHUB_OUTPUT"
+
+  build-and-push-images:
+    name: Build and push ${{ matrix.vars.platform }}
+    runs-on: ${{ matrix.vars.os }}
+    needs: [setup]
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        vars:
+          - { os: ubuntu-24.04, platform: amd64 }
+          - { os: ubuntu-24.04-arm, platform: arm64 }
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
+      PLATFORM: ${{ matrix.vars.platform }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the Docker image
+        run: >
+          docker build
+          --target production
+          --tag varavel/zen-idp:${VERSION}-${PLATFORM}
+          --tag ghcr.io/varavelio/zen-idp:${VERSION}-${PLATFORM}
+          .
+
+      - name: Push the Docker images
+        run: |
+          docker push varavel/zen-idp:${VERSION}-${PLATFORM}
+          docker push ghcr.io/varavelio/zen-idp:${VERSION}-${PLATFORM}
+
+  merge-and-push-manifest:
+    name: Merge and push manifest
+    runs-on: ubuntu-latest
+    needs: [setup, build-and-push-images]
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
+      UPDATE_LATEST: ${{ needs.setup.outputs.update_latest }}
+
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge and push manifests
+        run: |
+          docker manifest create varavel/zen-idp:${VERSION} \
+            --amend varavel/zen-idp:${VERSION}-amd64 \
+            --amend varavel/zen-idp:${VERSION}-arm64
+          docker manifest push varavel/zen-idp:${VERSION}
+
+          docker manifest create ghcr.io/varavelio/zen-idp:${VERSION} \
+            --amend ghcr.io/varavelio/zen-idp:${VERSION}-amd64 \
+            --amend ghcr.io/varavelio/zen-idp:${VERSION}-arm64
+          docker manifest push ghcr.io/varavelio/zen-idp:${VERSION}
+
+          if [[ "${UPDATE_LATEST}" == "true" ]]; then
+            docker manifest create varavel/zen-idp:latest \
+              --amend varavel/zen-idp:${VERSION}-amd64 \
+              --amend varavel/zen-idp:${VERSION}-arm64
+            docker manifest push varavel/zen-idp:latest
+
+            docker manifest create ghcr.io/varavelio/zen-idp:latest \
+              --amend ghcr.io/varavelio/zen-idp:${VERSION}-amd64 \
+              --amend ghcr.io/varavelio/zen-idp:${VERSION}-arm64
+            docker manifest push ghcr.io/varavelio/zen-idp:latest
+          fi
+
+  notify-release-failure:
+    name: Notify release failure
+    runs-on: ubuntu-latest
+    needs: [setup, build-and-push-images, merge-and-push-manifest]
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    permissions:
+      contents: write
+    timeout-minutes: 5
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+
+    steps:
+      - name: Update the release description
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          BODY="$(gh release view "${TAG}" --json body --jq '.body')"
+          NOTE=$'\n\n---\n\n> [!WARNING]\n> The release workflow failed. Use the next release instead.'
+
+          if [[ "${BODY}" == *"The release workflow failed"* ]]; then
+            echo "Failure note already present in the release description, skipping"
+            exit 0
+          fi
+
+          gh release edit "${TAG}" --notes "${BODY}${NOTE}"
