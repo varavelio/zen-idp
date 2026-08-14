@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/csrf"
+	"github.com/varavelio/zen-idp/internal/jwt"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
@@ -29,6 +30,23 @@ func (failingSessionRevoker) Revoke(context.Context, string) error {
 	return errors.New("database unavailable")
 }
 
+// signIDToken signs a valid ID token of the reference identity issued to
+// the given client, as an RP-Initiated Logout id_token_hint would carry.
+func signIDToken(t *testing.T, clientID string, issuedAt, expiresAt time.Time) string {
+	t.Helper()
+	signer, err := jwt.NewSigner(referenceKey(), referenceKid())
+	require.NoError(t, err)
+	signed, err := signer.Sign(map[string]any{
+		"iss": referenceIssuer,
+		"sub": "alice",
+		"aud": clientID,
+		"iat": issuedAt.Unix(),
+		"exp": expiresAt.Unix(),
+	})
+	require.NoError(t, err)
+	return signed
+}
+
 // logoutCSRFToken fetches the local logout interaction and returns the
 // anti-forgery token it issues, exactly as a browser would receive it.
 func logoutCSRFToken(t *testing.T, app *testApp) string {
@@ -42,6 +60,13 @@ func logoutCSRFToken(t *testing.T, app *testApp) string {
 	response := httptest.NewRecorder()
 	app.server.Handler().ServeHTTP(response, request)
 	require.Equal(t, http.StatusOK, response.Code)
+	return logoutCSRFCookie(t, response)
+}
+
+// logoutCSRFCookie returns the anti-forgery cookie value of an existing
+// logout response.
+func logoutCSRFCookie(t *testing.T, response *httptest.ResponseRecorder) string {
+	t.Helper()
 	for _, cookie := range response.Result().Cookies() {
 		if cookie.Name == CSRFCookieName {
 			return cookie.Value
@@ -78,6 +103,204 @@ func logoutRequest(
 }
 
 func TestLogout(t *testing.T) {
+	t.Run(
+		"redirects to a registered post_logout_redirect_uri after confirmation",
+		func(t *testing.T) {
+			app := newTestApp(t, testUsers)
+			cookie := createSessionToken(t, app, "alice", time.Now())
+			now := time.Now()
+			query := url.Values{
+				"id_token_hint":            {signIDToken(t, "public-app", now, now.Add(time.Hour))},
+				"post_logout_redirect_uri": {"https://app.example.com/callback"},
+				"state":                    {"rp-state"},
+			}.Encode()
+
+			// The confirmation form preserves the request so the redirect
+			// target survives the protected submission.
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodGet,
+				"/logout?"+query,
+				nil,
+			)
+			request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
+			response := httptest.NewRecorder()
+			app.server.Handler().ServeHTTP(response, request)
+
+			require.Equal(t, http.StatusOK, response.Code)
+			escapedQuery := strings.ReplaceAll(query, "&", "&amp;")
+			require.Contains(t, response.Body.String(), `action="/logout?`+escapedQuery+`"`)
+			csrfToken := logoutCSRFCookie(t, response)
+
+			// The protected submission revokes, clears, and redirects back
+			// to the registered URI echoing the state.
+			request = httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				"/logout?"+query,
+				strings.NewReader(url.Values{csrf.FieldName: {csrfToken}}.Encode()),
+			)
+			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
+			request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
+			response = httptest.NewRecorder()
+			app.server.Handler().ServeHTTP(response, request)
+
+			require.Equal(t, http.StatusSeeOther, response.Code)
+			require.Equal(
+				t,
+				"https://app.example.com/callback?state=rp-state",
+				response.Header().Get("Location"),
+			)
+			require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+			_, err := app.sessions.Validate(context.Background(), cookie, time.Now())
+			require.ErrorIs(t, err, session.ErrInvalidSession)
+		},
+	)
+
+	t.Run("never redirects to an unregistered post_logout_redirect_uri", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		cookie := createSessionToken(t, app, "alice", time.Now())
+		now := time.Now()
+		// The hint identifies a client that did not register the URI; the
+		// URI belongs to another registered client only.
+		query := url.Values{
+			"id_token_hint": {
+				signIDToken(t, "confidential-app", now, now.Add(time.Hour)),
+			},
+			"post_logout_redirect_uri": {"https://app.example.com/callback?tenant=1"},
+		}.Encode()
+
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			"/logout?"+query,
+			nil,
+		)
+		request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), `action="/logout"`)
+		require.NotContains(t, response.Body.String(), `action="/logout?`)
+		csrfToken := logoutCSRFCookie(t, response)
+
+		request = httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			"/logout?"+query,
+			strings.NewReader(url.Values{csrf.FieldName: {csrfToken}}.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
+		response = httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Empty(t, response.Header().Get("Location"))
+		require.Contains(t, response.Body.String(), "You have been signed out")
+	})
+
+	t.Run("ignores post_logout_redirect_uri without a valid id_token_hint", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		cookie := createSessionToken(t, app, "alice", time.Now())
+		query := url.Values{
+			"id_token_hint":            {"garbage"},
+			"post_logout_redirect_uri": {"https://app.example.com/callback"},
+		}.Encode()
+
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			"/logout?"+query,
+			nil,
+		)
+		request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+		require.Equal(t, http.StatusOK, response.Code)
+		csrfToken := logoutCSRFCookie(t, response)
+
+		request = httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			"/logout?"+query,
+			strings.NewReader(url.Values{csrf.FieldName: {csrfToken}}.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
+		response = httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Empty(t, response.Header().Get("Location"))
+		require.Contains(t, response.Body.String(), "You have been signed out")
+	})
+
+	t.Run("ignores an expired id_token_hint", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		cookie := createSessionToken(t, app, "alice", time.Now())
+		now := time.Now()
+		query := url.Values{
+			"id_token_hint": {
+				signIDToken(t, "public-app", now.Add(-2*time.Hour), now.Add(-time.Hour)),
+			},
+			"post_logout_redirect_uri": {"https://app.example.com/callback"},
+		}.Encode()
+
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			"/logout?"+query,
+			nil,
+		)
+		request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+		require.Equal(t, http.StatusOK, response.Code)
+		csrfToken := logoutCSRFCookie(t, response)
+
+		request = httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			"/logout?"+query,
+			strings.NewReader(url.Values{csrf.FieldName: {csrfToken}}.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
+		response = httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Empty(t, response.Header().Get("Location"))
+	})
+
+	t.Run("ignores post_logout_redirect_uri without a session", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		now := time.Now()
+		query := url.Values{
+			"id_token_hint":            {signIDToken(t, "public-app", now, now.Add(time.Hour))},
+			"post_logout_redirect_uri": {"https://app.example.com/callback"},
+		}.Encode()
+
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			"/logout?"+query,
+			nil,
+		)
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), "You have been signed out")
+		require.Empty(t, response.Header().Get("Location"))
+	})
+
 	t.Run("shows the confirmation page without revoking on GET", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		token := createSessionToken(t, app, "alice", time.Now())

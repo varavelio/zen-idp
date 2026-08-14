@@ -23,7 +23,7 @@ const referenceDiscoveryDocument = `{
 	"subject_types_supported": ["public"],
 	"id_token_signing_alg_values_supported": ["RS256"],
 	"scopes_supported": ["openid"],
-	"token_endpoint_auth_methods_supported": ["none", "client_secret_basic"],
+	"token_endpoint_auth_methods_supported": ["none", "client_secret_basic", "client_secret_post"],
 	"grant_types_supported": ["authorization_code"],
 	"response_modes_supported": ["query"],
 	"code_challenge_methods_supported": ["S256"]
@@ -86,7 +86,7 @@ func TestDiscovery(t *testing.T) {
 			"subject_types_supported": ["public"],
 			"id_token_signing_alg_values_supported": ["RS256"],
 			"scopes_supported": ["openid"],
-			"token_endpoint_auth_methods_supported": ["none", "client_secret_basic"],
+			"token_endpoint_auth_methods_supported": ["none", "client_secret_basic", "client_secret_post"],
 			"grant_types_supported": ["authorization_code"],
 			"response_modes_supported": ["query"],
 			"code_challenge_methods_supported": ["S256"]
@@ -119,7 +119,6 @@ func TestDiscovery(t *testing.T) {
 		newHandler(referenceIssuer).ServeHTTP(response, request)
 
 		require.NotContains(t, response.Body.String(), "implicit")
-		require.NotContains(t, response.Body.String(), "client_secret_post")
 		require.NotContains(t, response.Body.String(), "plain")
 	})
 }

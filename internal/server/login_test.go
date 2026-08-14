@@ -130,6 +130,7 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 			Sessions:      store,
 			Audit:         recorder,
 			CSRF:          csrfGuard,
+			Verifier:      verifier,
 			UI:            config.UI{Name: "Example Auth"},
 			SecureCookies: true,
 		},

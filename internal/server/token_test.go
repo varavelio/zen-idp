@@ -240,6 +240,109 @@ func TestToken(t *testing.T) {
 		require.NotEmpty(t, body.AccessToken)
 	})
 
+	t.Run("issues tokens for a confidential client with client_secret_post", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		code := createCode(t, app, func(params *onetoken.CodeParams) {
+			params.ClientID = "confidential-app"
+		})
+		form := validExchangeForm(code)
+		form.Set("client_id", "confidential-app")
+		form.Set("client_secret", testClientSecret)
+		response := tokenRequest(t, app.server.Handler(), form, "")
+
+		require.Equal(t, http.StatusOK, response.Code)
+		body := decodeTokenResponse(t, response)
+		require.NotEmpty(t, body.AccessToken)
+		require.NotEmpty(t, body.IDToken)
+
+		claims, err := verifier(t).Verify(body.IDToken)
+		require.NoError(t, err)
+		require.Equal(t, "confidential-app", claims["aud"])
+	})
+
+	t.Run("accepts client_secret_post over HTTPS in production", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.tokens.RequireClientSecretTLS = true
+		code := createCode(t, app, func(params *onetoken.CodeParams) {
+			params.ClientID = "confidential-app"
+		})
+
+		server := httptest.NewTLSServer(app.server.Handler())
+		defer server.Close()
+		form := validExchangeForm(code)
+		form.Set("client_id", "confidential-app")
+		form.Set("client_secret", testClientSecret)
+		request, err := http.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			server.URL+"/token",
+			strings.NewReader(form.Encode()),
+		)
+		require.NoError(t, err)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		response, err := server.Client().Do(request)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = response.Body.Close() })
+
+		require.Equal(t, http.StatusOK, response.StatusCode)
+	})
+
+	t.Run("rejects client_secret_post over plain HTTP in production", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		app.server.tokens.RequireClientSecretTLS = true
+		code := createCode(t, app, func(params *onetoken.CodeParams) {
+			params.ClientID = "confidential-app"
+		})
+
+		server := httptest.NewServer(app.server.Handler())
+		defer server.Close()
+		form := validExchangeForm(code)
+		form.Set("client_id", "confidential-app")
+		form.Set("client_secret", testClientSecret)
+		request, err := http.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			server.URL+"/token",
+			strings.NewReader(form.Encode()),
+		)
+		require.NoError(t, err)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		response, err := server.Client().Do(request)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = response.Body.Close() })
+
+		require.Equal(t, http.StatusUnauthorized, response.StatusCode)
+		var body tokenErrorResponse
+		require.NoError(t, json.NewDecoder(response.Body).Decode(&body))
+		require.Equal(t, "invalid_client", body.Error)
+	})
+
+	t.Run("rejects a public client that presents a client_secret_post secret", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		code := createCode(t, app, nil)
+		form := validExchangeForm(code)
+		form.Set("client_secret", testClientSecret)
+		response := tokenRequest(t, app.server.Handler(), form, "")
+
+		requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+	})
+
+	t.Run(
+		"rejects a confidential client with an empty client_secret_post value",
+		func(t *testing.T) {
+			app := newTestApp(t, testUsers)
+			code := createCode(t, app, func(params *onetoken.CodeParams) {
+				params.ClientID = "confidential-app"
+			})
+			form := validExchangeForm(code)
+			form.Set("client_id", "confidential-app")
+			form.Set("client_secret", "")
+			response := tokenRequest(t, app.server.Handler(), form, "")
+
+			requireTokenError(t, response, http.StatusUnauthorized, "invalid_client")
+		},
+	)
+
 	t.Run("rejects an oversized request body", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		request := httptest.NewRequestWithContext(

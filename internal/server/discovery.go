@@ -31,20 +31,22 @@ type discoveryDocument struct {
 func (server *Server) discovery(w http.ResponseWriter, _ *http.Request) error {
 	origin := strings.TrimSuffix(server.issuer, "/")
 	document := discoveryDocument{
-		Issuer:                            server.issuer,
-		AuthorizationEndpoint:             origin + "/authorize",
-		TokenEndpoint:                     origin + "/token",
-		UserinfoEndpoint:                  origin + "/userinfo",
-		EndSessionEndpoint:                origin + "/logout",
-		JWKSURI:                           origin + "/.well-known/jwks.json",
-		ResponseTypesSupported:            []string{"code"},
-		SubjectTypesSupported:             []string{"public"},
-		IDTokenSigningAlgValuesSupported:  []string{"RS256"},
-		ScopesSupported:                   []string{"openid"},
-		TokenEndpointAuthMethodsSupported: []string{"none", "client_secret_basic"},
-		GrantTypesSupported:               []string{"authorization_code"},
-		ResponseModesSupported:            []string{"query"},
-		CodeChallengeMethodsSupported:     []string{"S256"},
+		Issuer:                           server.issuer,
+		AuthorizationEndpoint:            origin + "/authorize",
+		TokenEndpoint:                    origin + "/token",
+		UserinfoEndpoint:                 origin + "/userinfo",
+		EndSessionEndpoint:               origin + "/logout",
+		JWKSURI:                          origin + "/.well-known/jwks.json",
+		ResponseTypesSupported:           []string{"code"},
+		SubjectTypesSupported:            []string{"public"},
+		IDTokenSigningAlgValuesSupported: []string{"RS256"},
+		ScopesSupported:                  []string{"openid"},
+		TokenEndpointAuthMethodsSupported: []string{
+			"none", "client_secret_basic", "client_secret_post",
+		},
+		GrantTypesSupported:           []string{"authorization_code"},
+		ResponseModesSupported:        []string{"query"},
+		CodeChallengeMethodsSupported: []string{"S256"},
 	}
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(document)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/varavelio/zen-idp/internal/audit"
@@ -23,6 +24,12 @@ type SessionRevoker interface {
 	Revoke(context.Context, string) error
 }
 
+// LogoutTokenVerifier authenticates the id_token_hint of an RP-Initiated
+// Logout request, satisfied by jwt.Verifier.
+type LogoutTokenVerifier interface {
+	Verify(string) (map[string]any, error)
+}
+
 // LogoutDependencies carries the injected pieces of the local logout
 // interaction.
 type LogoutDependencies struct {
@@ -34,6 +41,9 @@ type LogoutDependencies struct {
 	// CSRF protects the sign-out confirmation form from cross-site request
 	// forgery.
 	CSRF CSRFGuard
+	// Verifier authenticates the id_token_hint that authorizes a
+	// post-logout redirect to a registered URI.
+	Verifier LogoutTokenVerifier
 	// UI holds the presentation settings shown on the logout pages.
 	UI config.UI
 	// SecureCookies marks the session cookie Secure; it must be true in
@@ -41,20 +51,30 @@ type LogoutDependencies struct {
 	SecureCookies bool
 }
 
+// logoutPath is the local logout interaction.
+const logoutPath = "/logout"
+
 // logoutForm renders the local logout interaction: the sign-out confirmation
 // with its protected form when the browser carries a session cookie, or the
-// signed-out page directly when there is nothing to confirm. The GET itself
-// never changes state; the actual revocation happens only through the
-// protected form submission.
+// signed-out page directly when there is nothing to confirm. When the
+// request is a trustworthy RP-Initiated Logout carrying a registered
+// post-logout redirect, the form preserves the request so the completed
+// logout can redirect back to the relying party. The GET itself never
+// changes state; the actual revocation happens only through the protected
+// form submission.
 func (server *Server) logoutForm(w http.ResponseWriter, r *http.Request) error {
 	token, err := server.logout.CSRF.Token(w, r)
 	if err != nil {
 		return fmt.Errorf("get CSRF token: %w", err)
 	}
+	action := logoutPath
+	if _, ok := server.logoutRedirectTarget(r); ok {
+		action += "?" + r.URL.RawQuery
+	}
 	if _, err := r.Cookie(sessionCookieName); err != nil {
 		return server.renderSignedOutPage(w)
 	}
-	return server.renderSignOutConfirmationPage(w, token)
+	return server.renderSignOutConfirmationPage(w, token, action)
 }
 
 // processLogout handles the sign-out confirmation form submission: it
@@ -99,13 +119,64 @@ func (server *Server) processLogout(w http.ResponseWriter, r *http.Request) erro
 
 	http.SetCookie(w, browserCookie(sessionCookieName, "", -1, server.logout.SecureCookies))
 	w.Header().Set("Cache-Control", "no-store")
+	if target, ok := server.logoutRedirectTarget(r); ok {
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return nil
+	}
 	return server.renderSignedOutPage(w)
 }
 
+// logoutRedirectTarget returns the post_logout_redirect_uri of an
+// RP-Initiated Logout request when the request is trustworthy: the
+// id_token_hint must be an authentic, unexpired ID token of this issuer
+// issued to a registered client, and the redirect URI must be one of that
+// client's registered redirect URIs, matched exactly. Every other request
+// returns ok=false and completes the local logout without redirecting
+// anywhere.
+func (server *Server) logoutRedirectTarget(r *http.Request) (string, bool) {
+	query := r.URL.Query()
+	redirectURI := query.Get("post_logout_redirect_uri")
+	if redirectURI == "" || server.logout.Verifier == nil {
+		return "", false
+	}
+	claims, err := server.logout.Verifier.Verify(query.Get("id_token_hint"))
+	if err != nil {
+		return "", false
+	}
+	if claims["iss"] != server.issuer {
+		return "", false
+	}
+	exp, ok := claims["exp"].(float64)
+	if !ok || !time.Now().Before(time.Unix(int64(exp), 0)) {
+		return "", false
+	}
+	clientID, ok := claims["aud"].(string)
+	if !ok {
+		return "", false
+	}
+	client, ok := findClient(server.clients, clientID)
+	if !ok || !allowsRedirectURI(client, redirectURI) {
+		return "", false
+	}
+	target, err := url.Parse(redirectURI)
+	if err != nil {
+		return "", false
+	}
+	if state := query.Get("state"); state != "" {
+		stateQuery := target.Query()
+		stateQuery.Set("state", state)
+		target.RawQuery = stateQuery.Encode()
+	}
+	return target.String(), true
+}
+
 // renderSignOutConfirmationPage writes the sign-out confirmation form with
-// the given anti-forgery token.
-func (server *Server) renderSignOutConfirmationPage(w http.ResponseWriter, token string) error {
-	html, err := ui.LogOutConfirmationPage(server.logout.UI, token).RenderString()
+// the given anti-forgery token, targeting the given action.
+func (server *Server) renderSignOutConfirmationPage(
+	w http.ResponseWriter,
+	token, action string,
+) error {
+	html, err := ui.LogOutConfirmationPage(server.logout.UI, token, action).RenderString()
 	if err != nil {
 		return fmt.Errorf("render sign-out confirmation page: %w", err)
 	}

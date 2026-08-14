@@ -321,7 +321,7 @@ func (server *Server) authenticateClient(
 	}
 	if !presented {
 		return config.Client{}, clientError(
-			"confidential clients must authenticate with client_secret_basic",
+			"confidential clients must authenticate with a client secret",
 		)
 	}
 	if server.tokens.RequireClientSecretTLS && r.TLS == nil {
@@ -338,31 +338,40 @@ func (server *Server) authenticateClient(
 }
 
 // parseClientCredentials extracts the client identifier and optional secret
-// from a token request: the client_id form parameter for public clients, or
-// the HTTP Basic authorization header carrying the client_id and
-// client_secret pair for confidential clients.
+// from a token request: the client_id form parameter for public clients, the
+// HTTP Basic authorization header carrying the client_id and client_secret
+// pair for confidential clients using client_secret_basic, or the client_id
+// and client_secret form parameters for confidential clients using
+// client_secret_post. When the Basic header is present it takes precedence
+// over the form parameters.
 func parseClientCredentials(
 	r *http.Request,
 ) (clientID, clientSecret string, presented bool, err error) {
 	authorization := r.Header.Get("Authorization")
-	if authorization == "" {
-		return r.FormValue("client_id"), "", false, nil
+	if authorization != "" {
+		const basicScheme = "Basic "
+		if !hasAuthScheme(authorization, basicScheme) {
+			return "", "", false, clientError("unsupported client authentication method")
+		}
+		decoded, err := base64.StdEncoding.DecodeString(
+			strings.TrimSpace(authorization[len(basicScheme):]),
+		)
+		if err != nil {
+			return "", "", false, clientError("malformed client credentials")
+		}
+		clientID, clientSecret, ok := strings.Cut(string(decoded), ":")
+		if !ok || clientID == "" {
+			return "", "", false, clientError("malformed client credentials")
+		}
+		return clientID, clientSecret, true, nil
 	}
-	const basicScheme = "Basic "
-	if !hasAuthScheme(authorization, basicScheme) {
-		return "", "", false, clientError("unsupported client authentication method")
-	}
-	decoded, err := base64.StdEncoding.DecodeString(
-		strings.TrimSpace(authorization[len(basicScheme):]),
-	)
-	if err != nil {
-		return "", "", false, clientError("malformed client credentials")
-	}
-	clientID, clientSecret, ok := strings.Cut(string(decoded), ":")
-	if !ok || clientID == "" {
-		return "", "", false, clientError("malformed client credentials")
-	}
-	return clientID, clientSecret, true, nil
+	clientID = r.FormValue("client_id")
+	clientSecret = r.FormValue("client_secret")
+	// A present client_secret parameter counts as presented even when its
+	// value is empty, so an empty value fails authentication instead of
+	// silently downgrading to public-client handling.
+	_, presented = r.PostForm["client_secret"]
+	return clientID, clientSecret, presented, nil
 }
 
 // verifyPKCEVerifier reports whether verifier is a valid PKCE S256 verifier
