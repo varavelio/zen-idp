@@ -289,6 +289,7 @@ func runServe(envFile string, dependencies dependencies) error {
 			Sessions:      sessionStore,
 			Audit:         auditRecorder,
 			CSRF:          csrfGuard,
+			Verifier:      jwtVerifier,
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
 		},
