@@ -1,3 +1,10 @@
+<p align="center">
+  <img
+    width="125px"
+    src="https://cdn.jsdelivr.net/gh/varavelio/zen-idp@8cac59/assets/icon.svg"
+  />
+</p>
+
 <h1 align="center">Zen IdP</h1>
 
 <p align="center">
