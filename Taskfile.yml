@@ -22,7 +22,6 @@ tasks:
     cmds:
       - go mod download
       - bash scripts/download-fonts.sh
-      - bash scripts/download-alpine.sh
 
   serve:
     desc: Build and run serve subcommand with .env
