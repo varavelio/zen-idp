@@ -42,7 +42,7 @@ func TestEnrollForm(t *testing.T) {
 		require.Contains(t, body, "Show QR")
 	})
 
-	t.Run("offers manual entry when no link token is present", func(t *testing.T) {
+	t.Run("carries an empty token field when no link token is present", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 
 		response := getEnroll(t, app, "")
@@ -50,9 +50,11 @@ func TestEnrollForm(t *testing.T) {
 		require.Equal(t, http.StatusOK, response.Code)
 		body := response.Body.String()
 		require.Contains(t, body, `name="token"`)
-		require.Contains(t, body, `type="text"`)
-		require.Contains(t, body, "Enrollment token")
+		require.Contains(t, body, `type="hidden"`)
+		require.Contains(t, body, `value=""`)
+		require.Contains(t, body, `name="csrf_token"`)
 		require.Contains(t, body, "Show QR")
+		require.NotContains(t, body, `type="text"`)
 	})
 
 	t.Run("does not consume the token on preview", func(t *testing.T) {
@@ -84,7 +86,7 @@ func TestProcessEnroll(t *testing.T) {
 		require.Contains(t, body, "data:image/png;base64,")
 		require.Contains(t, body, html.EscapeString(referenceEnrollmentURI))
 		require.Contains(t, body, "LQJ2MSFEHZMA4KVBU5SNJRDAJHEH7PCGYIADZIKUDNYNG4SD6XFQ")
-		require.Contains(t, body, "Scan the code with your authenticator app.")
+		require.Contains(t, body, "Scan the code with your authenticator app")
 
 		// The reveal point records the consumption against the subject.
 		events := auditEvents(t, app)

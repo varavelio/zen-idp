@@ -269,7 +269,7 @@ func userCard(lock LockStatus, token string) nodx.Node {
 				nodx.If(
 					lock.Login != "",
 					nodx.P(
-						nodx.Class("truncate text-md text-content-muted"),
+						nodx.Class("truncate text-base text-content-muted"),
 						nodx.Text(lock.Login),
 					),
 				),
@@ -326,7 +326,7 @@ func enrollmentDialog(subject, token string) nodx.Node {
 		nodx.Dialog(
 			nodx.Id("enroll-"+subject),
 			nodx.Class(
-				"fixed inset-0 m-auto w-full max-w-md rounded-lg border border-base-400",
+				"fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-base-400",
 				"bg-base-200 p-6 text-content backdrop:bg-black/60",
 			),
 			nodx.FormEl(
