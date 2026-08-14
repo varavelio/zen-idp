@@ -120,51 +120,99 @@ func TestServeFailsClosed(t *testing.T) {
 	require.Contains(t, stderr, "ZEN_IDP_SECRET")
 }
 
+// writeCompositionFile writes one configuration fragment of the
+// composition tests.
+func writeCompositionFile(t *testing.T, path, contents string) {
+	t.Helper()
+	require.NoError(t, os.WriteFile(path, []byte(contents), 0o600))
+}
+
+// compositionInstance is a valid configuration fragment declaring the
+// issuer and the administrator credential.
+const compositionInstance = "config:\n" +
+	"  issuer: \"https://auth.example.com\"\n" +
+	"  security:\n" +
+	"    admin_password_hash: \"" + testAdminHash + "\"\n"
+
 // TestValidateConfigComposition verifies the multi-file configuration
-// pipeline: a directory selector composes its YAML sources deterministically
-// and a conflicting duplicate value fails validation.
+// pipeline: directory and recursive-glob selectors compose their YAML
+// sources deterministically, both extensions are accepted, and a
+// conflicting duplicate value fails validation.
 func TestValidateConfigComposition(t *testing.T) {
-	dir := t.TempDir()
-	instance := filepath.Join(dir, "10-instance.yaml")
-	require.NoError(t, os.WriteFile(instance, []byte(
-		"config:\n"+
-			"  issuer: \"https://auth.example.com\"\n"+
-			"  security:\n"+
-			"    admin_password_hash: \""+testAdminHash+"\"\n"+
+	t.Run("composes the yaml and yml files of a directory", func(t *testing.T) {
+		dir := t.TempDir()
+		writeCompositionFile(t, filepath.Join(dir, "10-instance.yaml"),
+			compositionInstance+
+				"users:\n"+
+				"  - sub: alice\n",
+		)
+		writeCompositionFile(t, filepath.Join(dir, "20-override.yml"),
+			"config:\n"+
+				"  ui:\n"+
+				"    name: \"Composed\"\n"+
+				"clients:\n"+
+				"  - id: app\n"+
+				"    redirect_uris:\n"+
+				"      - \"http://127.0.0.1:9999/callback\"\n",
+		)
+
+		stdout, _, code := harness.Run(t,
+			[]string{"ZEN_IDP_CONFIG_PATH=" + dir},
+			"validate-config",
+		)
+		require.Equal(t, 0, code)
+		require.Contains(t, stdout, "configuration is valid")
+	})
+
+	t.Run("a conflicting duplicate value fails composition", func(t *testing.T) {
+		dir := t.TempDir()
+		writeCompositionFile(t, filepath.Join(dir, "10-instance.yaml"),
+			compositionInstance,
+		)
+		writeCompositionFile(t, filepath.Join(dir, "30-conflict.yaml"),
+			"config:\n"+
+				"  issuer: \"https://other.example.com\"\n",
+		)
+
+		_, stderr, code := harness.Run(t,
+			[]string{"ZEN_IDP_CONFIG_PATH=" + dir},
+			"validate-config",
+		)
+		require.Equal(t, 1, code)
+		require.Contains(t, stderr, "config.issuer")
+	})
+
+	t.Run("composes recursive glob selectors across depths", func(t *testing.T) {
+		root := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "nested", "deep"), 0o700))
+		writeCompositionFile(t, filepath.Join(root, "instance.yaml"),
+			compositionInstance,
+		)
+		writeCompositionFile(t, filepath.Join(root, "nested", "users.yaml"),
 			"users:\n"+
-			"  - sub: alice\n",
-	), 0o600))
-	override := filepath.Join(dir, "20-override.yaml")
-	require.NoError(t, os.WriteFile(override, []byte(
-		"config:\n"+
-			"  ui:\n"+
-			"    name: \"Composed\"\n"+
+				"  - sub: alice\n",
+		)
+		writeCompositionFile(t, filepath.Join(root, "nested", "deep", "clients.yaml"),
 			"clients:\n"+
-			"  - id: app\n"+
-			"    redirect_uris:\n"+
-			"      - \"http://127.0.0.1:9999/callback\"\n",
-	), 0o600))
+				"  - id: app\n"+
+				"    redirect_uris:\n"+
+				"      - \"http://127.0.0.1:9999/callback\"\n",
+		)
+		// A .yml sibling is deliberately excluded by the yaml-only glob.
+		writeCompositionFile(t, filepath.Join(root, "nested", "deep", "ignored.yml"),
+			"config:\n"+
+				"  ui:\n"+
+				"    name: \"Ignored\"\n",
+		)
 
-	// The directory composes into one valid document.
-	stdout, _, code := harness.Run(t,
-		[]string{"ZEN_IDP_CONFIG_PATH=" + dir},
-		"validate-config",
-	)
-	require.Equal(t, 0, code)
-	require.Contains(t, stdout, "configuration is valid")
-
-	// A second definition of the same scalar conflicts and fails.
-	conflict := filepath.Join(dir, "30-conflict.yaml")
-	require.NoError(t, os.WriteFile(conflict, []byte(
-		"config:\n"+
-			"  issuer: \"https://other.example.com\"\n",
-	), 0o600))
-	_, stderr, code := harness.Run(t,
-		[]string{"ZEN_IDP_CONFIG_PATH=" + dir},
-		"validate-config",
-	)
-	require.Equal(t, 1, code)
-	require.Contains(t, stderr, "config.issuer")
+		selector := filepath.Join(root, "**", "*.yaml")
+		stdout, _, code := harness.Run(t,
+			[]string{"ZEN_IDP_CONFIG_PATH=" + selector},
+			"validate-config",
+		)
+		require.Equal(t, 0, code)
+		require.Contains(t, stdout, "configuration is valid")
+	})
 }
 
 // TestBootstrapWithGeneratedSecrets closes the bootstrap loop: a server
@@ -202,4 +250,66 @@ func TestBootstrapWithGeneratedSecrets(t *testing.T) {
 	})
 	response.RequireStatus(t, 303)
 	require.True(t, strings.HasPrefix(c.Cookie("zen_idp_admin_session"), "sess_"))
+}
+
+// TestEnvFileExplicit verifies that an environment file is loaded only when
+// serve or validate-config explicitly receives --env-file, that
+// process-environment values take precedence by presence, and that a .env
+// file is never loaded implicitly.
+func TestEnvFileExplicit(t *testing.T) {
+	dir := t.TempDir()
+	configPath := (harness.Config{
+		AdminHash: testAdminHash,
+	}).WriteFile(t, dir, "https://auth.example.com", 8080)
+	envFile := filepath.Join(dir, "instance.env")
+	require.NoError(t, os.WriteFile(
+		envFile,
+		[]byte("ZEN_IDP_CONFIG_PATH="+configPath+"\n"),
+		0o600,
+	))
+
+	// The explicitly selected env file satisfies validate-config alone.
+	stdout, _, code := harness.Run(t, nil, "validate-config", "--env-file", envFile)
+	require.Equal(t, 0, code)
+	require.Contains(t, stdout, "configuration is valid")
+
+	// Process-environment values take precedence by presence, even when
+	// the env file carries a valid value.
+	_, stderr, code := harness.Run(t,
+		[]string{"ZEN_IDP_CONFIG_PATH=" + filepath.Join(dir, "missing.yaml")},
+		"validate-config", "--env-file", envFile,
+	)
+	require.Equal(t, 1, code)
+	require.Contains(t, stderr, "missing.yaml")
+
+	// An empty process value also takes precedence and fails validation.
+	_, stderr, code = harness.Run(t,
+		[]string{"ZEN_IDP_CONFIG_PATH="},
+		"validate-config", "--env-file", envFile,
+	)
+	require.Equal(t, 1, code)
+	require.Contains(t, stderr, "ZEN_IDP_CONFIG_PATH")
+
+	// A .env file in the working directory is never loaded implicitly:
+	// without --env-file the variable stays absent.
+	t.Chdir(dir)
+	_, stderr, code = harness.Run(t, nil, "validate-config")
+	require.Equal(t, 1, code)
+	require.Contains(t, stderr, "ZEN_IDP_CONFIG_PATH")
+
+	// serve also honors --env-file: the database path it carries reaches
+	// the startup validation and fails on the exact configured location.
+	badDB := filepath.Join(dir, "no-such-dir", "state.db")
+	require.NoError(t, os.WriteFile(
+		envFile,
+		[]byte(
+			"ZEN_IDP_CONFIG_PATH="+configPath+"\n"+
+				"ZEN_IDP_SECRET="+testRootSecret+"\n"+
+				"ZEN_IDP_DB_PATH="+badDB+"\n",
+		),
+		0o600,
+	))
+	_, stderr, code = harness.Run(t, nil, "serve", "--env-file", envFile)
+	require.Equal(t, 1, code)
+	require.Contains(t, stderr, badDB)
 }
