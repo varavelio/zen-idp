@@ -3,8 +3,20 @@
 /* Scan NodX Go sources for class candidates. */
 @source "./**/*.go";
 
-/* Enable dark mode with either .dark or [data-theme="dark"]. */
-@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+/* Enable dark mode through the theme attribute: a forced dark theme, or the
+ * system preference when no theme is forced (the media query below). The
+ * theme is carried by data-theme on <html>; no light/dark class is ever set. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"])
+      *) {
+      @slot;
+    }
+  }
+}
 
 /* Bundled Geist fonts (self-hosted inside this package). */
 @font-face {
@@ -75,14 +87,18 @@
   --color-success: var(--color-emerald-500);
   --color-warning: var(--color-orange-500);
   --color-error: var(--color-red-500);
+
+  /* Brand accent of the project mark, used for decorative touches. */
+  --color-brand: #14b8a6;
 }
 
 :root {
   color-scheme: light;
 }
 
-/* Dark mode token overrides. */
-:where(.dark, [data-theme="dark"]) {
+/* Dark mode token overrides: a forced dark theme, or the system preference
+ * when no theme is forced. */
+:root[data-theme="dark"] {
   color-scheme: dark;
 
   --color-base-100: var(--color-black);
@@ -94,12 +110,41 @@
   --color-content-muted: var(--color-neutral-400);
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-base-100: var(--color-black);
+    --color-base-200: var(--color-neutral-900);
+    --color-base-300: var(--color-neutral-800);
+    --color-base-400: var(--color-neutral-700);
+
+    --color-content: var(--color-neutral-50);
+    --color-content-muted: var(--color-neutral-400);
+  }
+}
+
 @layer base {
   /* Structural borders for all elements. */
   *,
   ::before,
   ::after {
     @apply border-base-400;
+  }
+
+  /* Default size for Lucide icons without an explicit size utility. */
+  svg[data-nodxgo="lucide"]:not([class*="size-"]) {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Native modal dialogs adopt the surface tokens over the dimmed backdrop. */
+  dialog {
+    @apply bg-base-200 text-content;
+  }
+
+  dialog::backdrop {
+    background-color: rgb(0 0 0 / 0.6);
   }
 
   /* Scrollbar styling. */

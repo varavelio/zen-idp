@@ -1,9 +1,8 @@
 package ui
 
 import (
-	"fmt"
-
 	nodx "github.com/varavelio/nodxgo"
+	lucide "github.com/varavelio/nodxgo-lucide"
 	"github.com/varavelio/zen-idp/internal/config"
 )
 
@@ -28,82 +27,35 @@ func EnrollPage(settings config.UI, token, csrfToken, failure string) nodx.Node 
 		name = loginTitle
 	}
 	return Page(settings, enrollTitle,
-		nodx.Main(
-			nodx.Class("min-h-screen flex items-center justify-center px-4"),
-			nodx.Div(
-				nodx.Class(
-					"w-full max-w-sm bg-base-200 border border-base-400 rounded-lg p-8 space-y-6",
-				),
+		standalonePage(settings, name, "Set up your authenticator app.", "max-w-md",
+			nodx.If(failure != "", errorAlert(failure)),
+			nodx.FormEl(
+				nodx.Action(enrollAction),
+				nodx.Method("post"),
+				nodx.Class("space-y-5"),
+				csrfField(csrfToken),
 				nodx.If(
-					settings.LogoURL != "",
-					nodx.Img(nodx.Class("h-10 w-auto"), nodx.Src(settings.LogoURL), nodx.Alt("")),
-				),
-				nodx.Div(
-					nodx.Class("space-y-1"),
-					nodx.H1(nodx.Class("text-lg font-semibold text-content"), nodx.Text(name)),
-					nodx.P(
-						nodx.Class("text-sm text-content-muted"),
-						nodx.Text("Set up your authenticator app."),
+					token != "",
+					nodx.Input(
+						nodx.Attr("type", "hidden"),
+						nodx.Name("token"),
+						nodx.Value(token),
 					),
 				),
 				nodx.If(
-					failure != "",
-					nodx.P(
-						nodx.Class("text-sm text-error"),
-						nodx.Role("alert"),
-						nodx.Text(failure),
+					token == "",
+					textInput(
+						"token", "token", "Enrollment token", "off", "text",
+						lucide.KeyRound(nodx.Class("size-4")),
+						nodx.Required(true),
+						nodx.Autofocus(true),
 					),
 				),
-				nodx.FormEl(
-					nodx.Action(enrollAction),
-					nodx.Method("post"),
-					nodx.Class("space-y-5"),
-					csrfField(csrfToken),
-					nodx.If(
-						token != "",
-						nodx.Input(
-							nodx.Attr("type", "hidden"),
-							nodx.Name("token"),
-							nodx.Value(token),
-						),
-					),
-					nodx.If(
-						token == "",
-						nodx.Div(
-							nodx.Class("space-y-2"),
-							nodx.LabelEl(
-								nodx.Attr("for", "token"),
-								nodx.Class("block text-sm font-medium text-content"),
-								nodx.Text("Enrollment token"),
-							),
-							nodx.Input(
-								nodx.Attr("type", "text"),
-								nodx.Name("token"),
-								nodx.Id("token"),
-								nodx.Autocomplete("off"),
-								nodx.Required(true),
-								nodx.Autofocus(true),
-								nodx.Class(
-									"w-full rounded-md border border-base-400 bg-base-100 px-3 py-2 text-sm",
-									"text-content placeholder:text-content-muted focus:outline-none",
-									"focus:ring-2 focus:ring-content",
-								),
-							),
-						),
-					),
-					nodx.Button(
-						nodx.Attr("type", "submit"),
-						nodx.Class(
-							"w-full rounded-md bg-content text-base-100 font-medium py-2 px-3",
-							"hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-content",
-						),
-						nodx.Text("Show QR"),
-					),
-				),
-				nodx.P(
-					nodx.Class("text-xs text-content-muted"),
-					nodx.Text("The code is revealed only once, after this step."),
-				),
+				actionButton(buttonPrimary, "Show QR", lucide.QrCode(nodx.Class("size-4"))),
+			),
+			nodx.P(
+				nodx.Class("text-xs text-content-muted"),
+				nodx.Text("The code is revealed only once, after this step."),
 			),
 		),
 	)
@@ -121,67 +73,30 @@ func EnrollmentReadyPage(
 		name = loginTitle
 	}
 	return Page(settings, enrollTitle,
-		nodx.Main(
-			nodx.Class("min-h-screen flex items-center justify-center px-4"),
+		standalonePage(settings, name, "Scan the code with your authenticator app.", "max-w-md",
 			nodx.Div(
-				nodx.Class(
-					"w-full max-w-sm bg-base-200 border border-base-400 rounded-lg p-8 space-y-6",
-				),
-				nodx.If(
-					settings.LogoURL != "",
-					nodx.Img(nodx.Class("h-10 w-auto"), nodx.Src(settings.LogoURL), nodx.Alt("")),
-				),
-				nodx.Div(
-					nodx.Class("space-y-1"),
-					nodx.H1(nodx.Class("text-lg font-semibold text-content"), nodx.Text(name)),
-					nodx.P(
-						nodx.Class("text-sm text-content-muted"),
-						nodx.Text("Scan the code with your authenticator app."),
-					),
-				),
+				nodx.Class("mx-auto w-fit rounded-lg bg-white p-3"),
 				nodx.Img(
-					nodx.Class("mx-auto h-52 w-52"),
+					nodx.Class("h-52 w-52"),
 					nodx.Src(qrDataURI),
 					nodx.Alt("TOTP enrollment QR code"),
 				),
-				nodx.Div(
-					nodx.Class("space-y-1"),
-					nodx.P(
-						nodx.Class("text-sm text-content"),
-						nodx.Text(fmt.Sprintf("Account: %s", subject)),
-					),
-					nodx.CodeEl(
-						nodx.Class(
-							"block break-all rounded-md border border-base-400 bg-base-100",
-							"px-3 py-2 text-xs text-content select-all",
-						),
-						nodx.Text(otpauthURI),
-					),
+			),
+			labeledCodeBlock("Account: "+subject, otpauthURI),
+			labeledCodeBlock("Or enter this code manually:", secret),
+			nodx.Div(
+				nodx.Class(
+					"flex items-start gap-2 rounded-md border border-warning/25",
+					"bg-warning/10 p-3 text-sm text-warning",
 				),
-				nodx.Div(
-					nodx.Class("space-y-1"),
-					nodx.P(
-						nodx.Class("text-sm text-content-muted"),
-						nodx.Text("Or enter this code manually:"),
-					),
-					nodx.CodeEl(
-						nodx.Class(
-							"block break-all rounded-md border border-base-400 bg-base-100",
-							"px-3 py-2 text-xs text-content select-all",
-						),
-						nodx.Text(secret),
-					),
-				),
-				nodx.P(
-					nodx.Class("text-sm text-warning"),
-					nodx.Role("alert"),
-					nodx.Text("Copy this code now. It will not be shown again."),
-				),
-				nodx.P(
-					nodx.Class("text-sm text-content-muted"),
-					nodx.Text(
-						"You can now sign in with your identifier and the code from your authenticator.",
-					),
+				nodx.Role("alert"),
+				lucide.TriangleAlert(nodx.Class("mt-0.5 size-4 shrink-0")),
+				nodx.P(nodx.Text("Copy this code now. It will not be shown again.")),
+			),
+			nodx.P(
+				nodx.Class("text-sm text-content-muted"),
+				nodx.Text(
+					"You can now sign in with your identifier and the code from your authenticator.",
 				),
 			),
 		),
