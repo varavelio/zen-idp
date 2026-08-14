@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -123,16 +124,18 @@ func enrollmentTokenRequest(
 	return response
 }
 
+// enrollmentTokenPattern matches the rendered form of a one-use enrollment
+// token, wherever it appears on the page (code block or copy-button
+// attribute).
+var enrollmentTokenPattern = regexp.MustCompile(`tok_[A-Za-z0-9]+_[A-Za-z0-9]+`)
+
 // enrollmentTokenFromBody extracts the tok_{id}_{secret} credential shown
 // by an enrollment-token creation response.
 func enrollmentTokenFromBody(t *testing.T, body string) string {
 	t.Helper()
-	start := strings.Index(body, "tok_")
-	require.NotEqual(t, -1, start, "no enrollment token in response body")
-	rest := body[start:]
-	end := strings.IndexByte(rest, '<')
-	require.NotEqual(t, -1, end, "enrollment token is not terminated")
-	return rest[:end]
+	match := enrollmentTokenPattern.FindString(body)
+	require.NotEmpty(t, match, "no enrollment token in response body")
+	return match
 }
 
 func TestAdminForm(t *testing.T) {
@@ -196,7 +199,7 @@ func TestAdminForm(t *testing.T) {
 		app.server.Handler().ServeHTTP(response, request)
 
 		require.Equal(t, http.StatusOK, response.Code)
-		require.Contains(t, response.Body.String(), "Signed in as administrator.")
+		require.Contains(t, response.Body.String(), "Users")
 		require.Contains(t, response.Body.String(), `action="/admin/logout"`)
 		require.Contains(t, response.Body.String(), `name="csrf_token"`)
 		require.NotContains(t, response.Body.String(), "Administrator sign-in")
@@ -386,7 +389,7 @@ func TestProcessAdminLogin(t *testing.T) {
 }
 
 func TestProcessEnrollmentToken(t *testing.T) {
-	t.Run("renders the enrollment-token creation form on the home page", func(t *testing.T) {
+	t.Run("renders the enrollment-link dialog on the home page", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		loginResponse := adminLoginRequest(t, app, testAdminPassword)
 		require.Equal(t, http.StatusSeeOther, loginResponse.Code)
@@ -405,11 +408,14 @@ func TestProcessEnrollmentToken(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, response.Code)
 		body := response.Body.String()
-		require.Contains(t, body, "Create enrollment token")
+		require.Contains(t, body, "Users")
+		require.Contains(t, body, "Enrollment link")
 		require.Contains(t, body, `action="/admin/tokens"`)
 		require.Contains(t, body, `name="subject"`)
+		require.Contains(t, body, `<select`)
 		require.Contains(t, body, `name="duration"`)
-		require.Contains(t, body, `name="deadline"`)
+		require.Contains(t, body, `value="1h" selected`)
+		require.Contains(t, body, "No expiration")
 		require.Contains(t, body, `name="csrf_token"`)
 	})
 
@@ -427,7 +433,7 @@ func TestProcessEnrollmentToken(t *testing.T) {
 		body := response.Body.String()
 		require.Contains(t, body, "Enrollment token created.")
 		require.Contains(t, body, "Subject: alice")
-		require.Contains(t, body, "Copy this token now. It will not be shown again.")
+		require.Contains(t, body, "Copy this link now. It will not be shown again.")
 		require.Contains(t, body, `href="/admin"`)
 
 		token := enrollmentTokenFromBody(t, body)
@@ -1059,7 +1065,7 @@ func TestAdminAndUserCookiesCoexist(t *testing.T) {
 	adminPage := httptest.NewRecorder()
 	app.server.Handler().ServeHTTP(adminPage, both())
 	require.Equal(t, http.StatusOK, adminPage.Code)
-	require.Contains(t, adminPage.Body.String(), "Signed in as administrator.")
+	require.Contains(t, adminPage.Body.String(), "Users")
 
 	authorizeRequest := buildAuthorizeRequest(t, validPublicRequest())
 	authorizeRequest.AddCookie(&http.Cookie{Name: adminSessionCookieName, Value: adminToken})

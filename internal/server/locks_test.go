@@ -83,7 +83,7 @@ func TestProcessLockChange(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, response.Code)
 		body := response.Body.String()
-		require.Contains(t, body, "Lock management")
+		require.Contains(t, body, "Users")
 		require.Contains(t, body, "alice")
 		require.Contains(t, body, "Active")
 		require.Contains(t, body, `action="/admin/locks"`)
@@ -524,21 +524,24 @@ func TestProcessLockChange(t *testing.T) {
 // configured error.
 type failingSubjectLocks struct{ err error }
 
+// actionButtonPattern matches one rendered lock-management submit button,
+// including any icon markup inside it.
+var actionButtonPattern = regexp.MustCompile(
+	`<button[^>]*name="action"[^>]*value="([^"]+)"[^>]*>[\s\S]*?</button>`,
+)
+
 // extractFormValue returns the value attribute of the first rendered submit
 // button whose label contains labelText, or an empty string when no such
 // button exists. It lets tests submit the exact action value the UI renders,
 // keeping the UI-to-handler contract under test.
 func extractFormValue(t *testing.T, html, labelText string) string {
 	t.Helper()
-	pattern := regexp.MustCompile(
-		`<button[^>]*name="action"[^>]*value="([^"]+)"[^>]*>[^<]*` +
-			regexp.QuoteMeta(labelText) + `[^<]*</button>`,
-	)
-	match := pattern.FindStringSubmatch(html)
-	if len(match) != 2 {
-		return ""
+	for _, match := range actionButtonPattern.FindAllStringSubmatch(html, -1) {
+		if strings.Contains(match[0], labelText) {
+			return match[1]
+		}
 	}
-	return match[1]
+	return ""
 }
 
 func (stub failingSubjectLocks) LockSubject(context.Context, string, time.Time) error {

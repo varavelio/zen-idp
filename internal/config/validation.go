@@ -72,8 +72,11 @@ func validateDocument(document configurationDocument) error {
 	if ui.Name.Set && strings.TrimSpace(string(ui.Name.Value)) == "" {
 		return fmt.Errorf("validate configuration: config.ui.name must not be blank")
 	}
-	if ui.LogoURL.Set && string(ui.LogoURL.Value) == "" {
-		return fmt.Errorf("validate configuration: config.ui.logo_url must not be empty")
+	if ui.LogoLightURL.Set && string(ui.LogoLightURL.Value) == "" {
+		return fmt.Errorf("validate configuration: config.ui.logo_light_url must not be empty")
+	}
+	if ui.LogoDarkURL.Set && string(ui.LogoDarkURL.Value) == "" {
+		return fmt.Errorf("validate configuration: config.ui.logo_dark_url must not be empty")
 	}
 	if ui.FaviconURL.Set && string(ui.FaviconURL.Value) == "" {
 		return fmt.Errorf("validate configuration: config.ui.favicon_url must not be empty")
@@ -198,8 +201,11 @@ func validateUI(ui UI) error {
 	if ui.Name != "" && strings.TrimSpace(ui.Name) == "" {
 		return fmt.Errorf("validate configuration: config.ui.name must not be blank")
 	}
-	if err := validateHTTPSURL(ui.LogoURL); err != nil {
-		return fmt.Errorf("validate configuration: config.ui.logo_url: %w", err)
+	if err := validateHTTPSURL(ui.LogoLightURL); err != nil {
+		return fmt.Errorf("validate configuration: config.ui.logo_light_url: %w", err)
+	}
+	if err := validateHTTPSURL(ui.LogoDarkURL); err != nil {
+		return fmt.Errorf("validate configuration: config.ui.logo_dark_url: %w", err)
 	}
 	if err := validateHTTPSURL(ui.FaviconURL); err != nil {
 		return fmt.Errorf("validate configuration: config.ui.favicon_url: %w", err)

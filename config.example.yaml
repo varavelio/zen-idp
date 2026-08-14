@@ -30,8 +30,12 @@ config:
     # Product or organization name displayed to users.
     name: "Example Company Auth"
 
-    # Optional absolute HTTPS logo URL.
-    logo_url: "https://example.com/assets/logo.png"
+    # Optional absolute HTTPS logo URLs, one per color scheme. When both are
+    # set, the light logo is shown in light mode and the dark logo in dark
+    # mode; when only one is set, it is shown in both modes. To use the same
+    # logo everywhere, simply set the same URL in both fields.
+    logo_light_url: "https://example.com/assets/logo-light.png"
+    logo_dark_url: "https://example.com/assets/logo-dark.png"
 
     # Optional absolute HTTPS browser favicon URL.
     favicon_url: "https://example.com/assets/favicon.ico"

@@ -34,8 +34,10 @@ type Server struct {
 type UI struct {
 	// Name is the product or organization name shown to users.
 	Name string
-	// LogoURL is the HTTPS URL of the logo shown on authentication pages.
-	LogoURL string
+	// LogoLightURL is the HTTPS URL of the logo shown in light mode.
+	LogoLightURL string
+	// LogoDarkURL is the HTTPS URL of the logo shown in dark mode.
+	LogoDarkURL string
 	// FaviconURL is the URL of the icon associated with authentication pages.
 	FaviconURL string
 }

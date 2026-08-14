@@ -343,9 +343,9 @@ func (server *Server) processEnrollmentToken(w http.ResponseWriter, r *http.Requ
 
 	return server.renderEnrollmentTokenPage(
 		w,
+		r,
 		user.Subject,
 		clock.Format(expiresAt),
-		enrollmentToken,
 		server.enrollmentURL(enrollmentToken),
 	)
 }
@@ -366,18 +366,24 @@ func (server *Server) renderAdminHomeRefresh(
 }
 
 // renderEnrollmentTokenPage writes the one-time display of a freshly
-// created enrollment token and its shareable enrollment link. The page must
-// never be cached.
+// created enrollment token and its shareable enrollment link, carrying the
+// anti-forgery token that protects the sign-out form of the shared header.
+// The page must never be cached.
 func (server *Server) renderEnrollmentTokenPage(
 	w http.ResponseWriter,
-	subject, expiresAt, enrollmentToken, enrollURL string,
+	r *http.Request,
+	subject, expiresAt, enrollURL string,
 ) error {
+	csrfToken, err := server.admin.CSRF.Token(w, r)
+	if err != nil {
+		return fmt.Errorf("get CSRF token: %w", err)
+	}
 	html, err := ui.EnrollmentTokenPage(
 		server.admin.UI,
 		subject,
 		expiresAt,
-		enrollmentToken,
 		enrollURL,
+		csrfToken,
 	).RenderString()
 	if err != nil {
 		return fmt.Errorf("render enrollment token page: %w", err)

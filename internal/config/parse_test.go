@@ -21,7 +21,8 @@ config:
     port: 9090
   ui:
     name: Example Auth
-    logo_url: https://example.com/logo.png
+    logo_light_url: https://example.com/logo-light.png
+    logo_dark_url: https://example.com/logo-dark.png
     favicon_url: https://example.com/favicon.ico
   security:
     admin_password_hash: admin-hash
@@ -58,9 +59,10 @@ users:
 		require.Equal(t, "https://auth.example.com", configuration.Issuer)
 		require.Equal(t, Server{Host: "0.0.0.0", Port: 9090}, configuration.Server)
 		require.Equal(t, UI{
-			Name:       "Example Auth",
-			LogoURL:    "https://example.com/logo.png",
-			FaviconURL: "https://example.com/favicon.ico",
+			Name:         "Example Auth",
+			LogoLightURL: "https://example.com/logo-light.png",
+			LogoDarkURL:  "https://example.com/logo-dark.png",
+			FaviconURL:   "https://example.com/favicon.ico",
 		}, configuration.UI)
 		require.Equal(t, 8, configuration.Security.RateLimits.MaxUserLoginAttempts)
 		require.Equal(
@@ -439,27 +441,49 @@ config:
 `),
 			errorText: "config.ui.name must not be blank",
 		},
-		"UI logo is explicitly empty": {
+		"UI light logo is explicitly empty": {
 			contents: validConfigurationYAML(`
 config:
   issuer: https://auth.example.com
   ui:
-    logo_url: ""
+    logo_light_url: ""
   security:
     admin_password_hash: admin-hash
 `),
-			errorText: "config.ui.logo_url must not be empty",
+			errorText: "config.ui.logo_light_url must not be empty",
 		},
-		"UI logo is not HTTPS": {
+		"UI dark logo is explicitly empty": {
 			contents: validConfigurationYAML(`
 config:
   issuer: https://auth.example.com
   ui:
-    logo_url: http://example.com/logo.png
+    logo_dark_url: ""
   security:
     admin_password_hash: admin-hash
 `),
-			errorText: "config.ui.logo_url",
+			errorText: "config.ui.logo_dark_url must not be empty",
+		},
+		"UI light logo is not HTTPS": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  ui:
+    logo_light_url: http://example.com/logo.png
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "config.ui.logo_light_url",
+		},
+		"UI dark logo is not HTTPS": {
+			contents: validConfigurationYAML(`
+config:
+  issuer: https://auth.example.com
+  ui:
+    logo_dark_url: http://example.com/logo.png
+  security:
+    admin_password_hash: admin-hash
+`),
+			errorText: "config.ui.logo_dark_url",
 		},
 		"UI name is not a string": {
 			contents: []byte(`

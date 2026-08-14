@@ -43,7 +43,7 @@ func (server *Server) auditLog(w http.ResponseWriter, r *http.Request) error {
 			cookie.Value,
 			time.Now(),
 		); err == nil {
-			return server.renderAuditLogPage(w, r.Context())
+			return server.renderAuditLogPage(w, r.Context(), token)
 		} else if !errors.Is(
 			err,
 			session.ErrMalformedToken,
@@ -57,9 +57,14 @@ func (server *Server) auditLog(w http.ResponseWriter, r *http.Request) error {
 }
 
 // renderAuditLogPage writes the audit log page for an authenticated
-// administrator, listing the most recent events newest first. The page must
-// never be cached.
-func (server *Server) renderAuditLogPage(w http.ResponseWriter, ctx context.Context) error {
+// administrator, listing the most recent events newest first. csrfToken
+// protects the sign-out form of the shared header. The page must never be
+// cached.
+func (server *Server) renderAuditLogPage(
+	w http.ResponseWriter,
+	ctx context.Context,
+	csrfToken string,
+) error {
 	events, err := server.admin.AuditLog.List(ctx, auditListLimit)
 	if err != nil {
 		return fmt.Errorf("list audit records: %w", err)
@@ -75,7 +80,7 @@ func (server *Server) renderAuditLogPage(w http.ResponseWriter, ctx context.Cont
 		})
 	}
 
-	html, err := ui.AuditLogPage(server.admin.UI, records).RenderString()
+	html, err := ui.AuditLogPage(server.admin.UI, records, csrfToken).RenderString()
 	if err != nil {
 		return fmt.Errorf("render audit log page: %w", err)
 	}

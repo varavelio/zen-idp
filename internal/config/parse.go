@@ -81,9 +81,10 @@ type serverDocument struct {
 
 // uiDocument contains presentation settings from YAML.
 type uiDocument struct {
-	Name       optionalString `yaml:"name"`
-	LogoURL    optionalString `yaml:"logo_url"`
-	FaviconURL optionalString `yaml:"favicon_url"`
+	Name         optionalString `yaml:"name"`
+	LogoLightURL optionalString `yaml:"logo_light_url"`
+	LogoDarkURL  optionalString `yaml:"logo_dark_url"`
+	FaviconURL   optionalString `yaml:"favicon_url"`
 }
 
 // clientDocument contains one OIDC client from YAML.
@@ -319,9 +320,10 @@ func resolve(document configurationDocument) *Config {
 			Port: intValue(settings.Server.Port, defaultServerPort),
 		},
 		UI: UI{
-			Name:       stringValue(settings.UI.Name, ""),
-			LogoURL:    stringValue(settings.UI.LogoURL, ""),
-			FaviconURL: stringValue(settings.UI.FaviconURL, ""),
+			Name:         stringValue(settings.UI.Name, ""),
+			LogoLightURL: stringValue(settings.UI.LogoLightURL, ""),
+			LogoDarkURL:  stringValue(settings.UI.LogoDarkURL, ""),
+			FaviconURL:   stringValue(settings.UI.FaviconURL, ""),
 		},
 		Security: Security{
 			AdminPasswordHash: string(settings.Security.AdminPasswordHash),
