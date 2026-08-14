@@ -316,7 +316,7 @@ func AdminHomePage(
 								),
 								nodx.If(
 									lock.Panicked,
-									lockActionButton("clear-panic", "Clear panic", false),
+									lockActionButton("clear_panic", "Clear panic", false),
 								),
 							),
 						)

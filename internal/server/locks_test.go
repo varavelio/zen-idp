@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -130,7 +131,63 @@ func TestProcessLockChange(t *testing.T) {
 		require.Contains(t, body, "Panic locked")
 		require.Contains(t, body, `value="lock"`)
 		require.Contains(t, body, `value="unlock"`)
-		require.Contains(t, body, `value="clear-panic"`)
+		require.Contains(t, body, `value="clear_panic"`)
+	})
+
+	t.Run("submits the rendered clear-panic form value end to end", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		queries := statestore.New(app.db)
+		require.NoError(
+			t,
+			queries.CreatePanicLock(context.Background(), statestore.CreatePanicLockParams{
+				Sub:       "alice",
+				CreatedAt: clock.Format(time.Now()),
+			}),
+		)
+
+		loginResponse := adminLoginRequest(t, app, testAdminPassword)
+		adminToken := adminSessionCookie(t, loginResponse)
+		require.NotEmpty(t, adminToken)
+
+		// Render the home page and extract the exact action value the
+		// rendered form submits for the panic lock, so the test exercises
+		// the real UI-to-handler contract instead of a hand-written value.
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			adminLoginPath,
+			nil,
+		)
+		request.AddCookie(&http.Cookie{Name: adminSessionCookieName, Value: adminToken})
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+		require.Equal(t, http.StatusOK, response.Code)
+		action := extractFormValue(t, response.Body.String(), "Clear panic")
+		require.Equal(t, lockActionClearPanic, action)
+
+		csrfToken := adminCSRFToken(t, app)
+		form := url.Values{
+			"subject":      {"alice"},
+			"action":       {action},
+			csrf.FieldName: {csrfToken},
+		}
+		request = httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			adminLocksAction,
+			strings.NewReader(form.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: adminSessionCookieName, Value: adminToken})
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
+		response = httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+		require.Equal(t, http.StatusOK, response.Code)
+		require.NotContains(t, response.Body.String(), lockInvalidAction)
+
+		panicked, err := app.locks.IsPanicked(context.Background(), "alice")
+		require.NoError(t, err)
+		require.False(t, panicked)
 	})
 
 	t.Run("shows a placeholder when no users are configured", func(t *testing.T) {
@@ -466,6 +523,23 @@ func TestProcessLockChange(t *testing.T) {
 // failingSubjectLocks is a stub implementation that always returns the
 // configured error.
 type failingSubjectLocks struct{ err error }
+
+// extractFormValue returns the value attribute of the first rendered submit
+// button whose label contains labelText, or an empty string when no such
+// button exists. It lets tests submit the exact action value the UI renders,
+// keeping the UI-to-handler contract under test.
+func extractFormValue(t *testing.T, html, labelText string) string {
+	t.Helper()
+	pattern := regexp.MustCompile(
+		`<button[^>]*name="action"[^>]*value="([^"]+)"[^>]*>[^<]*` +
+			regexp.QuoteMeta(labelText) + `[^<]*</button>`,
+	)
+	match := pattern.FindStringSubmatch(html)
+	if len(match) != 2 {
+		return ""
+	}
+	return match[1]
+}
 
 func (stub failingSubjectLocks) LockSubject(context.Context, string, time.Time) error {
 	return stub.err
