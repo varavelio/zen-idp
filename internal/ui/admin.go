@@ -411,7 +411,7 @@ func lockActions(lock LockStatus, token string) nodx.Node {
 	return nodx.FormEl(
 		nodx.Action(adminLocksAction),
 		nodx.Method("post"),
-		nodx.Class("flex flex-col gap-2"),
+		nodx.Class("flex flex-col gap-3"),
 		csrfField(token),
 		nodx.Input(
 			nodx.Attr("type", "hidden"),
