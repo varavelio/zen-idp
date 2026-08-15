@@ -20,6 +20,14 @@ const shutdownTimeoutMs = 10_000;
 const probeIntervalMs = 100;
 
 /**
+ * How many times a start attempt may fail before the harness gives up.
+ * The loopback port is allocated with a probe that releases it before
+ * the server binds, so a parallel instance can take the same port;
+ * retrying with a fresh port turns that rare collision into a non-event.
+ */
+const maxStartAttempts = 3;
+
+/**
  * Root secret of instances that do not declare one. It satisfies the
  * service minimum length and stays stable, so tests can derive TOTP
  * secrets from it.
@@ -55,25 +63,26 @@ export class Harness {
   static async start(options: HarnessOptions): Promise<Harness> {
     assertBinary();
     validateConfig(options.config);
-    const dir = await Deno.makeTempDir({ prefix: "zen-idp-e2e-" });
-    const port = freePort();
-    const baseURL = `http://127.0.0.1:${port}`;
-    const harness = new Harness(
-      dir,
-      baseURL,
-      port,
-      options.rootSecret ?? defaultRootSecret,
-      options.env,
-    );
-    try {
-      await harness.writeConfig(options.config);
-      harness.startProcess();
-      await harness.waitReady();
-    } catch (error) {
-      await harness.stop();
-      throw error;
+    const rootSecret = options.rootSecret ?? defaultRootSecret;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < maxStartAttempts; attempt++) {
+      const dir = await Deno.makeTempDir({ prefix: "zen-idp-e2e-" });
+      const port = freePort();
+      const baseURL = `http://127.0.0.1:${port}`;
+      const harness = new Harness(dir, baseURL, port, rootSecret, options.env);
+      try {
+        await harness.writeConfig(options.config);
+        harness.startProcess();
+        await harness.waitReady();
+        return harness;
+      } catch (error) {
+        lastError = error;
+        await harness.stop();
+      }
     }
-    return harness;
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("harness: could not start an isolated instance");
   }
 
   private constructor(
@@ -222,8 +231,11 @@ export class Harness {
   }
 
   /**
-   * Polls the discovery endpoint until it answers with 200, failing fast
+   * Polls the discovery endpoint until this instance answers with 200 and
+   * its advertised issuer matches this instance's base URL, failing fast
    * with the server output when the process dies before becoming ready.
+   * The issuer check detects the rare case where another parallel
+   * instance took the same loopback port before this one bound it.
    */
   private async waitReady(): Promise<void> {
     const deadline = Date.now() + readinessTimeoutMs;
@@ -234,8 +246,10 @@ export class Harness {
           { signal: AbortSignal.timeout(1_000) },
         );
         if (response.status === 200) {
-          await response.arrayBuffer();
-          return;
+          const document = await response.json() as { issuer?: unknown };
+          if (document.issuer === this.baseURL) {
+            return;
+          }
         }
       } catch {
         // Not ready yet.

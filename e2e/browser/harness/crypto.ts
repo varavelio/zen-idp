@@ -45,3 +45,8 @@ export function totpCode(secret: string, at: Date): string {
   });
   return totp.generate({ timestamp: at.getTime() });
 }
+
+/** Builds the Authorization header value of HTTP Basic authentication. */
+export function basicAuth(username: string, password: string): string {
+  return `Basic ${btoa(`${username}:${password}`)}`;
+}

@@ -1,7 +1,8 @@
 // A small OIDC relying party built on the openid-client library. It binds
 // a loopback port and serves the authorization-flow endpoints of an
-// external application, so tests can drive a complete green path in a
-// real browser exactly like a third-party client would.
+// external application, so tests can drive complete flows in a real
+// browser exactly like a third-party client would: login, RP-Initiated
+// Logout, and the session the client holds in between.
 
 import {
   allowInsecureRequests,
@@ -35,11 +36,13 @@ export interface OIDCSession {
 }
 
 /**
- * Drives the authorization-code flow of one OIDC client as an external
- * application would: /start begins a flow with fresh PKCE, state, and
- * nonce and redirects the browser to the issuer; /callback exchanges the
+ * Drives the flows of one OIDC client as an external application would:
+ * /start begins an authorization flow with fresh PKCE, state, and nonce
+ * and redirects the browser to the issuer; /callback exchanges the
  * returned code, validates the tokens, resolves userinfo, and renders the
- * outcome.
+ * outcome; /logout begins an RP-Initiated Logout with the ID token the
+ * client holds; /logout-callback renders the return of that logout; and
+ * /session exposes the raw ID token of the last completed flow.
  */
 export class OIDCClientServer {
   /** Starts the client on a free loopback port. */
@@ -67,9 +70,19 @@ export class OIDCClientServer {
     this.#server = server;
   }
 
-  /** The registered callback URI of this client. */
+  /** The registered callback URI where authorization flows return. */
   get redirectURI(): string {
     return `${this.baseURL}/callback`;
+  }
+
+  /** The registered callback URI where RP-Initiated Logout returns. */
+  get logoutRedirectURI(): string {
+    return `${this.baseURL}/logout-callback`;
+  }
+
+  /** Every registered redirect URI of this client. */
+  get redirectURIs(): string[] {
+    return [this.redirectURI, this.logoutRedirectURI];
   }
 
   readonly #clientId: string;
@@ -77,6 +90,7 @@ export class OIDCClientServer {
   readonly #server: Deno.HttpServer;
   #config: Configuration | null = null;
   readonly #pending = new Map<string, { codeVerifier: string; nonce: string }>();
+  #session: { idToken: string } | null = null;
   #stopped = false;
 
   /**
@@ -91,7 +105,7 @@ export class OIDCClientServer {
     this.#config = await discovery(
       new URL(issuerURL),
       this.#clientId,
-      { redirect_uris: [this.redirectURI] },
+      { redirect_uris: this.redirectURIs },
       clientAuthentication,
       { execute: [allowInsecureRequests] },
     );
@@ -105,15 +119,21 @@ export class OIDCClientServer {
     }
   }
 
-  #handle(request: Request): Promise<Response> {
+  #handle(request: Request): Response | Promise<Response> {
     const url = new URL(request.url);
     switch (url.pathname) {
       case "/start":
         return this.#handleStart();
       case "/callback":
         return this.#handleCallback(url);
+      case "/logout":
+        return this.#handleLogout();
+      case "/logout-callback":
+        return this.#handleLogoutCallback(url);
+      case "/session":
+        return this.#handleSession();
       default:
-        return Promise.resolve(new Response("not found", { status: 404 }));
+        return new Response("not found", { status: 404 });
     }
   }
 
@@ -137,7 +157,7 @@ export class OIDCClientServer {
 
   /**
    * Exchanges the returned code, validates the tokens, resolves userinfo,
-   * and renders the outcome.
+   * stores the client session, and renders the outcome.
    */
   async #handleCallback(url: URL): Promise<Response> {
     const config = this.#requireConfig();
@@ -155,13 +175,52 @@ export class OIDCClientServer {
       expectedState: state,
       expectedNonce: pending.nonce,
     });
+    const idToken = tokens.id_token;
     const idTokenClaims = tokens.claims();
-    if (idTokenClaims === undefined) {
+    if (idToken === undefined || idTokenClaims === undefined) {
       throw new Error("authorization response carried no ID token");
     }
+    this.#session = { idToken };
     const userinfo = await fetchUserInfo(config, tokens.access_token, idTokenClaims.sub);
     return new Response(renderSession(idTokenClaims, userinfo), {
       headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  /**
+   * Begins an RP-Initiated Logout with the ID token the client holds,
+   * redirecting the browser to the issuer's end-session endpoint.
+   */
+  #handleLogout(): Response {
+    const config = this.#requireConfig();
+    if (this.#session === null) {
+      return new Response("no active client session", { status: 400 });
+    }
+    const endSession = config.serverMetadata().end_session_endpoint;
+    if (endSession === undefined) {
+      throw new Error("issuer does not advertise an end-session endpoint");
+    }
+    const logoutURL = new URL(endSession);
+    logoutURL.searchParams.set("id_token_hint", this.#session.idToken);
+    logoutURL.searchParams.set("post_logout_redirect_uri", this.logoutRedirectURI);
+    logoutURL.searchParams.set("state", randomState());
+    return Response.redirect(logoutURL, 302);
+  }
+
+  /** Renders the return of an RP-Initiated Logout with the echoed state. */
+  #handleLogoutCallback(url: URL): Response {
+    return new Response(renderLogoutReturn(url.searchParams.get("state") ?? ""), {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  /** Returns the raw ID token of the last completed flow. */
+  #handleSession(): Response {
+    if (this.#session === null) {
+      return new Response("no active client session", { status: 404 });
+    }
+    return new Response(JSON.stringify({ id_token: this.#session.idToken }), {
+      headers: { "content-type": "application/json" },
     });
   }
 
@@ -173,27 +232,40 @@ export class OIDCClientServer {
   }
 }
 
-/** Renders the outcome of one flow as a small result page. */
+/** Renders the outcome of one authorization flow as a result page. */
 function renderSession(
   idTokenClaims: Record<string, unknown>,
   userinfo: Record<string, unknown>,
 ): string {
   const idTokenJSON = escapeHTML(JSON.stringify(idTokenClaims, null, 2));
   const userinfoJSON = escapeHTML(JSON.stringify(userinfo, null, 2));
-  return `
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8">
-        <title>OIDC client</title>
-      </head>
-      <body>
-        <h1>Signed in</h1>
-        <pre id="idtoken">${idTokenJSON}</pre>
-        <pre id="userinfo">${userinfoJSON}</pre>
-      </body>
-    </html>
-  `;
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>OIDC client</title>
+</head>
+<body>
+  <h1>Signed in</h1>
+  <pre id="idtoken">${idTokenJSON}</pre>
+  <pre id="userinfo">${userinfoJSON}</pre>
+</body>
+</html>`;
+}
+
+/** Renders the return of an RP-Initiated Logout. */
+function renderLogoutReturn(state: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>OIDC client</title>
+</head>
+<body>
+  <h1>Signed out</h1>
+  <pre id="state">${escapeHTML(state)}</pre>
+</body>
+</html>`;
 }
 
 /** Escapes the HTML-significant characters of a text fragment. */
