@@ -55,7 +55,7 @@ tasks:
     desc: Run code generators (SQLC, TailwindCSS)
     cmds:
       - sqlc generate
-      - tailwindcss -i internal/ui/tailwind.css -o internal/ui/static/build/app.css --silent --minify
+      - cd ./internal/ui && tailwindcss -i ./tailwind.css -o ./static/build/app.css --silent --minify
 
   format:
     desc: Format all code
