@@ -61,7 +61,9 @@ type TokenDependencies struct {
 	// disables the events.
 	Audit AuditRecorder
 	// RequireClientSecretTLS demands HTTPS for client-secret
-	// authentication; production deployments must set it.
+	// authentication; production deployments must set it. The demand is
+	// satisfied by a direct TLS connection or by a reverse proxy that
+	// forwarded the original HTTPS scheme.
 	RequireClientSecretTLS bool
 	// Users lists every configured user, the only subjects whose
 	// authorization codes may still be redeemed.
@@ -325,7 +327,7 @@ func (server *Server) authenticateClient(
 			"confidential clients must authenticate with a client secret",
 		)
 	}
-	if server.tokens.RequireClientSecretTLS && r.TLS == nil {
+	if server.tokens.RequireClientSecretTLS && !requestIsHTTPS(r) {
 		return config.Client{}, clientError("client secrets are only accepted over HTTPS")
 	}
 	match, err := crypto.VerifyCredential(clientSecret, client.SecretHash)
@@ -336,6 +338,21 @@ func (server *Server) authenticateClient(
 		return config.Client{}, clientError("the client credentials are invalid")
 	}
 	return client, nil
+}
+
+// requestIsHTTPS reports whether the request was carried over HTTPS,
+// either directly to the listener or through a TLS-terminating reverse
+// proxy that forwarded the original scheme. Production deployments
+// terminate TLS at a reverse proxy and forward plain HTTP to the
+// listener, so the forwarded scheme is the only signal available there;
+// a proxy that could forge the header can already read the plaintext
+// traffic it forwards.
+func requestIsHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	proto, _, _ := strings.Cut(r.Header.Get("X-Forwarded-Proto"), ",")
+	return strings.EqualFold(strings.TrimSpace(proto), "https")
 }
 
 // parseClientCredentials extracts the client identifier and optional secret

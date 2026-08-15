@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -260,6 +261,50 @@ func TestToken(t *testing.T) {
 		require.Equal(t, http.StatusOK, response.Code)
 		body := decodeTokenResponse(t, response)
 		require.NotEmpty(t, body.AccessToken)
+	})
+
+	t.Run("accepts client secrets forwarded over HTTPS by a reverse proxy", func(t *testing.T) {
+		// Production deployments terminate TLS at a reverse proxy that
+		// forwards plain HTTP, so the forwarded scheme is the only
+		// HTTPS signal the listener receives.
+		app := newTestApp(t, testUsers)
+		app.server.tokens.RequireClientSecretTLS = true
+		exchange := func(forwardedProto string, directTLS bool) *httptest.ResponseRecorder {
+			t.Helper()
+			code := createCode(t, app, func(params *onetoken.CodeParams) {
+				params.ClientID = "confidential-app"
+			})
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				"/token",
+				strings.NewReader(validExchangeForm(code).Encode()),
+			)
+			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			request.Header.Set("Authorization", basicAuth("confidential-app", testClientSecret))
+			if forwardedProto != "" {
+				request.Header.Set("X-Forwarded-Proto", forwardedProto)
+			}
+			if directTLS {
+				request.TLS = &tls.ConnectionState{}
+			}
+			response := httptest.NewRecorder()
+			app.server.Handler().ServeHTTP(response, request)
+			return response
+		}
+
+		require.Equal(t, http.StatusOK, exchange("https", false).Code)
+		require.Equal(t, http.StatusOK, exchange("HTTPS", false).Code)
+		require.Equal(t, http.StatusOK, exchange("", true).Code)
+
+		for _, forwardedProto := range []string{"", "http"} {
+			response := exchange(forwardedProto, false)
+			require.Equal(t, http.StatusUnauthorized, response.Code)
+			var body tokenErrorResponse
+			require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+			require.Equal(t, "invalid_client", body.Error)
+			require.Equal(t, "client secrets are only accepted over HTTPS", body.ErrorDescription)
+		}
 	})
 
 	t.Run("issues tokens for a confidential client with client_secret_post", func(t *testing.T) {

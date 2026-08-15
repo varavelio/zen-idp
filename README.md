@@ -110,7 +110,7 @@ Each `generate-secrets` run is independent. When adding a client later, use only
 
 ## Security notes
 
-- Terminate TLS at your reverse proxy, CDN, or load balancer. Zen IdP serves plain HTTP by default and derives `Secure` cookies and TLS requirements from the issuer scheme, so the public issuer URL must be HTTPS in production.
+- Terminate TLS at your reverse proxy, CDN, or load balancer. Zen IdP serves plain HTTP by default, derives `Secure` cookies and TLS requirements from the issuer scheme, and trusts the `X-Forwarded-Proto` header of the terminating proxy to recognize the original scheme, so the public issuer URL must be HTTPS in production and your proxy must forward it.
 - The root secret is the crown jewel: it derives the signing key and every TOTP credential. Rotating it rotates _everything_ - plan accordingly.
 - Rate limits are keyed by identifier, never by source IP. Put IP-level limits at your edge.
 - The SQLite file is disposable operational state. Deleting it revokes every session and token and wipes the audit log, but the signing identity and all credentials remain intact.
