@@ -92,5 +92,6 @@ This is a Go project with a structure that aims to remain flat, simple, and idio
 - internal/totp: Derives the deterministic per-user TOTP shared secrets from the normalized root secret, builds their otpauth enrollment URIs, and verifies authenticator codes
 - internal/ui: Renders the HTML pages served by Zen IdP with NodX and embeds the static assets (compiled stylesheet, vendored fonts, and scripts)
 - internal/userinfo: Validates access tokens and resolves the current claims of their subject from the active configuration
+- internal/vectors: Verifies the frozen v1 deterministic derivation vectors that anchor the signing identity, RS256 signatures, and TOTP secrets to the source root secret
 - internal/yamlmerge: Merges YAML documents into one unified document
 - internal/yamlsource: Discovers and reads YAML files from filesystem paths, directories, and glob patterns
