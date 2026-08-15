@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -363,7 +364,19 @@ func parseClientCredentials(
 		if !ok || clientID == "" {
 			return "", "", false, clientError("malformed client credentials")
 		}
-		return clientID, clientSecret, true, nil
+		// RFC 6749 Section 2.3.1 encodes the credentials with
+		// application/x-www-form-urlencoded, so percent-encoded values
+		// must be decoded before they are compared. Clients that send
+		// the raw characters keep working: unescaped text is unchanged.
+		unescapedID, err := url.QueryUnescape(clientID)
+		if err != nil {
+			return "", "", false, clientError("malformed client credentials")
+		}
+		unescapedSecret, err := url.QueryUnescape(clientSecret)
+		if err != nil {
+			return "", "", false, clientError("malformed client credentials")
+		}
+		return unescapedID, unescapedSecret, true, nil
 	}
 	clientID = r.FormValue("client_id")
 	clientSecret = r.FormValue("client_secret")

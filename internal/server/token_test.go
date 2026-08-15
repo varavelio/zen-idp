@@ -240,6 +240,28 @@ func TestToken(t *testing.T) {
 		require.NotEmpty(t, body.AccessToken)
 	})
 
+	t.Run("decodes percent-encoded client_secret_basic credentials", func(t *testing.T) {
+		// RFC 6749 Section 2.3.1 form-url-encodes the credentials in the
+		// Basic header; well-behaved libraries such as oauth4webapi
+		// percent-encode even unreserved characters.
+		app := newTestApp(t, testUsers)
+		code := createCode(t, app, func(params *onetoken.CodeParams) {
+			params.ClientID = "confidential-app"
+		})
+		encoded := "confidential%2Dapp:test%2Dclient%2Dsecret"
+		credentials := base64.StdEncoding.EncodeToString([]byte(encoded))
+		response := tokenRequest(
+			t,
+			app.server.Handler(),
+			validExchangeForm(code),
+			"Basic "+credentials,
+		)
+
+		require.Equal(t, http.StatusOK, response.Code)
+		body := decodeTokenResponse(t, response)
+		require.NotEmpty(t, body.AccessToken)
+	})
+
 	t.Run("issues tokens for a confidential client with client_secret_post", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		code := createCode(t, app, func(params *onetoken.CodeParams) {
