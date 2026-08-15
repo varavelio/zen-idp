@@ -40,6 +40,11 @@ tasks:
       - build
     cmd: ./dist/zen-idp generate-secrets
 
+  docs:
+    desc: Generate documentation site using veta
+    dir: ./docs
+    cmd: veta build
+
   build:
     desc: Build the project
     deps:
