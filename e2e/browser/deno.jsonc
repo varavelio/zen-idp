@@ -1,0 +1,18 @@
+// The adjacent package.json only declares "type": "module". That makes
+// the Playwright runner load test files as ESM, so bare npm imports such
+// as openid-client resolve through Deno's native loader (import map and
+// npm graph) instead of Node-style CJS resolution, which cannot see the
+// transitive dependencies of Deno's virtual npm store.
+
+{
+  "tasks": {
+    "test": "deno run --allow-all npm:playwright test --timeout 60000 ."
+  },
+  "imports": {
+    "@playwright/test": "npm:@playwright/test@1.62.1",
+    "openid-client": "npm:openid-client@6.8.5",
+    "otpauth": "npm:otpauth@9.3.6",
+    "base32-encode": "npm:base32-encode@2.0.0"
+  },
+  "nodeModulesDir": "auto"
+}

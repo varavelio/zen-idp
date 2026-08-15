@@ -2,16 +2,27 @@
   "version": "5",
   "specifiers": {
     "npm:@playwright/test@1.62.1": "1.62.1",
+    "npm:base32-encode@2.0.0": "2.0.0",
     "npm:openid-client@6.8.5": "6.8.5",
+    "npm:otpauth@9.3.6": "9.3.6",
     "npm:playwright@*": "1.62.1"
   },
   "npm": {
+    "@noble/hashes@1.6.1": {
+      "integrity": "sha512-pq5D8h10hHBjyqX+cfBm0i8JUXJ0UhczFc4r74zbuT9XgewFo2E3J1cOaGtdZynILNmQ685YWGzGE1Zv6io50w=="
+    },
     "@playwright/test@1.62.1": {
       "integrity": "sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==",
       "dependencies": [
         "playwright"
       ],
       "bin": true
+    },
+    "base32-encode@2.0.0": {
+      "integrity": "sha512-mlmkfc2WqdDtMl/id4qm3A7RjW6jxcbAoMjdRmsPiwQP0ufD4oXItYMnPgVHe80lnAIy+1xwzhHE1s4FoIceSw==",
+      "dependencies": [
+        "to-data-view"
+      ]
     },
     "fsevents@2.3.2": {
       "integrity": "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==",
@@ -31,6 +42,12 @@
         "oauth4webapi"
       ]
     },
+    "otpauth@9.3.6": {
+      "integrity": "sha512-eIcCvuEvcAAPHxUKC9Q4uCe0Fh/yRc5jv9z+f/kvyIF2LPrhgAOuLB7J9CssGYhND/BL8M9hlHBTFmffpoQlMQ==",
+      "dependencies": [
+        "@noble/hashes"
+      ]
+    },
     "playwright-core@1.62.1": {
       "integrity": "sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==",
       "bin": true
@@ -44,12 +61,17 @@
         "fsevents"
       ],
       "bin": true
+    },
+    "to-data-view@2.0.0": {
+      "integrity": "sha512-RGEM5KqlPHr+WVTPmGNAXNeFEmsBnlkxXaIfEpUYV0AST2Z5W1EGq9L/MENFrMMmL2WQr1wjkmZy/M92eKhjYA=="
     }
   },
   "workspace": {
     "dependencies": [
       "npm:@playwright/test@1.62.1",
-      "npm:openid-client@6.8.5"
+      "npm:base32-encode@2.0.0",
+      "npm:openid-client@6.8.5",
+      "npm:otpauth@9.3.6"
     ]
   }
 }
