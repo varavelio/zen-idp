@@ -4,77 +4,29 @@ package harness
 
 import (
 	"bytes"
-	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
-	"sync"
 	"testing"
-	"time"
 )
 
-// buildTimeout bounds how long the one-time binary build may take.
-const buildTimeout = 5 * time.Minute
+// binaryPath is the compiled zen-idp executable used by the whole suite. It
+// is hardcoded because the suite always runs inside the devcontainer, where
+// the e2e task builds the binary to this exact location before running the
+// tests, so the harness never compiles it itself.
+const binaryPath = "/workspaces/zen-idp/dist/zen-idp"
 
-// binaryPath is the compiled zen-idp executable shared by the whole suite.
-var (
-	buildOnce sync.Once
-	builtPath string
-	buildErr  error
-)
-
-// moduleRoot returns the repository root that contains this package, derived
-// from the compiled location of this source file.
-func moduleRoot() string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("harness: locate module root")
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-}
-
-// buildBinary compiles the zen-idp executable once per test run and returns
-// its path. Concurrent callers share the same build.
-func buildBinary() (string, error) {
-	buildOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "zen-idp-e2e-*")
-		if err != nil {
-			buildErr = fmt.Errorf("create e2e binary directory: %w", err)
-			return
-		}
-		builtPath = filepath.Join(dir, "zen-idp")
-		ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "go", "build", "-o", builtPath, "./cmd/zen-idp")
-		cmd.Dir = moduleRoot()
-		if output, err := cmd.CombinedOutput(); err != nil {
-			buildErr = fmt.Errorf("build zen-idp binary: %w: %s", err, output)
-			builtPath = ""
-		}
-	})
-	return builtPath, buildErr
-}
-
-// BinaryPath returns the path of the compiled zen-idp executable, building
-// it on first use.
+// BinaryPath returns the path of the compiled zen-idp executable, failing
+// the test when the pre-built binary is missing.
 func BinaryPath(t *testing.T) string {
 	t.Helper()
-	path, err := buildBinary()
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(binaryPath); err != nil {
+		t.Fatalf(
+			"harness: compiled binary not found at %s (run `task build` first): %v",
+			binaryPath, err,
+		)
 	}
-	return path
-}
-
-// Cleanup removes the shared compiled binary and must run after the last
-// test of the suite finishes.
-func Cleanup() {
-	if builtPath != "" {
-		_ = os.RemoveAll(filepath.Dir(builtPath))
-	}
+	return binaryPath
 }
 
 // Run executes the compiled binary with the given environment additions and
