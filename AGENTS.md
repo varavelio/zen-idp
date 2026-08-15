@@ -51,6 +51,15 @@ black box.
 - Generated record identifiers used as SQLite primary keys MUST be TypeID values stored as TEXT.
 - Operator-declared natural keys, such as the YAML `sub` identifier, remain as declared and are not converted to TypeIDs.
 
+## Documentation site
+
+The project's docs page is built with Veta, a static site generator, using the veta-theme-vara theme. The site configuration lives in `./docs` (entry point `veta.yaml`) and the actual content in `./docs/content`.
+
+Read these references if you have doubts about how to use them:
+
+- Veta: https://raw.githubusercontent.com/varavelio/veta/main/README.md and https://veta.varavel.com/docs/llms.txt
+- veta-theme-vara: https://raw.githubusercontent.com/varavelio/veta-theme-vara/main/README.md and https://vara.varavel.com/docs/llms.txt
+
 ## Project structure
 
 This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
