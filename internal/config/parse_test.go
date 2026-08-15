@@ -245,7 +245,7 @@ func TestParseExampleConfiguration(t *testing.T) {
 
 	configuration, err := Parse(withValidHashes(contents))
 	require.NoError(t, err)
-	require.Equal(t, Server{Host: defaultServerHost, Port: defaultServerPort}, configuration.Server)
+	require.Equal(t, Server{Host: "0.0.0.0", Port: 8080}, configuration.Server)
 }
 
 func TestParseErrors(t *testing.T) {

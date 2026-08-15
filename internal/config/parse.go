@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	defaultServerHost               = "127.0.0.1"
+	defaultServerHost               = "0.0.0.0"
 	defaultServerPort               = 8080
 	defaultMaxUserLoginAttempts     = 5
 	defaultUserLoginAttemptsWindow  = 5 * time.Minute

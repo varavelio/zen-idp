@@ -17,10 +17,9 @@ config:
   # Optional local HTTP listener. Zen IdP does not terminate TLS; put a reverse
   # proxy, Cloudflare, or equivalent HTTPS infrastructure in front of it.
   server:
-    # Host or IP address to bind. Defaults to 127.0.0.1 when omitted.
-    # Use 0.0.0.0 only when the listener must be reachable from another host or
-    # container, and protect it with appropriate network controls.
-    host: "127.0.0.1"
+    # Host or IP address to bind. Defaults to 0.0.0.0 when omitted.
+    # Use 127.0.0.1 when the listener should be reachable only from your local machine.
+    host: "0.0.0.0"
 
     # TCP port to bind. Defaults to 8080. Valid values are 1 through 65535.
     port: 8080

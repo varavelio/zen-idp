@@ -87,7 +87,7 @@ func TestRunServe(t *testing.T) {
 		require.NotNil(t, migratedDB)
 		require.Equal(t, runtime.RootSecret, derivedRootSecret)
 		require.Equal(t, derivedKey.PublicKey, receivedPublicKey)
-		require.Equal(t, "127.0.0.1:8080", listenedAddress)
+		require.Equal(t, "0.0.0.0:8080", listenedAddress)
 		require.Same(t, listener, servedListener)
 		require.NotNil(t, servedServer.Handler)
 		require.Equal(t, 5*time.Second, servedServer.ReadHeaderTimeout)
@@ -205,7 +205,7 @@ func TestRunServe(t *testing.T) {
 
 		require.Equal(t, 1, exitCode)
 		require.Empty(t, stdout.String())
-		require.Contains(t, stderr.String(), "listen on 127.0.0.1:8080")
+		require.Contains(t, stderr.String(), "listen on 0.0.0.0:8080")
 		require.Contains(t, stderr.String(), "cannot listen")
 	})
 

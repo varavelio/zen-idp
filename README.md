@@ -77,7 +77,7 @@ Zen IdP never loads `.env` implicitly. Pass it explicitly when you want it:
 ./dist/zen-idp serve --env-file ./local.env
 ```
 
-`validate-config` runs the exact startup discovery, merge, parse, and validation path - a great habit before every deploy. `serve` then starts the HTTP listener on `127.0.0.1:8080` by default.
+`validate-config` runs the exact startup discovery, merge, parse, and validation path - a great habit before every deploy. `serve` then starts the HTTP listener on `0.0.0.0:8080` by default.
 
 The fastest way to see it all work: open `http://127.0.0.1:8080/admin`, sign in with the administrator password, create an enrollment token, and share the enrollment link with your first user. That link walks them through setting up their authenticator app.
 

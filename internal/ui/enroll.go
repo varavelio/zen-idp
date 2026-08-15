@@ -133,7 +133,7 @@ func EnrollmentReadyPage(
 				),
 				nodx.Role("alert"),
 				lucide.TriangleAlert(nodx.Class("mt-0.5 size-4 shrink-0")),
-				nodx.P(nodx.Text("This will not be shown again.")),
+				nodx.P(nodx.Text("This will not be shown again")),
 			),
 		),
 	)
