@@ -10,6 +10,7 @@
   },
   "imports": {
     "@playwright/test": "npm:@playwright/test@1.62.1",
+    "@std/yaml": "jsr:@std/yaml@1.2.0",
     "openid-client": "npm:openid-client@6.8.5",
     "otpauth": "npm:otpauth@9.3.6",
     "base32-encode": "npm:base32-encode@2.0.0"

@@ -1,11 +1,17 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/yaml@1.2.0": "1.2.0",
     "npm:@playwright/test@1.62.1": "1.62.1",
     "npm:base32-encode@2.0.0": "2.0.0",
     "npm:openid-client@6.8.5": "6.8.5",
     "npm:otpauth@9.3.6": "9.3.6",
     "npm:playwright@*": "1.62.1"
+  },
+  "jsr": {
+    "@std/yaml@1.2.0": {
+      "integrity": "20beb41e4983ba3437dbefac62b14061ab058e8a187596f19d28ff9035f6e6cf"
+    }
   },
   "npm": {
     "@noble/hashes@1.6.1": {
@@ -68,6 +74,7 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@std/yaml@1.2.0",
       "npm:@playwright/test@1.62.1",
       "npm:base32-encode@2.0.0",
       "npm:openid-client@6.8.5",
