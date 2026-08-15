@@ -105,6 +105,11 @@ EXPOSE 8080
 
 VOLUME ["/data/config", "/data/db"]
 
+# The health command reads the same configuration source as serve, so the
+# check always targets the configured listener with no extra configuration.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+        CMD ["/usr/local/bin/zen-idp", "health"]
+
 ENTRYPOINT ["/usr/local/bin/zen-idp"]
 
 CMD ["serve"]
