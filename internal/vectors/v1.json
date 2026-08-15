@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "description": "Frozen v1 deterministic derivation vectors. These values bind the source root secret to the RSA signing identity, the RFC 7638 kid, a representative RS256 signature over the exact input bytes, and the derived TOTP shared secrets. The file is immutable: refactors and Go upgrades must reproduce these values unchanged, and a deliberate contract change must be published as v2.",
+  "root_secret": "zen-idp-v1-vector-secret-0102030405060708090a0b0c0d0e0f10",
+  "root_secret_sha256": "fb7d2ce4995ce95b43932590ee7e09a5c41b6761f844e985047bef5e1170d454",
+  "derivation": {
+    "hash": "SHA-256",
+    "rsa_domain_label": "zen-idp:jwt:rs256:keygen:v1",
+    "rsa_modulus_bits": 2048,
+    "rsa_public_exponent": 65537,
+    "totp_domain_label": "zen-idp:totp:",
+    "totp_base32_encoding": "RFC 4648 without padding"
+  },
+  "jwt": {
+    "modulus_n": "wI3xEPmiQkSdmiHI-WazpXPOyvGwNn0I-AvGPKdRthlGaIX2H62D-KM1G99bikidwVGdgjoLlIc-MyZ0gWiaZvQHpSCZ3Fx_ukjP7KvxrKjZ2LIoDWm4iNTHouW9Y1mZSlRPlBRsKnKreeHYx9IbFTQhbHG7EYFaLnVw47wnQODzCnnKj4Hv5OaJohhcc4w5D4jxc7L4BpqDM8XDpjUzi9cYMJHcF1k7YZQLiaAtmwoKq2uICAq0afaGae1XT5x_n2mi70qhQFjYmF8w-MUollv-GfA_fi12zYz4RBxe8IaVswzlcE_aHJlqcQXsT7nt_4BNy10Plfs41ohrYFqnuQ",
+    "exponent_e": "AQAB",
+    "kid": "Ht_CQQHqr2lsUGpXMBOTCogJtBizN6rL_sBXtL3BTLM"
+  },
+  "signature": {
+    "input": "eyJhbGciOiJSUzI1NiIsImtpZCI6Ikh0X0NRUUhxcjJsc1VHcFhNQk9UQ29nSnRCaXpONnJMX3NCWHRMM0JUTE0ifQ.eyJhdWQiOiJ2ZWN0b3ItY2xpZW50IiwiZXhwIjoxNzAwMDAwOTAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vaXNzdWVyLmV4YW1wbGUiLCJzdWIiOiJhbGljZSJ9",
+    "input_description": "The exact UTF-8 bytes signed: base64url({\"alg\":\"RS256\",\"kid\":...}) + \".\" + base64url(payload) with the payload {\"aud\":\"vector-client\",\"exp\":1700000900,\"iat\":1700000000,\"iss\":\"https://issuer.example\",\"sub\":\"alice\"}.",
+    "rs256": "TSQLcIE33cHnXHOcyQOL5em3-qP2XFdt5WI7TLGENjjGLJ0vOs2DLKdRO8Hl3o4CWCfYqCeDU5vDu77NYmrfNhrOGTmVZBrxtJqeaqqpY0mkmqu-l_2dQKIgDL_OjEDCkeiKPWqHeRe8l-gOpoCwKXXnReBvsdRU_pkqeRn6Kmchg5mrv5Pv-1U0nMaNMczKWfCBTg4KW5b5B-BhAnbXFfklWuRC69cK8Jd2DWnPWEzhQE3g1kfOjeebq3BGdXLXCTfoOhs-Cv5Lbb9pDAsEO-2ELgJ8PJxvNAX7JKIUl6F1Uha4PXBd4JJ4xuXmY8vUqf8FmuRrxAq6Jj2TfP4S1g"
+  },
+  "totp": [
+    {
+      "sub": "alice",
+      "revision": 0,
+      "secret": "L4Y6C6FSUJ4ECRCBTWEBS3GBFW3DJK5SFBNZLWC6W3BG7BYSYBJA"
+    },
+    {
+      "sub": "alice",
+      "revision": 1,
+      "secret": "E2Y33A2LE4KZUS7ZTVW7C5XJTYCNNQURA4TTZSCTG6JZOXSM7ZIQ"
+    },
+    {
+      "sub": "bob",
+      "revision": 0,
+      "secret": "YKRKLLKEU43W7JB5DLIEDCNGUWZJPVRLC42MDEVTY3EP5RT6FJUQ"
+    }
+  ]
+}
