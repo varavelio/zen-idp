@@ -34,6 +34,7 @@ RUN set -e && \
   # Install tools from npm
   deno install --global --allow-all --allow-scripts --quiet npm:@go-task/cli@3.52.0 && \
   deno install --global --allow-all --allow-scripts --quiet npm:dprint@0.55.2 && \
+  deno run --allow-all npm:playwright@1.62.1 install --with-deps --no-progress chromium && \
   # Install goose
   curl -fsSL https://raw.githubusercontent.com/pressly/goose/v3.27.3/install.sh | sh -s v3.27.3 && \
   # Install Tailwind CSS standalone binary

@@ -4,13 +4,17 @@
 !.env.example
 
 # Temporary
-/tmp
-/temp
+tmp/
+temp/
 
 # Build output
-/dist
+dist/
 
 # Development DB
 *.db
 *.sqlite
 *.sqlite3
+
+# Deno & Playwright
+node_modules/
+test-results/
