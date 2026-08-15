@@ -32,7 +32,6 @@ func TestContentSecurityPolicy(t *testing.T) {
 			"script-src 'self'",
 			"style-src 'self'",
 			"font-src 'self'",
-			"form-action 'self'",
 			"frame-ancestors 'none'",
 			"base-uri 'none'",
 		} {

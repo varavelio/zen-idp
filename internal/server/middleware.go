@@ -7,9 +7,15 @@ import "net/http"
 // compiled stylesheet, vendored fonts and scripts; data: images cover the
 // embedded enrollment QR code; and https: images cover the configured UI
 // logo, which configuration validation already restricts to HTTPS.
+//
+// The form-action directive is deliberately absent: the login form is
+// submitted to the issuer, and the browser then follows the redirect chain
+// to the requesting client's callback, whose origin cannot be enumerated
+// in the policy. Form-submission CSRF is already prevented by the
+// double-submit anti-forgery tokens and the SameSite session cookies.
 const contentSecurityPolicy = "default-src 'self'; img-src 'self' data: https:; " +
 	"script-src 'self'; style-src 'self'; font-src 'self'; " +
-	"form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+	"frame-ancestors 'none'; base-uri 'none'"
 
 // maxRequestBodyBytes bounds every request body. Legitimate Zen IdP requests
 // carry only small forms or JSON payloads, so a larger body is an anomaly;
