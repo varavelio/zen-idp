@@ -2,6 +2,7 @@
   "version": "5",
   "specifiers": {
     "npm:@playwright/test@1.62.1": "1.62.1",
+    "npm:openid-client@6.8.5": "6.8.5",
     "npm:playwright@*": "1.62.1"
   },
   "npm": {
@@ -16,6 +17,19 @@
       "integrity": "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==",
       "os": ["darwin"],
       "scripts": true
+    },
+    "jose@6.2.8": {
+      "integrity": "sha512-Bsdjwm3Qsd/P0jR+BHDe3LytDfY7WBq2HmCCLIwuVRHMuEC9ae7/R474GIUdF1NgCyZjzVo/A9DOiOBtXq8ZoQ=="
+    },
+    "oauth4webapi@3.8.7": {
+      "integrity": "sha512-4RxcKxXjuItDFZ20RRPf4YTw3kpeXJyCgJFxVzJ068A7PNJ18st2Dg90tlC1LkSDS0GecroagCLHYEIVUhCAkw=="
+    },
+    "openid-client@6.8.5": {
+      "integrity": "sha512-jNGC/5wnTYwCcEUe2ss0IRUmVRQcgxM0A1nLb3eX/9llqNbMWOQd2xd+qDAgfVCpA5Qh96Y1cdnkfbva6+bSdA==",
+      "dependencies": [
+        "jose",
+        "oauth4webapi"
+      ]
     },
     "playwright-core@1.62.1": {
       "integrity": "sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==",
@@ -34,7 +48,8 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:@playwright/test@1.62.1"
+      "npm:@playwright/test@1.62.1",
+      "npm:openid-client@6.8.5"
     ]
   }
 }

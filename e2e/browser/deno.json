@@ -3,7 +3,8 @@
     "test": "deno run --allow-all npm:playwright test --timeout 60000 ."
   },
   "imports": {
-    "@playwright/test": "npm:@playwright/test@1.62.1"
+    "@playwright/test": "npm:@playwright/test@1.62.1",
+    "openid-client": "npm:openid-client@6.8.5"
   },
   "nodeModulesDir": "auto"
 }
