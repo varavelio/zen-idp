@@ -26,6 +26,7 @@ func TestNew(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 
 		require.NotNil(t, handler)
@@ -52,6 +53,7 @@ func TestServeAssets(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 	}
 
@@ -126,6 +128,7 @@ func TestServeAssets(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 
 		response := httptest.NewRecorder()
@@ -155,6 +158,7 @@ func TestServeAssets(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 
 		response := httptest.NewRecorder()

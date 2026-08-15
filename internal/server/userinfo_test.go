@@ -263,6 +263,7 @@ func TestUserInfo(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 		response := userinfoRequest(t, handler, "Bearer anything")
 

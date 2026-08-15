@@ -46,6 +46,7 @@ func TestDiscovery(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 	}
 

@@ -855,6 +855,7 @@ func TestToken(t *testing.T) {
 				EnrollDependencies{},
 				AdminDependencies{},
 				PanicDependencies{},
+				HealthDependencies{},
 			).Handler()
 			response := tokenRequest(t, handler, validExchangeForm("anything"), "")
 
@@ -883,6 +884,7 @@ func TestToken(t *testing.T) {
 				EnrollDependencies{},
 				AdminDependencies{},
 				PanicDependencies{},
+				HealthDependencies{},
 			).Handler()
 			form := validExchangeForm("anything")
 			form.Set("client_id", "unknown")
@@ -941,6 +943,7 @@ func TestToken(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 		response := tokenRequest(t, handler, validExchangeForm("anything"), "")
 
@@ -968,6 +971,7 @@ func TestToken(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 		response := tokenRequest(t, handler, validExchangeForm(code), "")
 

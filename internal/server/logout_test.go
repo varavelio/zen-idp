@@ -505,6 +505,7 @@ func TestLogout(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 
 		// Obtain the anti-forgery token from the confirmation interaction.

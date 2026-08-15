@@ -22,6 +22,7 @@ type Server struct {
 	enroll        EnrollDependencies
 	admin         AdminDependencies
 	panics        PanicDependencies
+	health        HealthDependencies
 }
 
 // New returns a server that publishes the given public signing identity and
@@ -30,7 +31,8 @@ type Server struct {
 // discovery metadata, the login interaction, the authorization continuation,
 // the token exchange, the /userinfo resolution, the local logout
 // interaction, the user enrollment interaction, the user panic interaction,
-// and the administration interaction with the given injected dependencies.
+// the administration interaction, and the health endpoint with the given
+// injected dependencies.
 func New(
 	publicJWK jwk.PublicJWK,
 	issuer string,
@@ -44,6 +46,7 @@ func New(
 	enroll EnrollDependencies,
 	admin AdminDependencies,
 	panics PanicDependencies,
+	health HealthDependencies,
 ) *Server {
 	return &Server{
 		publicJWK:     publicJWK,
@@ -58,6 +61,7 @@ func New(
 		enroll:        enroll,
 		admin:         admin,
 		panics:        panics,
+		health:        health,
 	}
 }
 
@@ -92,6 +96,8 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("POST /admin/logout", handle(server.adminLogOut))
 	mux.Handle("POST /admin/tokens", handle(server.processEnrollmentToken))
 	mux.Handle("POST /admin/locks", handle(server.processLockChange))
+
+	mux.Handle("GET /health", handle(server.healthz))
 
 	return securityHeaders(limitRequestBody(crossOriginAPI(mux)))
 }

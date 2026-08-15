@@ -39,6 +39,7 @@ func TestJWKS(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -69,6 +70,7 @@ func TestJWKS(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -97,6 +99,7 @@ func TestJWKS(t *testing.T) {
 			EnrollDependencies{},
 			AdminDependencies{},
 			PanicDependencies{},
+			HealthDependencies{},
 		).Handler()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
