@@ -15,11 +15,11 @@ cta_href="/docs/get-started/"
 <vara-features
 container="lg"
 title="Why Zen IdP"
-description="A focused identity provider built for teams that prefer code over admin panels."
+description="Built on a few deliberate decisions that keep the whole system small and understandable."
 columns="3"
 item_1_icon="file-code"
 item_1_title="Identity as code"
-item_1_description="Users, clients, and custom claims are YAML files you can review, version, and audit like any other code. Changes ship through pull requests, not through an admin panel."
+item_1_description="Every user, client, and custom claim is a YAML file you can review, version, and audit like any other code. Changes ship through pull requests, not through an admin panel."
 item_1_badge="YAML"
 item_2_icon="key-round"
 item_2_title="One root secret"
@@ -31,8 +31,8 @@ item_3_description="Users sign in with their identifier and a code from their au
 item_3_badge="TOTP"
 item_4_icon="blocks"
 item_4_title="Standard OIDC"
-item_4_description="Authorization code flow with PKCE, RS256 signing, discovery, JWKS, and /userinfo. Every OIDC-capable application works out of the box."
-item_4_badge="OpenID Connect"
+item_4_description="Authorization code flow with PKCE, RS256 signing, discovery, JWKS, and /userinfo. Every OIDC-capable application can connect directly."
+item_4_badge="PKCE S256"
 item_5_icon="database"
 item_5_title="Disposable state"
 item_5_description="Sessions, one-use tokens, rate limits, locks, and audit records live in an embedded SQLite file. It holds operational state only: identities and credentials always come from YAML and the root secret."
@@ -48,14 +48,14 @@ container="lg"
 eyebrow="How it works"
 title="From YAML to single sign-on"
 description="The whole journey is visible. You declare the identity layer, and the service handles the rest."
-item_1="Declare users, clients, and redirect URIs in YAML, split across as many files as you like"
+item_1="Declare identities, clients, and redirect URIs in YAML, split across as many files as you like"
 item_2="Generate a root secret plus the administrator and client hashes with one command"
 item_3="Run the binary behind your reverse proxy and hand out one-time enrollment links"
 item_4="Applications redirect to Zen IdP, users authenticate with TOTP, and everyone gets back to work"
 panel_icon="workflow"
 panel_title="Nothing to babysit"
-panel_description="Sessions, tokens, rate limits, and cleanup are handled internally, and restarts preserve state. The database is purely operational: identities and credentials always come from YAML and the root secret."
-heading_level="3"
+panel_description="Sessions, tokens, rate limits, and cleanup are handled internally, and restarts preserve state. The database is purely operational and never the source of truth."
+heading_level="2"
 />
 
 <vara-features
@@ -66,7 +66,7 @@ description="A focused identity layer for people who want to own their sign-in."
 columns="3"
 item_1_icon="server"
 item_1_title="Internal team SSO"
-item_1_description="Small and medium teams get one shared sign-in for their internal tools without depending on a third-party identity provider."
+item_1_description="One shared sign-in for all the internal tools your team runs itself, with no third-party identity provider in the middle."
 item_1_badge="Teams"
 item_2_icon="house"
 item_2_title="Home labs"
@@ -88,22 +88,21 @@ stat_1_label="Binary to run"
 stat_1_description="A single Go executable, nothing else to install."
 stat_2_value="0"
 stat_2_label="External services"
-stat_2_description="No database, directory, SMTP, or third-party identity provider."
+stat_2_description="Nothing to install or connect beyond the binary itself."
 stat_3_value="3"
 stat_3_label="CLI commands"
 stat_3_description="serve, validate-config, and generate-secrets."
-stat_4_value="100%"
-stat_4_label="Free and open source"
-stat_4_description="MIT-licensed and fully self-hosted."
-heading_level="3"
+stat_4_value="MIT"
+stat_4_label="License"
+stat_4_description="Free, open source, and fully self-hosted."
 />
 
-<vara-faq container="lg" title="Common questions" description="The things people usually ask before adopting Zen IdP." open_first="true" heading_level="3">
+<vara-faq container="lg" title="Common questions" description="The things people usually ask before adopting Zen IdP." open_first="true" heading_level="2">
 <vara-faq-item id="what-is-zen-idp" question="What exactly is Zen IdP?">
-Zen IdP is a declarative OpenID Connect identity provider for small and medium teams. It authenticates your people with TOTP and lets every OIDC-capable application accept those identities through single sign-on. Users, clients, and claims are managed as YAML in your repository, not through an admin panel.
+Zen IdP is a declarative OpenID Connect identity provider. It authenticates your people with TOTP and lets every OIDC-capable application accept those identities through single sign-on. Everything is managed as YAML in your repository, not through an admin panel.
 </vara-faq-item>
 <vara-faq-item id="who-is-it-for" question="Who is Zen IdP for?">
-Anyone who wants to own their identity layer. It suits small and medium teams that self-host their internal tools and prefer not to depend on a third-party identity provider, home lab owners who want single sign-on across their services, and networks that need an identity provider that works offline. If you manage a handful of tools and want one clean sign-in, Zen IdP is for you.
+Anyone who wants to own their identity layer. It suits teams that self-host their internal tools and prefer not to depend on a third-party identity provider, home lab owners who want single sign-on across their services, and networks that need an identity provider that works offline. If you manage a handful of tools and want one clean sign-in, Zen IdP is for you.
 </vara-faq-item>
 <vara-faq-item id="external-services" question="Do I need a database or a directory service?">
 No. Zen IdP is a single Go binary with an embedded SQLite file that holds disposable operational state: sessions, one-use tokens, rate limits, temporary locks, and short-lived audit records. Identities come from YAML and the root secret, so there is no external database, no LDAP, and no Active Directory to keep in sync.
