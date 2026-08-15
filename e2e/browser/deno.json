@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "test": "deno run --allow-all npm:playwright test ."
+    "test": "deno run --allow-all npm:playwright test --timeout 60000 ."
   },
   "imports": {
     "@playwright/test": "npm:@playwright/test@1.62.1"

@@ -75,8 +75,9 @@ tasks:
     deps:
       - build
     cmds:
-      - go test -tags e2e -count=1 -timeout 10m ./e2e/
-      - golangci-lint run --build-tags e2e ./e2e/...
+      - go test -tags e2e -count=1 -timeout 10m ./e2e/http/...
+      - golangci-lint run --build-tags e2e ./e2e/http/...
+      - cd ./e2e/browser && deno task test
 
   goose:
     desc: Run goose binary (configured for statestore)
