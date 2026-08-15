@@ -53,7 +53,7 @@ black box.
 
 ## Documentation site
 
-The project's docs page is built with Veta, a static site generator, using the veta-theme-vara theme. The site configuration lives in `./docs` (entry point `veta.yaml`) and the actual content in `./docs/content`.
+The project's docs page is built with Veta, a static site generator, using the veta-theme-vara theme. The site configuration lives in `./docs` (entry point `veta.yaml`) and the actual content in `./docs/content`. Read all the `.js` files inside `docs/pages` to understand how the pages are generated.
 
 Read these references if you have doubts about how to use them:
 
