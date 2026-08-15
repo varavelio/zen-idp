@@ -19,6 +19,8 @@ const (
 	ValidateConfig
 	// GenerateSecrets produces an independent bootstrap secret bundle.
 	GenerateSecrets
+	// Health checks the configured listener's health endpoint.
+	Health
 )
 
 // Invocation is one parsed command-line invocation.
@@ -59,7 +61,7 @@ func Parse(args []string) (Invocation, error) {
 	switch commandName {
 	case "help", "--help", "-h":
 		return Invocation{Command: Help}, nil
-	case "serve", "validate-config", "generate-secrets":
+	case "serve", "validate-config", "generate-secrets", "health":
 		if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
 			return Invocation{Command: Help}, nil
 		}
@@ -82,6 +84,9 @@ func Parse(args []string) (Invocation, error) {
 	command := Serve
 	if commandName == "validate-config" {
 		command = ValidateConfig
+	}
+	if commandName == "health" {
+		command = Health
 	}
 
 	return Invocation{Command: command, EnvFile: envFile}, nil
@@ -116,4 +121,5 @@ func parseEnvFile(command string, args []string) (string, error) {
 const usage = `usage:
   zen-idp serve [--env-file PATH]
   zen-idp validate-config [--env-file PATH]
-  zen-idp generate-secrets`
+  zen-idp generate-secrets
+  zen-idp health [--env-file PATH]`

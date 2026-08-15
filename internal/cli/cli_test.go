@@ -54,6 +54,18 @@ func TestParse(t *testing.T) {
 		require.Empty(t, invocation.EnvFile)
 	})
 
+	t.Run("parses health invocations", func(t *testing.T) {
+		invocation, err := Parse([]string{"health", "--env-file=runtime.env"})
+		require.NoError(t, err)
+		require.Equal(t, Health, invocation.Command)
+		require.Equal(t, "runtime.env", invocation.EnvFile)
+
+		invocation, err = Parse([]string{"health"})
+		require.NoError(t, err)
+		require.Equal(t, Health, invocation.Command)
+		require.Empty(t, invocation.EnvFile)
+	})
+
 	t.Run("rejects malformed invocations", func(t *testing.T) {
 		tests := map[string][]string{
 			"no arguments":               {},
