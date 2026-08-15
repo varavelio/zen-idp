@@ -75,6 +75,7 @@ func (server *Server) Handler() http.Handler {
 
 	mux.Handle("GET /.well-known/jwks.json", handle(server.jwks))
 	mux.Handle("GET /.well-known/openid-configuration", handle(server.discovery))
+	mux.Handle("GET /robots.txt", handle(serveRobotsTXT))
 
 	mux.Handle("GET /login", handle(server.loginForm))
 	mux.Handle("POST /login", handle(server.processLogin))

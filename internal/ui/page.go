@@ -43,6 +43,7 @@ func page(cfg config.UI, title string, body ...nodx.Node) nodx.Node {
 					nodx.Name("viewport"),
 					nodx.Attr("content", "width=device-width, initial-scale=1"),
 				),
+				nodx.Meta(nodx.Name("robots"), nodx.Attr("content", "noindex, nofollow")),
 				nodx.TitleEl(nodx.Text(title)),
 				nodx.If(
 					cfg.FaviconURL != "",
