@@ -246,6 +246,19 @@ func errorAlert(message string) nodx.Node {
 	)
 }
 
+// warningAlert renders a caution message with the warning tone and an
+// alert icon.
+func warningAlert(message string) nodx.Node {
+	return nodx.Div(
+		nodx.Class(
+			"flex items-start gap-2 rounded-md border border-warning/25 bg-warning/10 p-3 text-sm text-warning",
+		),
+		nodx.Role("alert"),
+		lucide.TriangleAlert(nodx.Class("mt-0.5 size-4 shrink-0")),
+		nodx.P(nodx.Text(message)),
+	)
+}
+
 // textInput renders a labeled text input with a leading icon, the shared
 // field style of every form.
 func textInput(

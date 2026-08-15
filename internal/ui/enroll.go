@@ -38,6 +38,11 @@ func EnrollPage(settings config.UI, token, csrfToken, failure string) nodx.Node 
 					nodx.Name("token"),
 					nodx.Value(token),
 				),
+				warningAlert(
+					"Before you continue, make sure no one is watching your screen. "+
+						"If you are in a virtual meeting or sharing your screen, be careful: "+
+						"anyone who sees this code could scan it and access your account.",
+				),
 				actionButton(buttonPrimary, "Show QR", lucide.QrCode(nodx.Class("size-4"))),
 			),
 			nodx.P(
@@ -126,15 +131,7 @@ func EnrollmentReadyPage(
 			identifierBox(subject, login),
 			labeledCodeBlock("Account: "+subject, otpauthURI),
 			labeledCodeBlock("Or enter this code manually:", secret),
-			nodx.Div(
-				nodx.Class(
-					"flex items-start gap-2 rounded-md border border-warning/25",
-					"bg-warning/10 p-3 text-sm text-warning",
-				),
-				nodx.Role("alert"),
-				lucide.TriangleAlert(nodx.Class("mt-0.5 size-4 shrink-0")),
-				nodx.P(nodx.Text("This will not be shown again")),
-			),
+			warningAlert("This will not be shown again."),
 		),
 	)
 }
