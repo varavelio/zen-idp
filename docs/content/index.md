@@ -14,7 +14,7 @@ cta_href="/docs/get-started/"
 container="lg"
 eyebrow="Zen IdP"
 title="Single sign-on for your internal tools, declared as code"
-description="Zen IdP is a declarative OpenID Connect provider for small and medium teams. Your users, clients, and claims live in YAML, one root secret drives everything cryptographic, and a single binary handles the rest. No database to back up, no directory to sync, no passwords to reset."
+description="Zen IdP is a declarative OpenID Connect provider for small and medium teams. Your users, clients, and claims live in YAML, one root secret drives everything cryptographic, and a single binary handles the rest. No external database, no directory to sync, no passwords to reset."
 primary_label="Get Started"
 primary_href="/docs/get-started/"
 secondary_label="Installation"
@@ -22,10 +22,10 @@ secondary_href="/docs/installation/"
 panel_icon="shield-check"
 panel_title="What you get"
 panel_description="A standard OIDC provider your applications already know how to talk to."
-item_1="Grafana, Argo CD, Portainer, Vault, and custom apps sign in through OIDC"
+item_1="Self-hosted apps, home labs, and internal tools sign in through OIDC"
 item_2="Users authenticate with TOTP, no passwords or email involved"
 item_3="Configuration changes flow through pull requests"
-caption="Written in Go, distributed as a single executable."
+caption="Written in Go, distributed as a single executable. Free and open source under the MIT license."
 />
 
 <vara-features
@@ -51,12 +51,12 @@ item_4_description="Authorization code flow with PKCE, RS256 signing, discovery,
 item_4_badge="OpenID Connect"
 item_5_icon="database"
 item_5_title="Disposable state"
-item_5_description="Sessions, one-use tokens, rate limits, locks, and audit records live in an embedded SQLite file. It is operational state, not a source of truth, so it needs no backups."
+item_5_description="Sessions, one-use tokens, rate limits, locks, and audit records live in an embedded SQLite file. It holds operational state only: identities and credentials always come from YAML and the root secret."
 item_5_badge="SQLite"
-item_6_icon="terminal"
-item_6_title="One small binary"
-item_6_description="Everything ships as a single Go executable with no runtime dependencies. Point it at your YAML and secret, terminate TLS at your reverse proxy, and you are done."
-item_6_badge="Go"
+item_6_icon="lock-keyhole"
+item_6_title="Free and open source"
+item_6_description="MIT-licensed and fully self-hosted. Zen IdP runs entirely on your own infrastructure, so your identities never depend on a vendor's availability or pricing."
+item_6_badge="MIT"
 />
 
 <vara-content-split
@@ -70,8 +70,28 @@ item_3="Run the binary behind your reverse proxy and hand out one-time enrollmen
 item_4="Applications redirect to Zen IdP, users authenticate with TOTP, and everyone gets back to work"
 panel_icon="workflow"
 panel_title="Nothing to babysit"
-panel_description="Sessions, tokens, rate limits, and cleanup are handled internally. Restarts preserve state, and the database never holds anything you cannot recreate from YAML and the root secret."
+panel_description="Sessions, tokens, rate limits, and cleanup are handled internally, and restarts preserve state. The database is purely operational: identities and credentials always come from YAML and the root secret."
 heading_level="3"
+/>
+
+<vara-features
+container="lg"
+eyebrow="Use cases"
+title="Where Zen IdP fits"
+description="A focused identity layer for people who want to own their sign-in."
+columns="3"
+item_1_icon="server"
+item_1_title="Internal team SSO"
+item_1_description="Small and medium teams get one shared sign-in for their internal tools without depending on a third-party identity provider."
+item_1_badge="Teams"
+item_2_icon="house"
+item_2_title="Home labs"
+item_2_description="A single binary with no external services fits on any small server. Declare your users in YAML, run it behind your reverse proxy, and move on."
+item_2_badge="Home labs"
+item_3_icon="wifi-off"
+item_3_title="Offline environments"
+item_3_description="Everything runs locally with no external calls, so Zen IdP works in air-gapped networks where cloud identity providers are not an option."
+item_3_badge="Air-gapped"
 />
 
 <vara-stats
@@ -88,15 +108,18 @@ stat_2_description="No database, directory, SMTP, or third-party identity provid
 stat_3_value="3"
 stat_3_label="CLI commands"
 stat_3_description="serve, validate-config, and generate-secrets."
-stat_4_value="10-500"
-stat_4_label="Users per config"
-stat_4_description="Comfortable with hand-maintained YAML, more with split or generated files."
+stat_4_value="100%"
+stat_4_label="Free and open source"
+stat_4_description="MIT-licensed and fully self-hosted."
 heading_level="3"
 />
 
 <vara-faq container="lg" title="Common questions" description="The things people usually ask before adopting Zen IdP." open_first="true" heading_level="3">
 <vara-faq-item id="what-is-zen-idp" question="What exactly is Zen IdP?">
 Zen IdP is a declarative OpenID Connect identity provider for small and medium teams. It authenticates your people with TOTP and lets every OIDC-capable application accept those identities through single sign-on. Users, clients, and claims are managed as YAML in your repository, not through an admin panel.
+</vara-faq-item>
+<vara-faq-item id="who-is-it-for" question="Who is Zen IdP for?">
+Anyone who wants to own their identity layer. It suits small and medium teams that self-host their internal tools and prefer not to depend on a third-party identity provider, home lab owners who want single sign-on across their services, and networks that need an identity provider that works offline. If you manage a handful of tools and want one clean sign-in, Zen IdP is for you.
 </vara-faq-item>
 <vara-faq-item id="external-services" question="Do I need a database or a directory service?">
 No. Zen IdP is a single Go binary with an embedded SQLite file that holds disposable operational state: sessions, one-use tokens, rate limits, temporary locks, and short-lived audit records. Identities come from YAML and the root secret, so there is no external database, no LDAP, and no Active Directory to keep in sync.
@@ -105,7 +128,7 @@ No. Zen IdP is a single Go binary with an embedded SQLite file that holds dispos
 With an authenticator app. Each user's TOTP secret is derived deterministically from the root secret, so there are no passwords to store and no email to deliver. An administrator creates a one-time enrollment link for each user, and the user scans it into their authenticator once.
 </vara-faq-item>
 <vara-faq-item id="which-apps" question="Which applications can I connect?">
-Any application that speaks OIDC. Zen IdP implements the authorization code flow with PKCE, RS256 signing, discovery metadata, JWKS, and /userinfo. Grafana, Argo CD, Prometheus, Portainer, Vault, and internal dashboards are typical fits.
+Any application that speaks OIDC. Zen IdP implements the authorization code flow with PKCE, RS256 signing, discovery metadata, JWKS, and /userinfo, so the self-hosted tools you already run can connect without custom work.
 </vara-faq-item>
 <vara-faq-item id="revoke-access" question="How do I revoke access for someone?">
 The way you would expect from a code-first provider: remove or expire the user in YAML and the change applies immediately. For temporary situations, the admin interface can lock a user and revoke all of their sessions at once. Rotating one user's credential is a one-line revision bump in YAML.
@@ -118,7 +141,7 @@ No. Zen IdP answers who is signing in. Every declared custom claim, such as grou
 <vara-cta
 container="lg"
 title="Put your identity layer in the repository"
-description="Declare your users, choose a root secret, and give your internal tools one shared sign-in."
+description="Declare your users, choose a root secret, and give your internal tools one shared sign-in. Free, open source, and self-hosted."
 primary_label="Get Started"
 primary_href="/docs/get-started/"
 secondary_label="Installation"
