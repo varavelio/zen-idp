@@ -28,14 +28,23 @@ Whenever possible, write tests that verify the expected behavior of the code bei
 
 ## End-to-end testing
 
-The `e2e/` directory holds the black-box end-to-end suite, compiled only under
-the `e2e` build tag and run with `task e2e` (also part of `task ci`). Each
-file covers one complete product scenario and drives the compiled binary
-only through its CLI and HTTP surface; the reusable plumbing lives in the
-`e2e/harness` package, which spawns one isolated instance per test
-(configuration, state database, and loopback port) and reproduces the
-crypto contracts independently. The harness must never import `internal/`
-packages, so the suite always validates the public behavior as a black box.
+The `e2e/` directory holds two end-to-end suites, both orchestrated by
+`task e2e` from the Taskfile.yml (also part of `task ci`):
+
+- `e2e/http`: the black-box HTTP suite in Go, compiled only under the `e2e`
+  build tag. Each complete product scenario lives in its own `*_test.go`
+  file and drives the compiled binary only through its CLI and HTTP surface.
+- `e2e/browser`: the browser suite in Deno using Playwright. Each complete
+  product scenario lives in its own `*.test.ts` file and drives a real
+  browser against the compiled binary.
+
+Both suites keep their reusable plumbing in a `harness/` subdirectory
+(`e2e/http/harness` and `e2e/browser/harness`), so shared code is never
+repeated inside individual tests. The HTTP harness spawns one isolated
+instance per test (configuration, state database, and loopback port),
+reproduces the crypto contracts independently, and never imports
+`internal/` packages, so the suite always validates public behavior as a
+black box.
 
 ## Data Storage
 
