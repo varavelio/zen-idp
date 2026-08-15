@@ -101,6 +101,7 @@ func TestAdminLifecycle(t *testing.T) {
 	c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {lockCode},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	}).RequireStatus(t, 200).Contains(t, "Sign-in failed")
 	c.PostForm(t, "/admin/locks", url.Values{
 		"subject":    {"alice"},
@@ -123,6 +124,7 @@ func TestAdminLifecycle(t *testing.T) {
 	c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {harness.TOTPCode(aliceSecret, time.Now())},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	}).RequireStatus(t, 200).Contains(t, "Sign-in failed")
 	home = c.Get(t, "/admin")
 	home.RequireStatus(t, 200)
@@ -134,6 +136,7 @@ func TestAdminLifecycle(t *testing.T) {
 	c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {harness.TOTPCode(aliceSecret, time.Now())},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	}).RequireStatus(t, 200).Contains(t, "Sign-in failed")
 	home = c.Get(t, "/admin")
 	home.RequireStatus(t, 200)

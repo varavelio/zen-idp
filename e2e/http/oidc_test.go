@@ -79,6 +79,18 @@ func authorizeQuery(clientID, redirectURI string) string {
 	}.Encode()
 }
 
+// loginFormCSRF returns the anti-forgery token of the login form for the
+// given pending request, fetching the form so the browser jar holds the
+// matching cookie, exactly as a browser would receive it.
+func loginFormCSRF(t *testing.T, c *harness.Browser, query string) string {
+	t.Helper()
+	form := c.Get(t, "/login?"+query)
+	form.RequireStatus(t, 200)
+	token := harness.FormValue(form.Body, "csrf_token")
+	require.NotEmpty(t, token)
+	return token
+}
+
 // login signs the given identifier in with its correct TOTP code and
 // returns the login response.
 func login(t *testing.T, c *harness.Browser, query, identifier string) *harness.Response {
@@ -87,6 +99,7 @@ func login(t *testing.T, c *harness.Browser, query, identifier string) *harness.
 	return c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {identifier},
 		"code":       {harness.TOTPCode(secret, time.Now())},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 }
 
@@ -166,6 +179,7 @@ func TestOIDCGoldenPath(t *testing.T) {
 	response = c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {"000000"},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 	response.RequireStatus(t, 200).Contains(t, "Sign-in failed")
 
@@ -328,11 +342,13 @@ func TestOIDCDenials(t *testing.T) {
 		"code": {
 			harness.TOTPCode(harness.DeriveTOTPSecret(testRootSecret, "nobody", 0), time.Now()),
 		},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 	unknown.RequireStatus(t, 200)
 	wrongCode := c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {"000000"},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 	wrongCode.RequireStatus(t, 200)
 	require.Equal(t, unknown.Body, wrongCode.Body)
@@ -342,6 +358,7 @@ func TestOIDCDenials(t *testing.T) {
 	malformed := c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {"12ab"},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 	malformed.RequireStatus(t, 200)
 	require.Equal(t, unknown.Body, malformed.Body)
@@ -351,6 +368,7 @@ func TestOIDCDenials(t *testing.T) {
 	response = c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice@example.com"},
 		"code":       {harness.TOTPCode(aliceSecret, time.Now())},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 	response.RequireStatus(t, 303)
 
@@ -424,6 +442,7 @@ func TestOIDCDenials(t *testing.T) {
 		throttled.PostForm(t, "/login?"+query, url.Values{
 			"identifier": {"bob"},
 			"code":       {"000000"},
+			"csrf_token": {loginFormCSRF(t, throttled, query)},
 		}).RequireStatus(t, 200)
 	}
 	response = throttled.PostForm(t, "/login?"+query, url.Values{
@@ -431,6 +450,7 @@ func TestOIDCDenials(t *testing.T) {
 		"code": {
 			harness.TOTPCode(harness.DeriveTOTPSecret(testRootSecret, "bob", 0), time.Now()),
 		},
+		"csrf_token": {loginFormCSRF(t, throttled, query)},
 	})
 	response.RequireStatus(t, 200).Contains(t, "Sign-in failed")
 }

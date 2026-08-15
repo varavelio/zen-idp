@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 import { calculatePKCECodeChallenge, randomPKCECodeVerifier } from "openid-client";
 import { testAdminHash, testRootSecret } from "./harness/credentials.ts";
 import { attachDiagnostics } from "./harness/diagnostics.ts";
-import { CallbackCatcher, deriveTOTPSecret, Harness, totpCode } from "./harness/index.ts";
+import { CallbackCatcher, deriveTOTPSecret, formValue, Harness, totpCode } from "./harness/index.ts";
 
 test("PKCE S256 is enforced for public clients", async ({ page }) => {
   const testInfo = test.info();
@@ -102,8 +102,18 @@ async function loginAndGetCode(
   query: URLSearchParams,
   identifier: string,
 ): Promise<string> {
+  // The login form echoes the anti-forgery token of the browser jar;
+  // fetching it first stores the matching cookie.
+  const form = await harness.client.get(`/login?${query}`);
+  form.requireStatus(200);
+  const csrfToken = formValue(form.text(), "csrf_token");
+  expect(csrfToken).toBeDefined();
   const code = totpCode(await deriveTOTPSecret(testRootSecret, identifier, 0), new Date());
-  (await harness.client.postForm(`/login?${query}`, { identifier, code })).requireStatus(303);
+  (await harness.client.postForm(`/login?${query}`, {
+    identifier,
+    code,
+    csrf_token: csrfToken!,
+  })).requireStatus(303);
   const callback = await harness.client.get(`/authorize?${query}`);
   callback.requireStatus(302);
   const authCode = callback.location().searchParams.get("code");

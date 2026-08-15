@@ -38,6 +38,7 @@ func TestUserExpiration(t *testing.T) {
 	response := c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {code},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 	response.RequireStatus(t, 200).Contains(t, "Sign-in failed")
 }
@@ -69,11 +70,13 @@ func TestTOTPRevisionRotation(t *testing.T) {
 	c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {harness.TOTPCode(oldSecret, time.Now())},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	}).RequireStatus(t, 200).Contains(t, "Sign-in failed")
 	newSecret := harness.DeriveTOTPSecret(testRootSecret, "alice", 1)
 	response = c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {harness.TOTPCode(newSecret, time.Now())},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 	response.RequireStatus(t, 303)
 
@@ -125,11 +128,13 @@ func TestRootSecretRotation(t *testing.T) {
 	c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {harness.TOTPCode(oldSecret, time.Now())},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	}).RequireStatus(t, 200).Contains(t, "Sign-in failed")
 	newSecret := harness.DeriveTOTPSecret(rotatedRootSecret, "alice", 0)
 	response = c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"alice"},
 		"code":       {harness.TOTPCode(newSecret, time.Now())},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 	response.RequireStatus(t, 303)
 }
@@ -184,6 +189,7 @@ func TestRateLimitsSurviveRestart(t *testing.T) {
 		c.PostForm(t, "/login?"+query, url.Values{
 			"identifier": {"bob"},
 			"code":       {"000000"},
+			"csrf_token": {loginFormCSRF(t, c, query)},
 		}).RequireStatus(t, 200)
 	}
 
@@ -194,6 +200,7 @@ func TestRateLimitsSurviveRestart(t *testing.T) {
 	c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"bob"},
 		"code":       {"000000"},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	}).RequireStatus(t, 200)
 
 	// The sixth attempt is throttled even with the correct code.
@@ -201,6 +208,7 @@ func TestRateLimitsSurviveRestart(t *testing.T) {
 	response := c.PostForm(t, "/login?"+query, url.Values{
 		"identifier": {"bob"},
 		"code":       {harness.TOTPCode(bobSecret, time.Now())},
+		"csrf_token": {loginFormCSRF(t, c, query)},
 	})
 	response.RequireStatus(t, 200).Contains(t, "Sign-in failed")
 }
