@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/varavelio/zen-idp/e2e/harness"
+	"github.com/varavelio/zen-idp/e2e/http/harness"
 )
 
 // rotatedRootSecret is a second root secret used to exercise rotation.

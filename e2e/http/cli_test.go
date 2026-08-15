@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/varavelio/zen-idp/e2e/harness"
+	"github.com/varavelio/zen-idp/e2e/http/harness"
 )
 
 // TestValidateConfig exercises the configuration validation command against

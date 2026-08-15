@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/varavelio/zen-idp/e2e/harness"
+	"github.com/varavelio/zen-idp/e2e/http/harness"
 )
 
 // TestAdminLifecycle walks the complete administration interaction: sign-in,

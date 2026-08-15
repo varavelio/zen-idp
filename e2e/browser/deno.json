@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "test": "deno run --allow-all npm:playwright test ."
+  },
+  "imports": {
+    "@playwright/test": "npm:@playwright/test@1.62.1"
+  },
+  "nodeModulesDir": "auto"
+}
