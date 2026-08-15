@@ -8,9 +8,11 @@
   Landing hero.
 
   Motion for the brand mark composition: verification pulse rings around the
-  identity card, a slow orbit of relying-party dots, the floating mark, and a
-  one-time entrance where the brackets draw themselves and the identity
-  figure rises into place. Every animated layer is decorative.
+  identity card, three satellites orbiting the provider while staying upright
+  (the orbit rotates one way and each satellite counter-rotates at the same
+  speed), the floating mark, and a one-time entrance where the brackets draw
+  themselves and the identity figure rises into place. Every animated layer is
+  decorative.
 */
 
 .hero-grid-bg {
@@ -44,6 +46,32 @@
 
 .hero-orbit {
   animation: hero-orbit 56s linear infinite;
+}
+
+/* Static angular placement of each satellite anchor. */
+.hero-anchor-120 {
+  rotate: 120deg;
+}
+
+.hero-anchor-240 {
+  rotate: 240deg;
+}
+
+/*
+  Satellites counter-rotate at the exact speed of the orbit, so their icons
+  revolve around the mark while staying upright. The static rotate values
+  cancel the anchor placement; the animation cancels the orbit rotation.
+*/
+.hero-satellite {
+  animation: hero-counter-orbit 56s linear infinite;
+}
+
+.hero-satellite-120 {
+  rotate: -120deg;
+}
+
+.hero-satellite-240 {
+  rotate: -240deg;
 }
 
 .hero-float {
@@ -84,6 +112,15 @@
   }
 }
 
+@keyframes hero-counter-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
 @keyframes hero-float {
   0%,
   100% {
@@ -119,6 +156,7 @@
   .hero-ring,
   .hero-ring-delayed,
   .hero-orbit,
+  .hero-satellite,
   .hero-float,
   .hero-brackets,
   .hero-person {

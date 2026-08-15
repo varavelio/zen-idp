@@ -6,9 +6,10 @@
   Project-specific hero for the docs landing page. The copy lives here on
   purpose: the component is the landing page's own, not a reusable building
   block. The right panel presents the brand mark as a living composition:
-  pulse rings signal continuous verification, orbiting dots represent the
-  relying parties connected to the provider, and the mark floats at the
-  center. Every animated layer is decorative and still under
+  pulse rings signal continuous verification, and three satellites (the
+  identity, its session, and the relying apps) orbit the provider while
+  staying upright through a synchronized counter-rotation. The mark floats
+  at the center. Every animated layer is decorative and still under
   prefers-reduced-motion.
 {% endcomment %}
 
@@ -32,7 +33,7 @@
           {{ button("Installation", "/docs/installation/", "", "", "", "lg", "md", "outline", "neutral", "true", "false", "button", "desk:w-auto") }}
         </div>
         <p class="mt-4 text-sm leading-6 text-content-muted">
-          Written in Go, distributed as a single executable. Free and open source under the MIT license.
+          Written in Go, distributed as a single executable and docker image. Free and open source under the MIT license.
         </p>
       </div>
 
@@ -42,11 +43,28 @@
             <div class="hero-ring absolute inset-[26%] rounded-full border border-base-400" aria-hidden="true"></div>
             <div class="hero-ring hero-ring-delayed absolute inset-[26%] rounded-full border border-base-400" aria-hidden="true"></div>
 
-            <div class="absolute inset-[6%] rounded-full border border-dashed border-base-400" aria-hidden="true"></div>
+            <div class="absolute inset-[6%] rounded-full border-2 border-dashed border-base-400" aria-hidden="true"></div>
 
             <div class="hero-orbit absolute inset-[6%]" aria-hidden="true">
-              <span class="absolute left-1/2 top-0 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-base-400 bg-base-100"></span>
-              <span class="absolute bottom-0 left-1/2 size-1.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-content-muted"></span>
+              <div class="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
+                <div class="hero-satellite flex size-8 items-center justify-center rounded-full border border-base-400 bg-base-100 text-content-muted">
+                  {{ vara_icon("user", "size-4")|safe }}
+                </div>
+              </div>
+              <div class="hero-anchor-120 absolute inset-0">
+                <div class="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
+                  <div class="hero-satellite hero-satellite-120 flex size-8 items-center justify-center rounded-full border border-base-400 bg-base-100 text-content-muted">
+                    {{ vara_icon("lock-keyhole", "size-4")|safe }}
+                  </div>
+                </div>
+              </div>
+              <div class="hero-anchor-240 absolute inset-0">
+                <div class="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
+                  <div class="hero-satellite hero-satellite-240 flex size-8 items-center justify-center rounded-full border border-base-400 bg-base-100 text-content-muted">
+                    {{ vara_icon("globe", "size-4")|safe }}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="hero-float absolute inset-[26%] z-10 flex items-center justify-center rounded-lg border border-base-400 bg-base-100 text-content" aria-hidden="true">
