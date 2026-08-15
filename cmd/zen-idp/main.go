@@ -39,6 +39,7 @@ type dependencies struct {
 	listen            func(string, string) (net.Listener, error)
 	serve             func(net.Listener, *http.Server) error
 	generateSecrets   func() (crypto.SecretBundle, error)
+	checkHealth       func(context.Context, string) (int, error)
 }
 
 func main() {
@@ -54,6 +55,7 @@ func main() {
 		listen:            net.Listen,
 		serve:             serveWithGracefulShutdown,
 		generateSecrets:   crypto.GenerateSecretBundle,
+		checkHealth:       checkHealthEndpoint,
 	}
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, dependencies))
 }
@@ -85,6 +87,8 @@ func run(args []string, stdout, stderr io.Writer, dependencies dependencies) int
 		runErr = runValidateConfig(invocation.EnvFile, stdout, dependencies)
 	case cli.GenerateSecrets:
 		runErr = runGenerateSecrets(stdout, dependencies)
+	case cli.Health:
+		runErr = runHealth(invocation.EnvFile, stdout, dependencies)
 	}
 	if runErr == nil {
 		return exitCodeSuccess

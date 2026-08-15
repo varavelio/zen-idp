@@ -20,6 +20,7 @@ import (
 	"github.com/varavelio/zen-idp/internal/audit"
 	"github.com/varavelio/zen-idp/internal/cleanup"
 	"github.com/varavelio/zen-idp/internal/csrf"
+	"github.com/varavelio/zen-idp/internal/health"
 	"github.com/varavelio/zen-idp/internal/id"
 	"github.com/varavelio/zen-idp/internal/jwt"
 	"github.com/varavelio/zen-idp/internal/lock"
@@ -322,6 +323,9 @@ func runServe(envFile string, dependencies dependencies) error {
 			CSRF:          csrfGuard,
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
+		},
+		server.HealthDependencies{
+			Checker: health.New(db, time.Minute),
 		},
 	)
 	httpServer := &http.Server{
