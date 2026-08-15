@@ -13,7 +13,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run lint and test
+      - name: Run CI pipeline
         uses: devcontainers/ci@v0.3
         with:
           push: never
