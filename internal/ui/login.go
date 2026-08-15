@@ -34,7 +34,7 @@ func LoginPage(settings config.UI, action, failure string) nodx.Node {
 					nodx.Autofocus(true),
 				),
 				textInput(
-					"code", "code", "One-time code", "one-time-code", "text",
+					"code", "code", "One-time code", "one-time-code", "password",
 					lucide.KeyRound(nodx.Class("size-4")),
 					nodx.Required(true),
 					nodx.Placeholder("XXX XXX"),
