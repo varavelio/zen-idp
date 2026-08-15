@@ -1,5 +1,8 @@
 title: "Zen IdP"
 description: "A declarative, zero-maintenance OIDC Identity Provider."
 site_url: "https://zen-idp.varavel.com"
+favicon: "https://cdn.jsdelivr.net/gh/varavelio/zen-idp@v0.1.0-alpha.6/assets/icon.svg"
+logo_light: "https://cdn.jsdelivr.net/gh/varavelio/zen-idp@v0.1.0-alpha.6/assets/logo-black.svg"
+logo_dark: "https://cdn.jsdelivr.net/gh/varavelio/zen-idp@v0.1.0-alpha.6/assets/logo-white.svg"
 
 docs_github_repo: "varavelio/zen-idp"
