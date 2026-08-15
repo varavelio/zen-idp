@@ -10,23 +10,7 @@ cta_label="Get Started"
 cta_href="/docs/get-started/"
 />
 
-<vara-hero
-container="lg"
-eyebrow="Zen IdP"
-title="Single sign-on for your internal tools, declared as code"
-description="Zen IdP is a declarative OpenID Connect provider for small and medium teams. Your users, clients, and claims live in YAML, one root secret drives everything cryptographic, and a single binary handles the rest. No external database, no directory to sync, no passwords to reset."
-primary_label="Get Started"
-primary_href="/docs/get-started/"
-secondary_label="Installation"
-secondary_href="/docs/installation/"
-panel_icon="shield-check"
-panel_title="What you get"
-panel_description="A standard OIDC provider your applications already know how to talk to."
-item_1="Self-hosted apps, home labs, and internal tools sign in through OIDC"
-item_2="Users authenticate with TOTP, no passwords or email involved"
-item_3="Configuration changes flow through pull requests"
-caption="Written in Go, distributed as a single executable. Free and open source under the MIT license."
-/>
+<landing-hero />
 
 <vara-features
 container="lg"

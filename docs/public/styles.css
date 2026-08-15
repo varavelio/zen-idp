@@ -1,0 +1,135 @@
+/*
+  Zen IdP docs stylesheet.
+  Extends the veta-theme-vara entrypoint with project-specific styles.
+*/
+@import "./styles_vara.css";
+
+/*
+  Landing hero.
+
+  Motion for the brand mark composition: verification pulse rings around the
+  identity card, a slow orbit of relying-party dots, the floating mark, and a
+  one-time entrance where the brackets draw themselves and the identity
+  figure rises into place. Every animated layer is decorative.
+*/
+
+.hero-grid-bg {
+  background-image: radial-gradient(
+    circle,
+    var(--color-base-300) 1px,
+    transparent 1.5px
+  );
+  background-size: 28px 28px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 60% 55% at 72% 28%,
+    black 0%,
+    transparent 72%
+  );
+  mask-image: radial-gradient(
+    ellipse 60% 55% at 72% 28%,
+    black 0%,
+    transparent 72%
+  );
+  opacity: 0.55;
+}
+
+.hero-ring {
+  opacity: 0;
+  animation: hero-ring 4.8s cubic-bezier(0.2, 0.6, 0.4, 1) infinite both;
+}
+
+.hero-ring-delayed {
+  animation-delay: 2.4s;
+}
+
+.hero-orbit {
+  animation: hero-orbit 56s linear infinite;
+}
+
+.hero-float {
+  animation: hero-float 7s ease-in-out infinite;
+}
+
+.hero-brackets {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: hero-draw 1.5s cubic-bezier(0.6, 0, 0.2, 1) 0.2s both;
+}
+
+.hero-person {
+  animation: hero-rise 0.9s cubic-bezier(0.2, 0.6, 0.2, 1) 1.2s both;
+}
+
+@keyframes hero-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.5;
+  }
+  70%,
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes hero-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes hero-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Respect users who prefer still interfaces. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-ring,
+  .hero-ring-delayed,
+  .hero-orbit,
+  .hero-float,
+  .hero-brackets,
+  .hero-person {
+    animation: none;
+  }
+
+  .hero-ring {
+    opacity: 0;
+  }
+
+  .hero-brackets {
+    stroke-dashoffset: 0;
+  }
+}

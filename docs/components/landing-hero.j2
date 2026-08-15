@@ -1,0 +1,95 @@
+{% import "../templates/vara/macros/button.j2" button %}
+
+{% comment %}
+  Zen IdP landing hero.
+
+  Project-specific hero for the docs landing page. The copy lives here on
+  purpose: the component is the landing page's own, not a reusable building
+  block. The right panel presents the brand mark as a living composition:
+  pulse rings signal continuous verification, orbiting dots represent the
+  relying parties connected to the provider, and the mark floats at the
+  center. Every animated layer is decorative and still under
+  prefers-reduced-motion.
+{% endcomment %}
+
+<section class="not-prose relative overflow-hidden bg-base-100 py-12 desk:py-24">
+  <div class="hero-grid-bg pointer-events-none absolute inset-0" aria-hidden="true"></div>
+
+  <div class="relative mx-auto w-full max-w-7xl px-4">
+    <div class="grid items-center gap-8 desk:grid-cols-2 desk:gap-12">
+      <div class="flex min-w-0 flex-col items-start">
+        <p class="mb-4 inline-flex rounded-full border border-base-400 bg-base-200 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.18em] text-content-muted">
+          OpenID Connect Identity Provider
+        </p>
+        <h1 class="max-w-4xl text-4xl font-semibold tracking-tight text-content desk:text-6xl">
+          Single sign-on for your internal tools, declared as code
+        </h1>
+        <p class="mt-5 max-w-2xl text-base leading-7 text-content-muted desk:text-xl desk:leading-8">
+          Zen IdP is a declarative OpenID Connect provider for small and medium teams. Your users, clients, and claims live in YAML, one root secret drives everything cryptographic, and a single binary handles the rest. No external database, no directory to sync, no passwords to reset.
+        </p>
+        <div class="mt-8 flex w-full flex-col gap-3 desk:w-auto desk:flex-row">
+          {{ button("Get Started", "/docs/get-started/", "", "", "", "lg", "md", "solid", "neutral", "true", "false", "button", "desk:w-auto") }}
+          {{ button("Installation", "/docs/installation/", "", "", "", "lg", "md", "outline", "neutral", "true", "false", "button", "desk:w-auto") }}
+        </div>
+        <p class="mt-4 text-sm leading-6 text-content-muted">
+          Written in Go, distributed as a single executable. Free and open source under the MIT license.
+        </p>
+      </div>
+
+      <div class="min-w-0">
+        <div class="rounded-lg border border-base-400 bg-base-200 p-6 desk:p-8">
+          <div class="relative mx-auto aspect-square w-full max-w-[19rem]">
+            <div class="hero-ring absolute inset-[26%] rounded-full border border-base-400" aria-hidden="true"></div>
+            <div class="hero-ring hero-ring-delayed absolute inset-[26%] rounded-full border border-base-400" aria-hidden="true"></div>
+
+            <div class="absolute inset-[6%] rounded-full border border-dashed border-base-400" aria-hidden="true"></div>
+
+            <div class="hero-orbit absolute inset-[6%]" aria-hidden="true">
+              <span class="absolute left-1/2 top-0 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-base-400 bg-base-100"></span>
+              <span class="absolute bottom-0 left-1/2 size-1.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-content-muted"></span>
+            </div>
+
+            <div class="hero-float absolute inset-[26%] z-10 flex items-center justify-center rounded-lg border border-base-400 bg-base-100 text-content" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="w-[58%]" fill="none">
+                <path
+                  class="hero-brackets"
+                  pathLength="1"
+                  d="M25 12.5H6.25v75H25m50-75h18.75v75H75"
+                  stroke="currentColor"
+                  stroke-width="12.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <g class="hero-person" fill="#14B8A6">
+                  <circle cx="50" cy="37.5" r="12.5" />
+                  <path d="M42.5 45h15l5 30H37.5Z" />
+                </g>
+              </svg>
+            </div>
+          </div>
+
+          <h2 class="mt-6 text-xl font-medium tracking-tight text-content desk:mt-8 desk:text-2xl">
+            What you get
+          </h2>
+          <p class="mt-3 text-sm leading-6 text-content-muted desk:text-base">
+            A standard OIDC provider your applications already know how to talk to.
+          </p>
+          <ul class="mt-6 space-y-3">
+            <li class="flex items-start gap-3 text-sm leading-6 text-content-muted">
+              <span class="mt-1 shrink-0 text-content" aria-hidden="true">{{ vara_icon("check", "size-4")|safe }}</span>
+              <span>Self-hosted apps, home labs, and internal tools sign in through OIDC</span>
+            </li>
+            <li class="flex items-start gap-3 text-sm leading-6 text-content-muted">
+              <span class="mt-1 shrink-0 text-content" aria-hidden="true">{{ vara_icon("check", "size-4")|safe }}</span>
+              <span>Users authenticate with TOTP, no passwords or email involved</span>
+            </li>
+            <li class="flex items-start gap-3 text-sm leading-6 text-content-muted">
+              <span class="mt-1 shrink-0 text-content" aria-hidden="true">{{ vara_icon("check", "size-4")|safe }}</span>
+              <span>Configuration changes flow through pull requests</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
