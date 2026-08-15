@@ -5,24 +5,15 @@
 // a derived TOTP code, code exchange with PKCE, ID token validation, and
 // userinfo resolution.
 
-import { expect } from "@playwright/test";
-import { attachDiagnostics, test } from "./harness/fixtures.ts";
-import { deriveTOTPSecret, Harness, totpCode } from "./harness/index.ts";
-import { OIDCClientServer } from "./harness/oidcclient.ts";
-
-// Shared fixtures of the browser suite. The hash is a precomputed
-// Argon2id PHC value anchored in the HTTP suite.
-const testRootSecret = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
-const testAdminHash =
-  "$argon2id$v=19$m=65536,t=2,p=2$INy39hwa9rMN8WhprspfDQ$45uH4EsaLtb2h9bUkVfgAAoLKsgPK1ALYprlwxm16B4";
+import { expect, test } from "@playwright/test";
+import { testAdminHash, testRootSecret } from "./harness/credentials.ts";
+import { deriveTOTPSecret, OIDCScenario, totpCode } from "./harness/index.ts";
 
 test("walks the complete OIDC green path with a real client", async ({ page }) => {
   const testInfo = test.info();
-  // The client binds its loopback port before the instance starts, so the
-  // configuration can register its exact callback URI.
-  const client = await OIDCClientServer.start({ clientId: "public-app" });
-  const harness = await Harness.start({
+  const scenario = await OIDCScenario.start({
     rootSecret: testRootSecret,
+    client: { clientId: "public-app", name: "Public App" },
     config: {
       config: {
         ui: { name: "E2E Browser Test" },
@@ -33,15 +24,20 @@ test("walks the complete OIDC green path with a real client", async ({ page }) =
         name: "Alice Example",
         groups: ["engineering", "operators"],
       }],
-      clients: [{
-        id: "public-app",
-        name: "Public App",
-        redirect_uris: [client.redirectURI],
-      }],
     },
   });
+
+  const { harness, client } = scenario;
+
   try {
-    await client.connect(harness.baseURL);
+    // Discovery advertises exactly the implemented behavior.
+    const discovery = await harness.client.get("/.well-known/openid-configuration");
+    discovery.requireStatus(200);
+    expect(discovery.json()).toMatchObject({
+      issuer: harness.baseURL,
+      authorization_endpoint: `${harness.baseURL}/authorize`,
+      token_endpoint: `${harness.baseURL}/token`,
+    });
 
     // The browser begins the flow at the client and lands on the login
     // interaction with the pending authorization request.
@@ -54,10 +50,7 @@ test("walks the complete OIDC green path with a real client", async ({ page }) =
 
     // Signing in with the derived TOTP code returns the browser to the
     // client, which exchanges the code and renders the outcome.
-    const code = totpCode(
-      await deriveTOTPSecret(testRootSecret, "alice", 0),
-      new Date(),
-    );
+    const code = totpCode(await deriveTOTPSecret(testRootSecret, "alice", 0), new Date());
     await page.getByLabel("Login identifier").fill("alice");
     await page.getByLabel("One-time code").fill(code);
     await page.getByRole("button", { name: "Sign in" }).click();
@@ -87,10 +80,6 @@ test("walks the complete OIDC green path with a real client", async ({ page }) =
       groups: ["engineering", "operators"],
     });
   } finally {
-    if (testInfo.status === "failed" || testInfo.status === "timedOut") {
-      await attachDiagnostics(testInfo, harness);
-    }
-    await harness.stop();
-    await client.stop();
+    await scenario.dispose(testInfo);
   }
 });
