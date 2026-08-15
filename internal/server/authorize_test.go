@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/varavelio/zen-idp/internal/clock"
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/onetoken"
 	"github.com/varavelio/zen-idp/internal/session"
 	"github.com/varavelio/zen-idp/internal/statestore"
@@ -946,15 +947,22 @@ func TestAuthorizeIssuesCode(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		secret, err := totp.DeriveSharedSecret(referenceRootSecret, "alice", 0)
 		require.NoError(t, err)
-		form := url.Values{"identifier": {"alice"}, "code": {totpCode(t, secret, time.Now())}}
+		query := queryFor(validPublicRequest())
+		csrfValue := loginCSRFToken(t, app, query)
+		form := url.Values{
+			"identifier":   {"alice"},
+			"code":         {totpCode(t, secret, time.Now())},
+			csrf.FieldName: {csrfValue},
+		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
 			http.MethodPost,
-			"/login?"+queryFor(validPublicRequest()),
+			"/login?"+query,
 			strings.NewReader(form.Encode()),
 		)
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfValue})
 		app.server.Handler().ServeHTTP(response, request)
 		require.Equal(t, http.StatusSeeOther, response.Code)
 		cookie := response.Result().Cookies()[0]

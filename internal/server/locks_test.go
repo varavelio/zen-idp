@@ -245,9 +245,11 @@ func TestProcessLockChange(t *testing.T) {
 
 		secret, err := totp.DeriveSharedSecret(referenceRootSecret, "alice", 0)
 		require.NoError(t, err)
+		token := loginCSRFToken(t, app, loginQuery())
 		form := url.Values{
-			"identifier": {"alice"},
-			"code":       {totpCode(t, secret, time.Now())},
+			"identifier":   {"alice"},
+			"code":         {totpCode(t, secret, time.Now())},
+			csrf.FieldName: {token},
 		}
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -256,6 +258,7 @@ func TestProcessLockChange(t *testing.T) {
 			strings.NewReader(form.Encode()),
 		)
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: token})
 		loginResponse := httptest.NewRecorder()
 		app.server.Handler().ServeHTTP(loginResponse, request)
 

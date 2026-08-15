@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/csrf"
 	"github.com/varavelio/zen-idp/internal/login"
 	"github.com/varavelio/zen-idp/internal/ui"
 )
@@ -37,6 +38,9 @@ type LoginService interface {
 type LoginDependencies struct {
 	// Service authenticates users and creates their sessions.
 	Service LoginService
+	// CSRF protects the login form submission from cross-site request
+	// forgery.
+	CSRF CSRFGuard
 	// UI holds the presentation settings shown on the login page.
 	UI config.UI
 	// SecureCookies marks the session cookie Secure; it must be true in
@@ -58,13 +62,20 @@ func (server *Server) loginForm(w http.ResponseWriter, r *http.Request) error {
 	return server.renderLoginPage(w, r, "")
 }
 
-// processLogin handles the login form submission: it authenticates the
-// submitted identifier and one-time code, and on success issues the SSO
-// session cookie and continues the pending authorization flow. Every denied
-// attempt re-renders the form with the same generic failure message.
+// processLogin handles the login form submission: it verifies the
+// anti-forgery token, authenticates the submitted identifier and one-time
+// code, and on success issues the SSO session cookie and continues the
+// pending authorization flow. Every denied attempt re-renders the form
+// with the same generic failure message.
 func (server *Server) processLogin(w http.ResponseWriter, r *http.Request) error {
 	if _, err := server.parseAndValidateAuthorizeRequest(r); err != nil {
 		return writeInvalidRequestPage(w)
+	}
+	if err := server.login.CSRF.Verify(r); err != nil {
+		if errors.Is(err, csrf.ErrInvalidToken) {
+			return writeForbiddenPage(w)
+		}
+		return fmt.Errorf("verify CSRF token: %w", err)
 	}
 	if err := r.ParseForm(); err != nil {
 		return fmt.Errorf("parse login form: %w", err)
@@ -112,17 +123,23 @@ func browserCookie(name, value string, maxAge int, secure bool) *http.Cookie {
 }
 
 // renderLoginPage writes the login form for the pending authorization request
-// carried by r, with an optional failure message.
+// carried by r, with an optional failure message. Every render issues the
+// anti-forgery token of the browser, so the form always echoes the token
+// stored in its cookie.
 func (server *Server) renderLoginPage(
 	w http.ResponseWriter,
 	r *http.Request,
 	failure string,
 ) error {
+	token, err := server.login.CSRF.Token(w, r)
+	if err != nil {
+		return fmt.Errorf("get CSRF token: %w", err)
+	}
 	action := authorizeLoginPath
 	if r.URL.RawQuery != "" {
 		action += "?" + r.URL.RawQuery
 	}
-	html, err := ui.LoginPage(server.login.UI, action, failure).RenderString()
+	html, err := ui.LoginPage(server.login.UI, action, token, failure).RenderString()
 	if err != nil {
 		return fmt.Errorf("render login page: %w", err)
 	}

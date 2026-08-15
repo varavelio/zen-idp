@@ -1010,9 +1010,11 @@ func TestAdminAndUserCookiesCoexist(t *testing.T) {
 
 	secret, err := totp.DeriveSharedSecret(referenceRootSecret, "alice", 0)
 	require.NoError(t, err)
+	csrfValue := loginCSRFToken(t, app, loginQuery())
 	userForm := url.Values{
-		"identifier": {"alice"},
-		"code":       {totpCode(t, secret, time.Now())},
+		"identifier":   {"alice"},
+		"code":         {totpCode(t, secret, time.Now())},
+		csrf.FieldName: {csrfValue},
 	}
 	userRequest := httptest.NewRequestWithContext(
 		context.Background(),
@@ -1021,6 +1023,7 @@ func TestAdminAndUserCookiesCoexist(t *testing.T) {
 		strings.NewReader(userForm.Encode()),
 	)
 	userRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	userRequest.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfValue})
 	userResponse := httptest.NewRecorder()
 	app.server.Handler().ServeHTTP(userResponse, userRequest)
 	require.Equal(t, http.StatusSeeOther, userResponse.Code)

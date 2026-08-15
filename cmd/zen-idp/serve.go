@@ -264,6 +264,7 @@ func runServe(envFile string, dependencies dependencies) error {
 		ui.Assets(),
 		server.LoginDependencies{
 			Service:       logins,
+			CSRF:          csrfGuard,
 			UI:            configuration.UI,
 			SecureCookies: strings.HasPrefix(configuration.Issuer, "https://"),
 			SessionMaxAge: configuration.Security.Session.MaxAge,

@@ -106,6 +106,7 @@ func newTestApp(t *testing.T, users []config.User) *testApp {
 		ui.Assets(),
 		LoginDependencies{
 			Service:       service,
+			CSRF:          csrfGuard,
 			UI:            config.UI{Name: "Example Auth"},
 			SecureCookies: true,
 			SessionMaxAge: testMaxAge,
@@ -267,11 +268,14 @@ func TestLoginForm(t *testing.T) {
 		require.Contains(t, response.Body.String(), "Example Auth")
 		require.Contains(t, response.Body.String(), "Login identifier")
 		require.Contains(t, response.Body.String(), "One-time code")
+		require.Contains(t, response.Body.String(), `name="csrf_token"`)
 		require.Contains(
 			t,
 			response.Body.String(),
 			`form action="/login?`+strings.ReplaceAll(loginQuery(), "&", "&amp;")+`"`,
 		)
+		require.Len(t, response.Result().Cookies(), 1)
+		require.Equal(t, CSRFCookieName, response.Result().Cookies()[0].Name)
 	})
 
 	t.Run("rejects requests without a pending authorization request", func(t *testing.T) {
@@ -330,10 +334,41 @@ func TestLoginForm(t *testing.T) {
 	})
 }
 
+// loginCSRFToken fetches the login form for the given pending request and
+// returns the anti-forgery token it issues, exactly as a browser would
+// receive it.
+func loginCSRFToken(t *testing.T, app *testApp, query string) string {
+	t.Helper()
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/login?"+query,
+		nil,
+	)
+	response := httptest.NewRecorder()
+	app.server.Handler().ServeHTTP(response, request)
+	require.Equal(t, http.StatusOK, response.Code)
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == CSRFCookieName {
+			return cookie.Value
+		}
+	}
+	require.FailNow(t, "no CSRF cookie in response")
+	return ""
+}
+
 func TestProcessLogin(t *testing.T) {
-	post := func(t *testing.T, server *Server, query, identifier, code string) *httptest.ResponseRecorder {
+	post := func(t *testing.T, app *testApp, query, identifier, code string) *httptest.ResponseRecorder {
 		t.Helper()
-		form := url.Values{"identifier": {identifier}, "code": {code}}
+		// The anti-forgery token always comes from a valid pending
+		// request; the posted query may differ, as in the subtest that
+		// submits without one.
+		token := loginCSRFToken(t, app, loginQuery())
+		form := url.Values{
+			"identifier":   {identifier},
+			"code":         {code},
+			csrf.FieldName: {token},
+		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -342,9 +377,10 @@ func TestProcessLogin(t *testing.T) {
 			strings.NewReader(form.Encode()),
 		)
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: token})
 		request.RemoteAddr = "192.0.2.10:54321"
 		request.Header.Set("User-Agent", "test-agent")
-		server.Handler().ServeHTTP(response, request)
+		app.server.Handler().ServeHTTP(response, request)
 		return response
 	}
 
@@ -359,7 +395,7 @@ func TestProcessLogin(t *testing.T) {
 		"authenticates a valid identifier and code and issues the session cookie",
 		func(t *testing.T) {
 			app := newTestApp(t, testUsers)
-			response := post(t, app.server, loginQuery(), "alice", codeFor(t, "alice"))
+			response := post(t, app, loginQuery(), "alice", codeFor(t, "alice"))
 
 			require.Equal(t, http.StatusSeeOther, response.Code)
 			require.Equal(t, "/authorize?"+loginQuery(), response.Header().Get("Location"))
@@ -383,7 +419,7 @@ func TestProcessLogin(t *testing.T) {
 	t.Run("authenticates a user by its configured login identifier", func(t *testing.T) {
 		users := []config.User{{Subject: "alice", Login: "alice@example.com"}}
 		app := newTestApp(t, users)
-		response := post(t, app.server, loginQuery(), "alice@example.com", codeFor(t, "alice"))
+		response := post(t, app, loginQuery(), "alice@example.com", codeFor(t, "alice"))
 
 		require.Equal(t, http.StatusSeeOther, response.Code)
 	})
@@ -391,7 +427,7 @@ func TestProcessLogin(t *testing.T) {
 	t.Run("marks the cookie secure only when configured", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		app.server.login.SecureCookies = false
-		response := post(t, app.server, loginQuery(), "alice", codeFor(t, "alice"))
+		response := post(t, app, loginQuery(), "alice", codeFor(t, "alice"))
 
 		cookies := response.Result().Cookies()
 		require.Len(t, cookies, 1)
@@ -400,7 +436,7 @@ func TestProcessLogin(t *testing.T) {
 
 	t.Run("re-renders the form with a generic failure for a wrong code", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
-		response := post(t, app.server, loginQuery(), "alice", "000000")
+		response := post(t, app, loginQuery(), "alice", "000000")
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
@@ -414,7 +450,7 @@ func TestProcessLogin(t *testing.T) {
 
 	t.Run("returns the same failure for an unknown identifier", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
-		response := post(t, app.server, loginQuery(), "mallory", "000000")
+		response := post(t, app, loginQuery(), "mallory", "000000")
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Contains(
@@ -426,7 +462,7 @@ func TestProcessLogin(t *testing.T) {
 
 	t.Run("returns the same failure for a malformed code", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
-		response := post(t, app.server, loginQuery(), "alice", "not-a-code")
+		response := post(t, app, loginQuery(), "alice", "not-a-code")
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Contains(
@@ -439,10 +475,10 @@ func TestProcessLogin(t *testing.T) {
 	t.Run("denies attempts once the rate limit is exhausted", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		for range 5 {
-			response := post(t, app.server, loginQuery(), "alice", "000000")
+			response := post(t, app, loginQuery(), "alice", "000000")
 			require.Equal(t, http.StatusOK, response.Code)
 		}
-		response := post(t, app.server, loginQuery(), "alice", codeFor(t, "alice"))
+		response := post(t, app, loginQuery(), "alice", codeFor(t, "alice"))
 
 		require.Equal(t, http.StatusOK, response.Code)
 		require.Contains(
@@ -455,9 +491,27 @@ func TestProcessLogin(t *testing.T) {
 
 	t.Run("rejects submissions without a pending authorization request", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
-		response := post(t, app.server, "", "alice", codeFor(t, "alice"))
+		response := post(t, app, "", "alice", codeFor(t, "alice"))
 
 		require.Equal(t, http.StatusBadRequest, response.Code)
 		require.Contains(t, response.Body.String(), "Invalid authorization request")
+	})
+
+	t.Run("rejects a submission without a CSRF token", func(t *testing.T) {
+		app := newTestApp(t, testUsers)
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			"/login?"+loginQuery(),
+			strings.NewReader(url.Values{
+				"identifier": {"alice"},
+				"code":       {codeFor(t, "alice")},
+			}.Encode()),
+		)
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		response := httptest.NewRecorder()
+		app.server.Handler().ServeHTTP(response, request)
+
+		require.Equal(t, http.StatusForbidden, response.Code)
 	})
 }

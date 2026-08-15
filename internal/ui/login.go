@@ -14,7 +14,8 @@ const loginTitle = "Sign in"
 // identifier and one-time-code fields, and an optional failure message.
 // action is the form target that carries the pending authorization request
 // parameters, which are forwarded unchanged when the form is submitted.
-func LoginPage(settings config.UI, action, failure string) nodx.Node {
+// csrfToken protects the form submission from cross-site request forgery.
+func LoginPage(settings config.UI, action, csrfToken, failure string) nodx.Node {
 	name := settings.Name
 	if name == "" {
 		name = loginTitle
@@ -26,6 +27,7 @@ func LoginPage(settings config.UI, action, failure string) nodx.Node {
 				nodx.Action(action),
 				nodx.Method("post"),
 				nodx.Class("space-y-5"),
+				csrfField(csrfToken),
 				textInput(
 					"identifier", "identifier", "Login identifier", "username", "text",
 					lucide.User(nodx.Class("size-4")),

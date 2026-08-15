@@ -306,9 +306,11 @@ func TestProcessPanic(t *testing.T) {
 
 		secret, err := totp.DeriveSharedSecret(referenceRootSecret, "alice", 0)
 		require.NoError(t, err)
+		csrfToken := loginCSRFToken(t, app, loginQuery())
 		form := url.Values{
-			"identifier": {"alice"},
-			"code":       {totpCode(t, secret, time.Now())},
+			"identifier":   {"alice"},
+			"code":         {totpCode(t, secret, time.Now())},
+			csrf.FieldName: {csrfToken},
 		}
 		request := httptest.NewRequestWithContext(
 			context.Background(),
@@ -317,6 +319,7 @@ func TestProcessPanic(t *testing.T) {
 			strings.NewReader(form.Encode()),
 		)
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
 		response := httptest.NewRecorder()
 		app.server.Handler().ServeHTTP(response, request)
 
