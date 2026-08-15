@@ -8,12 +8,11 @@ tasks:
     cmd: task --list-all
 
   ci:
-    desc: Run full CI pipeline (deps, format, lint, build, test, e2e)
+    desc: Run full CI pipeline (deps, format, lint, test, e2e)
     cmds:
       - task: deps
       - task: format
       - task: lint
-      - task: build
       - task: test
       - task: e2e
 
@@ -73,6 +72,8 @@ tasks:
 
   e2e:
     desc: Run the black-box end-to-end test suite against the compiled binary
+    deps:
+      - build
     cmds:
       - go test -tags e2e -count=1 -timeout 10m ./e2e/
       - golangci-lint run --build-tags e2e ./e2e/...
