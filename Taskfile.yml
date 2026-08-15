@@ -63,6 +63,7 @@ tasks:
     cmds:
       - dprint check --config ./dprint.json --log-level warn
       - golangci-lint run ./...
+      - deno lint ./e2e/browser/.
 
   test:
     desc: Run all tests
