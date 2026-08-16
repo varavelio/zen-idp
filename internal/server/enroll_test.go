@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,13 +17,15 @@ import (
 	"github.com/varavelio/zen-idp/internal/onetoken"
 )
 
-// referenceEnrollmentURI is the otpauth URI revealed by the enrollment of
-// sub "alice" at revision 0 with the reference root secret and the test
-// display name "Example Auth", matching the vector anchored by the TOTP
-// package tests.
-const referenceEnrollmentURI = "otpauth://totp/Example%20Auth:alice" +
-	"?secret=LQJ2MSFEHZMA4KVBU5SNJRDAJHEH7PCGYIADZIKUDNYNG4SD6XFQ" +
-	"&issuer=Example%20Auth&algorithm=SHA1&digits=6&period=30"
+// referenceSecret is the deterministic TOTP shared secret of sub "alice"
+// at revision 0 with the reference root secret, matching the vector
+// anchored by the crypto derivation chain tests.
+const referenceSecret = "LQJ2MSFEHZMA4KVBU5SNJRDAJHEH7PCGYIADZIKUDNYNG4SD6XFQ"
+
+// referenceAccountName is the human-readable authenticator account name
+// shown for manual configuration on the enrollment of sub "alice" with
+// the test display name "Example Auth".
+const referenceAccountName = "Example Auth: alice"
 
 func TestEnrollForm(t *testing.T) {
 	t.Run("carries the shared link token into the protected form", func(t *testing.T) {
@@ -74,7 +75,7 @@ func TestEnrollForm(t *testing.T) {
 }
 
 func TestProcessEnroll(t *testing.T) {
-	t.Run("reveals the QR code and otpauth URI for a valid token", func(t *testing.T) {
+	t.Run("reveals the QR code and manual entry values for a valid token", func(t *testing.T) {
 		app := newTestApp(t, testUsers)
 		token := enrollmentToken(t, app, "alice", 0)
 
@@ -84,9 +85,17 @@ func TestProcessEnroll(t *testing.T) {
 		require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
 		body := response.Body.String()
 		require.Contains(t, body, "data:image/png;base64,")
-		require.Contains(t, body, html.EscapeString(referenceEnrollmentURI))
-		require.Contains(t, body, "LQJ2MSFEHZMA4KVBU5SNJRDAJHEH7PCGYIADZIKUDNYNG4SD6XFQ")
 		require.Contains(t, body, "Scan the code with your authenticator app")
+
+		// The manual entry values mirror the QR code exactly: the account
+		// name, the secret, and the RFC 6238 profile, each behind a copy
+		// button, and never the raw otpauth URI.
+		require.Contains(t, body, `data-copy="`+referenceAccountName+`"`)
+		require.Contains(t, body, `data-copy="`+referenceSecret+`"`)
+		require.Contains(t, body, `data-copy="SHA1"`)
+		require.Contains(t, body, `data-copy="6"`)
+		require.Contains(t, body, `data-copy="30"`)
+		require.NotContains(t, body, "otpauth://")
 
 		// The reveal point records the consumption against the subject.
 		events := auditEvents(t, app)
@@ -110,7 +119,7 @@ func TestProcessEnroll(t *testing.T) {
 		body := second.Body.String()
 		require.Contains(t, body, enrollDeniedMessage)
 		require.NotContains(t, body, "data:image/png;base64,")
-		require.NotContains(t, body, referenceEnrollmentURI)
+		require.NotContains(t, body, "otpauth://")
 
 		// Only the successful redemption is recorded, never the replay.
 		events := auditEvents(t, app)

@@ -134,7 +134,8 @@ func (server *Server) processEnroll(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return fmt.Errorf("derive TOTP secret: %w", err)
 	}
-	otpauthURI := totp.OTPAuthURI(secret, user.Subject, server.enrollmentIssuerName())
+	issuer := server.enrollmentIssuerName()
+	otpauthURI := totp.OTPAuthURI(secret, user.Subject, issuer)
 	qrDataURI, err := qr.Encode(otpauthURI)
 	if err != nil {
 		return fmt.Errorf("encode enrollment QR code: %w", err)
@@ -143,9 +144,9 @@ func (server *Server) processEnroll(w http.ResponseWriter, r *http.Request) erro
 	return server.renderEnrollmentReadyPage(
 		w,
 		user,
-		otpauthURI,
 		secret,
 		qrDataURI,
+		totp.OTPAuthLabelPretty(issuer, user.Subject),
 	)
 }
 
@@ -182,20 +183,21 @@ func (server *Server) renderEnrollPageFailure(
 }
 
 // renderEnrollmentReadyPage writes the one-time reveal of the enrolled TOTP
-// secret: the QR code, the sign-in identifiers, the otpauth URI, and the
-// manual entry code. The page must never be cached.
+// secret: the QR code, the sign-in identifiers, and the manual entry
+// values. name is the human-readable authenticator account name shown for
+// manual configuration. The page must never be cached.
 func (server *Server) renderEnrollmentReadyPage(
 	w http.ResponseWriter,
 	user config.User,
-	otpauthURI, secret, qrDataURI string,
+	secret, qrDataURI, name string,
 ) error {
 	html, err := ui.EnrollmentReadyPage(
 		server.enroll.UI,
 		user.Subject,
 		user.Login,
-		otpauthURI,
 		secret,
 		qrDataURI,
+		name,
 	).RenderString()
 	if err != nil {
 		return fmt.Errorf("render enrollment ready page: %w", err)
