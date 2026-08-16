@@ -1,27 +1,27 @@
 #!/bin/sh
 set -e
 
-# ====================================================================================== #
-# Zen IdP installer for macOS and Linux.                                                 #
-#                                                                                        #
-# Usage:                                                                                 #
-#   curl -fsSL https://get.varavel.com/zen-idp | sh                                      #
-#                                                                                        #
-# Options:                                                                               #
-#   VERSION     : Specify a version (e.g., vx.x.x). Defaults to "latest".                #
-#   INSTALL_DIR : Directory to install the binary. Defaults to "/usr/local/bin".         #
-#   QUIET       : Set to "true" to suppress all output (e.g., QUIET=true).               #
-#                                                                                        #
-# Examples:                                                                              #
-#   # Install or update to latest version                                                #
-#   curl -fsSL https://get.varavel.com/zen-idp | sh                                      #
-#                                                                                        #
-#   # Install specific version                                                           #
-#   curl -fsSL https://get.varavel.com/zen-idp | VERSION=vx.x.x sh                       #
-#                                                                                        #
-#   # Install to a custom directory quietly                                              #
+# ========================================================================================= #
+# Zen IdP installer for macOS and Linux.                                                    #
+#                                                                                           #
+# Usage:                                                                                    #
+#   curl -fsSL https://get.varavel.com/zen-idp | sh                                         #
+#                                                                                           #
+# Options:                                                                                  #
+#   VERSION     : Specify a version (e.g., vx.x.x). Defaults to "latest".                   #
+#   INSTALL_DIR : Directory to install the binary. Defaults to "/usr/local/bin".            #
+#   QUIET       : Set to "true" to suppress all output (e.g., QUIET=true).                  #
+#                                                                                           #
+# Examples:                                                                                 #
+#   # Install or update to latest version                                                   #
+#   curl -fsSL https://get.varavel.com/zen-idp | sh                                         #
+#                                                                                           #
+#   # Install specific version                                                              #
+#   curl -fsSL https://get.varavel.com/zen-idp | VERSION=vx.x.x sh                          #
+#                                                                                           #
+#   # Install to a custom directory quietly                                                 #
 #   curl -fsSL https://get.varavel.com/zen-idp | INSTALL_DIR=$HOME/.local/bin QUIET=true sh #
-# ====================================================================================== #
+# ========================================================================================= #
 
 REPO="varavelio/zen-idp"
 BINARY_NAME="zen-idp"
