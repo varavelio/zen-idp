@@ -106,7 +106,7 @@ Because identities are files, every lifecycle operation is an edit followed by a
 | Add a user           | Add the mapping, deploy, then create an enrollment token in the admin interface.             |
 | Remove a user        | Delete the mapping and deploy. Their sessions stop working immediately.                      |
 | Disable temporarily  | Lock the user from the admin interface instead, see [Administration](/docs/administration/). |
-| Disable permanently  | Remove the user, or set `idp_expires_at` to a past instant, and deploy.                      |
+| Disable permanently  | Remove the user, comment it, or set `idp_expires_at` to a past instant, and deploy.          |
 | Change claims        | Edit the mapping and deploy. New tokens carry the new claims right away.                     |
 | Rotate credentials   | Increment `idp_totp_rev`, deploy, create a new enrollment token.                             |
 | Rename an identifier | Change `idp_login` freely. Changing `sub` is creating a new identity, prefer not to.         |
