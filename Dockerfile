@@ -70,7 +70,7 @@ COPY scripts/ ./scripts/
 RUN task deps
 
 COPY . .
-RUN task build
+RUN task build:prod
 
 #######################
 # PRODUCTION (DEBIAN) #

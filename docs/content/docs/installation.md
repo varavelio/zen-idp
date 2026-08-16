@@ -207,10 +207,10 @@ cd zen-idp
 go build -o zen-idp ./cmd/zen-idp
 ```
 
-The project repository also defines a Taskfile with the same commands plus its development checks:
+The project repository also defines a Taskfile with the same commands plus its development checks. Use the production task to get the same optimized binary the official artifacts ship:
 
 ```console
-task build
+task build:prod
 ```
 
 ## Upgrades

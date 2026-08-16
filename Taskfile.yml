@@ -51,6 +51,12 @@ tasks:
       - codegen
     cmd: go build -o ./dist/zen-idp ./cmd/zen-idp/.
 
+  build:prod:
+    desc: Build the project with production optimizations
+    deps:
+      - codegen
+    cmd: go build -trimpath -ldflags "-s -w" -o ./dist/zen-idp ./cmd/zen-idp/.
+
   release:
     desc: Build all release artifacts into dist
     cmd: go run ./scripts/release
