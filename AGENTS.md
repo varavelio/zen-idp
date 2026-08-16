@@ -65,6 +65,8 @@ Read these references if you have doubts about how to use them:
 This is a Go project with a structure that aims to remain flat, simple, and idiomatic; here's a summary:
 
 - cmd/zen-idp: The entry point of the program
+- scripts/release: Cross-compiles the release archives for every supported platform and writes their manifest and checksums into dist
+- installers: The published installation integrations: the Homebrew formula generator and the shell and PowerShell installers that the release workflow feeds with the release binaries
 - internal/admin: Authenticates the administrator, creates the distinct administrator sessions that gate the administrative interfaces, and records authentication and rate-limit events
 - internal/audit: Records security-relevant operational events as disposable SQLite-backed audit records and enforces their retention by purging records older than the configured deadline
 - internal/cli: Parses Zen IdP command-line invocations into typed commands
