@@ -49,14 +49,14 @@ An accurate clock is a hard requirement on both sides: the server needs reliable
 
 ## Sessions
 
-After a successful sign-in, the browser holds one Zen IdP session, valid across all your applications for the configured lifetime, 72 hours by default. That is the single sign-on part: the second application redirects, sees the live session, and sends the user back signed in without asking anything.
+After a successful sign-in, the browser holds one Zen IdP session, valid across all your applications for the configured lifetime, 72 hours by default (you can configure it in your yaml config). That is the single sign-on part: the second application (client) redirects, sees the live session, and sends the user back signed in without asking anything.
 
 A few facts that answer most session questions:
 
-- **Signing out of Zen IdP** is an action the application or the user can trigger, and it revokes the session server side. It does not sign users out of applications' own local sessions, those belong to the applications.
-- **Signing out of an application** usually ends only that application's session. The Zen IdP session may still be alive, so the next sign-in there is silent.
+- **Signing out of Zen IdP** is an action the application (client) or the user can trigger, and it revokes the session server side. It does not sign users out of application's (client) own local sessions, those belong to the applications.
+- **Signing out of an application** usually ends only that application's (client) session. The Zen IdP session may still be alive, so the next sign-in there is silent.
 - **Any change that matters revokes sessions.** Removing the user, letting them expire, incrementing their TOTP revision, locking them, or their own panic action all end the session immediately.
-- **Applications' tokens are short and independent.** ID tokens and access tokens live 15 minutes and stay mathematically valid until then even if the session is revoked. Applications that need stronger revocation check `/userinfo`, which enforces session state, or keep short local sessions.
+- **Applications' tokens are short and independent.** ID tokens and access tokens live 15 minutes (commonly but each client is different) and stay mathematically valid until then even if the session is revoked. Applications that need stronger revocation check `/userinfo`, which enforces session state, or keep short local sessions.
 
 ## Recovery when a device is lost
 
@@ -64,12 +64,12 @@ People lose phones. Recovery is a short, well-defined procedure, and every step 
 
 1. **Stop the bleeding if needed.** Lock the user from the admin interface. This ends their sessions and blocks sign-in until you unlock.
 2. **Rotate the credential.** Increment the user's `idp_totp_rev` in YAML and deploy. The old secret is now wrong, on the lost device and anywhere else it might have leaked.
-3. **Enroll the new device.** Create a fresh enrollment token, deliver it, have the user scan it.
+3. **Enroll the new device.** Create a fresh enrollment link, deliver it, have the user scan it.
 4. **Unlock** if you locked them in step 1.
 
 Total effort: one number changed, one deploy, one link. No user is ever "locked out forever", because credentials are derived from configuration, not stored in a database you would have to repair.
 
-The same procedure, minus the urgency, is how you rotate a credential proactively when someone changes devices or when policy says so.
+The same procedure, minus the urgency, is how you rotate a credential proactively when someone changes devices or when your company policy says so.
 
 ## The panic action
 
@@ -81,6 +81,6 @@ The panic lock is deliberate friction, not a punishment: it can only be cleared 
 
 <vara-alert
 title="TOTP is strong but not phishing proof"
-description="A code can be relayed by a convincing fake login page in real time. For internet facing, high risk deployments, combine Zen IdP with network level protections, and always terminate TLS properly so users can verify they are on the real login page."
+description="A code can be relayed by a convincing fake login page in real time. For internet facing, high risk deployments, combine Zen IdP with network level protections, and always terminate TLS properly so users can verify they are on the real login page. It is also important to educate users about the risk of phishing and how to detect it by always verifying domains, ignoring suspicious emails, and other standard security practices."
 color="info"
 />
