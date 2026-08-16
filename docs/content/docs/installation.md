@@ -1,15 +1,93 @@
 ---
 title: "Installation"
-description: "Run Zen IdP with Docker or build it from source, including image tags, volumes, permissions, and upgrades."
+description: "Install Zen IdP with Docker, the shell and PowerShell installers, Homebrew, prebuilt binaries, or build it from source."
 icon: "download"
 weight: 2
 ---
 
 # Installation
 
-Zen IdP ships as OCI images on Docker Hub and GitHub Container Registry, and as a Go module you can build from source. Everything the service needs at runtime is inside the image: the binary, the embedded SQLite engine, and the static assets. There is no database server, no broker, and no frontend build.
+Zen IdP ships as OCI images on Docker Hub and GitHub Container Registry, as prebuilt binaries for Linux, macOS, and Windows installed with a one-line command, and as a Go module you can build from source. Everything the service needs at runtime is inside the single executable: the embedded SQLite engine and the static assets. There is no database server, no broker, and no frontend build.
 
-## Image locations
+Pick the flavor that fits your deployment:
+
+- **Docker** is the quickest path to a reproducible deployment, and the one this guide defaults to.
+- **The binary** is self-contained and works anywhere the Go toolchain targets, from a VPS to a Raspberry Pi.
+
+## Install with the shell installer
+
+On Linux and macOS, the installer downloads the right binary for your platform, verifies its SHA-256 checksum, and installs it into `/usr/local/bin`:
+
+```console
+curl -fsSL https://get.varavel.com/zen-idp | sh
+```
+
+Verify the installation with `zen-idp help`, which prints the command usage.
+
+The installer accepts a few options through environment variables:
+
+```console
+# Install a specific version
+curl -fsSL https://get.varavel.com/zen-idp | VERSION=v0.1.0-alpha.6 sh
+
+# Install into a user directory, without sudo
+curl -fsSL https://get.varavel.com/zen-idp | INSTALL_DIR=$HOME/.local/bin sh
+
+# Suppress all output
+curl -fsSL https://get.varavel.com/zen-idp | QUIET=true sh
+```
+
+When `VERSION` is not set, the installer resolves the latest release. If the target directory is not writable and a terminal is available, the installer falls back to `sudo`; point `INSTALL_DIR` somewhere writable to avoid that entirely.
+
+## Install with Homebrew
+
+On macOS or Linux with Homebrew, install the formula from the Varavel tap:
+
+```console
+brew install varavelio/tap/zen-idp
+```
+
+Upgrading follows the usual Homebrew flow:
+
+```console
+brew update && brew upgrade zen-idp
+```
+
+Stable releases also publish a pinned versioned formula, so you can hold an exact version with `brew install varavelio/tap/zen-idp@0.1.0` style commands when you need to.
+
+## Install on Windows
+
+The PowerShell installer downloads the Windows binary, verifies its SHA-256 checksum, installs it into your local programs directory, and adds it to your user `PATH`:
+
+```powershell
+irm https://get.varavel.com/zen-idp.ps1 | iex
+```
+
+Verify the installation by opening a new terminal and running `zen-idp help`.
+
+The installer accepts the same `VERSION`, `INSTALL_DIR`, and `QUIET` options as the shell installer, set as environment variables before the command. If your execution policy blocks the one-liner, run it with an explicit bypass:
+
+```powershell
+powershell -ExecutionPolicy ByPass -Command "irm https://get.varavel.com/zen-idp.ps1 | iex"
+```
+
+## Download the binaries directly
+
+Every release publishes prebuilt archives for `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, and `windows/amd64`, plus `checksums.txt` and `manifest.json`:
+
+```text
+https://github.com/varavelio/zen-idp/releases
+```
+
+Each archive contains the binary, the readme, and the license. Verify a download against the release checksums before trusting it:
+
+```console
+sha256sum --check checksums.txt --ignore-missing
+```
+
+## Run with Docker
+
+### Image locations
 
 The same image is published to two registries:
 
@@ -22,7 +100,7 @@ Both are multi-arch manifests covering `linux/amd64` and `linux/arm64`, so the s
 
 Version tags follow the releases, for example `0.1.0-alpha.6`. The `latest` tag only tracks stable releases and never points at a pre-release, so pinning an exact version keeps your upgrades deliberate and your rollback obvious.
 
-## What the image expects
+### What the image expects
 
 The image is designed so a standard `docker run` or compose file needs almost no configuration:
 
@@ -42,7 +120,7 @@ Configuration is read-only for the service, so the `config` directory only needs
 
 The only input the image does not provide is the root secret, which always comes from your environment or your secret manager.
 
-## Run with Docker
+### Run the container
 
 ```console
 docker run -d \
@@ -68,7 +146,7 @@ description="In production the service speaks plain HTTP and expects TLS to be t
 color="warning"
 />
 
-## Run with Docker Compose
+### Run with Docker Compose
 
 A compose file makes the deployment reproducible, which is worth it even for a single service:
 
@@ -94,6 +172,31 @@ ZEN_IDP_SECRET=your-root-secret
 
 Binding to `127.0.0.1:8080` keeps the service reachable only from the host itself, which is exactly what you want when a reverse proxy on the same machine terminates TLS. If the proxy runs in another container, replace the binding with a shared network and no published port at all.
 
+## Run the binary outside Docker
+
+The installed binary is the same self-contained executable the image runs, so the same rules apply with one difference: there are no image-provided defaults. The three environment variables point wherever you want them:
+
+```dotenv
+ZEN_IDP_CONFIG_PATH=/etc/zen-idp/config
+ZEN_IDP_SECRET=your-root-secret
+ZEN_IDP_DB_PATH=/var/lib/zen-idp/zen-idp.sqlite3
+```
+
+Validate your configuration, then start the service:
+
+```console
+zen-idp validate-config
+zen-idp serve
+```
+
+<vara-alert
+title="One directory per deployment"
+description="Keep the configuration, the SQLite file, and any env files in a directory dedicated to the deployment, with permissions limited to the service user. The state file is disposable, but sessions and active enrollment tokens live in it."
+color="info"
+/>
+
+Because the binary serves plain HTTP, terminate TLS at a reverse proxy, CDN, or load balancer in front of it, exactly as with the container. See [Operations](/docs/operations/) for a complete reverse proxy example and the runtime reference.
+
 ## Build from source
 
 If you prefer to build the binary yourself, all you need is Go:
@@ -110,20 +213,12 @@ The project repository also defines a Taskfile with the same commands plus its d
 task build
 ```
 
-The resulting binary is self-contained and works anywhere the Go toolchain targets. When you run it outside Docker, the same three environment variables apply, and the paths point wherever you point them. See [Operations](/docs/operations/) for the complete runtime reference.
-
 ## Upgrades
 
-Upgrading is replacing the image tag, with one safety habit:
+Upgrading is replacing the image tag or the binary, with one safety habit:
 
-1. Run `validate-config` with the new image and your current configuration. This catches schema changes before they reach your running service.
-2. Change the image tag and recreate the container.
+1. Run `validate-config` with the new version and your current configuration. This catches schema changes before they reach your running service.
+2. Replace the image tag and recreate the container, or replace the binary and restart the service.
 3. Confirm the health endpoint returns `ok`.
 
 The state database carries forward. Ordinary upgrades and restarts preserve unexpired sessions, outstanding enrollment tokens, locks, and rate-limit counters, so nobody has to sign in again and nothing you revoked becomes valid again. If an upgrade ever changes the state schema, it is migrated automatically when the service starts.
-
-<vara-alert
-title="Version pinning"
-description="Zen IdP is pre-1.0. Pre-release versions can change behavior between tags. Pin an exact version everywhere, upgrade one tag at a time, and validate configuration with the new image before switching traffic to it."
-color="info"
-/>
