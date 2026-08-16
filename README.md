@@ -49,6 +49,9 @@ Most identity providers ask you to run several services, manage a database, and 
 - Strict validation, secure defaults, CSRF protection, and browser security headers
 - **Zero external state**: one binary, one SQLite file, done
 
+> [!TIP]
+> The complete, step-by-step documentation lives at [zen-idp.varavel.com](https://zen-idp.varavel.com). It guides you through the whole project (from your first sign-in to production operations) and is the best place to understand Zen IdP in full.
+
 ## Quick start
 
 Install the `zen-idp` binary with the shell installer (Linux and macOS), Homebrew, or PowerShell (Windows):
