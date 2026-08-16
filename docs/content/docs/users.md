@@ -60,8 +60,8 @@ Your applications read these claims and decide what the user may do. Zen IdP is 
 
 Two kinds of names are reserved and rejected with a validation error:
 
-- every key starting with `idp_`, that namespace is internal;
-- protocol claims such as `iss`, `sub`, `aud`, `exp`, `iat`, `nonce`, and `auth_time`, which Zen IdP produces itself.
+- every key starting with `idp_`, that namespace is internal and never returned as claims in the id token;
+- protocol claims such as `iss`, `aud`, `exp`, `iat`, `nonce`, and `auth_time`, which Zen IdP produces itself.
 
 <vara-alert
 title="Claims are broadcast"
