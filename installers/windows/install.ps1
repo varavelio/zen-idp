@@ -79,8 +79,10 @@ function Get-PlatformArch {
   switch ($arch.ToUpper()) {
     "AMD64" { return "amd64" }
     "X86_64" { return "amd64" }
+    "ARM64" { return "arm64" }
+    "AARCH64" { return "arm64" }
     default {
-      Write-Err "Unsupported architecture: $arch. Zen IdP currently publishes Windows amd64 binaries."
+      Write-Err "Unsupported architecture: $arch. Zen IdP publishes Windows amd64 and arm64 binaries."
       exit 1
     }
   }

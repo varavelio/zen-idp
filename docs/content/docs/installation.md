@@ -73,7 +73,7 @@ powershell -ExecutionPolicy ByPass -Command "irm https://get.varavel.com/zen-idp
 
 ## Download the binaries directly
 
-Every release publishes prebuilt archives for `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, and `windows/amd64`, plus `checksums.txt` and `manifest.json`:
+Every release publishes prebuilt archives for `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`, and `windows/arm64`, plus `checksums.txt` and `manifest.json`:
 
 ```text
 https://github.com/varavelio/zen-idp/releases

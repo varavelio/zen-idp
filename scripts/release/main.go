@@ -40,6 +40,7 @@ var releaseTargets = []target{
 	{OS: "darwin", Arch: "amd64"},
 	{OS: "darwin", Arch: "arm64"},
 	{OS: "windows", Arch: "amd64"},
+	{OS: "windows", Arch: "arm64"},
 }
 
 // target is one GOOS/GOARCH pair to cross-compile.
