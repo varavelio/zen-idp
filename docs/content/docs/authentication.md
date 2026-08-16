@@ -43,7 +43,7 @@ Sign-in always happens inside an application's (client) login flow, which is wha
 3. Otherwise they enter their identifier, which is their `sub` or their `idp_login` when one is configured, and the current code from their authenticator app.
 4. On success, a session is created and the browser returns to the application (client), carrying an authorization code it exchanges for tokens.
 
-Codes from the authenticator are accepted within a small clock tolerance window of one step in each direction, so a phone a few seconds behind still works. Failed attempts are rate limited per identifier, five attempts by default inside five minutes, and the limit applies to both of a user's identifiers as one bucket. When the limit trips, sign-in for that identifier is throttled for the rest of the window.
+Codes from the authenticator are accepted within a small clock tolerance window of one step in each direction, so a phone a few seconds behind still works. Failed attempts are rate limited per identifier, five attempts by default inside five minutes (you can configure it in your yaml config), and the limit applies to both of a user's identifiers as one bucket. When the limit trips, sign-in for that identifier is throttled for the rest of the window.
 
 An accurate clock is a hard requirement on both sides: the server needs reliable time to validate codes, and the user's device needs it to generate them. If everyone's codes are suddenly rejected, check server time first.
 
