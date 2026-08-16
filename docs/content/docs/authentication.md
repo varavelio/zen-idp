@@ -41,7 +41,7 @@ Sign-in always happens inside an application's (client) login flow, which is wha
 1. The user clicks sign-in in any connected application (client) and is redirected to Zen IdP.
 2. If they have a live session, they are sent straight back, signed in.
 3. Otherwise they enter their identifier, which is their `sub` or their `idp_login` when one is configured, and the current code from their authenticator app.
-4. On success, a session is created and the browser returns to the application, carrying an authorization code it exchanges for tokens.
+4. On success, a session is created and the browser returns to the application (client), carrying an authorization code it exchanges for tokens.
 
 Codes from the authenticator are accepted within a small clock tolerance window of one step in each direction, so a phone a few seconds behind still works. Failed attempts are rate limited per identifier, five attempts by default inside five minutes, and the limit applies to both of a user's identifiers as one bucket. When the limit trips, sign-in for that identifier is throttled for the rest of the window.
 
