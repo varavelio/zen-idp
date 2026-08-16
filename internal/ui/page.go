@@ -346,23 +346,3 @@ func copyButton(value string) nodx.Node {
 		nodx.SpanEl(nodx.Attr("data-copy-label"), nodx.Text("Copy")),
 	)
 }
-
-// labeledCodeBlock renders a titled, selectable code block with a copy
-// button.
-func labeledCodeBlock(title, value string) nodx.Node {
-	return nodx.Div(
-		nodx.Class("space-y-2"),
-		nodx.Div(
-			nodx.Class("flex items-center justify-between gap-2"),
-			nodx.P(nodx.Class("text-sm font-medium text-content"), nodx.Text(title)),
-			copyButton(value),
-		),
-		nodx.CodeEl(
-			nodx.Class(
-				"block break-all rounded-md border border-base-400 bg-base-100",
-				"px-3 py-2 text-xs text-content select-all",
-			),
-			nodx.Text(value),
-		),
-	)
-}

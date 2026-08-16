@@ -4,6 +4,7 @@ import (
 	nodx "github.com/varavelio/nodxgo"
 	lucide "github.com/varavelio/nodxgo-lucide"
 	"github.com/varavelio/zen-idp/internal/config"
+	"github.com/varavelio/zen-idp/internal/totp"
 )
 
 // enrollTitle is the document and page title of the enrollment
@@ -106,20 +107,27 @@ func identifierBox(subject, login string) nodx.Node {
 }
 
 // EnrollmentReadyPage renders the one-time reveal of a completed
-// enrollment: the QR code of the otpauth URI, the sign-in identifiers, and
-// the manual entry values. login is the user's additional login
-// identifier, equal to subject when none is configured. The page must
-// never be cached.
+// enrollment: the QR code, the sign-in identifiers, and the manual entry
+// values. login is the user's additional login identifier, equal to
+// subject when none is configured. name is the human-readable
+// authenticator account name shown for manual configuration. The page
+// must never be cached.
 func EnrollmentReadyPage(
 	settings config.UI,
-	subject, login, otpauthURI, secret, qrDataURI string,
+	subject, login, secret, qrDataURI, name string,
 ) nodx.Node {
-	name := settings.Name
-	if name == "" {
-		name = loginTitle
+	productName := settings.Name
+	if productName == "" {
+		productName = loginTitle
 	}
-	return page(settings, enrollTitle,
-		standalonePage(settings, name, "Scan the code with your authenticator app", "max-w-md",
+	return page(
+		settings,
+		enrollTitle,
+		standalonePage(
+			settings,
+			productName,
+			"Scan the code with your authenticator app",
+			"max-w-md",
 			nodx.Div(
 				nodx.Class("mx-auto w-fit rounded-lg bg-white p-3"),
 				nodx.Img(
@@ -129,9 +137,53 @@ func EnrollmentReadyPage(
 				),
 			),
 			identifierBox(subject, login),
-			labeledCodeBlock("Account: "+subject, otpauthURI),
-			labeledCodeBlock("Or enter this code manually:", secret),
+			manualEntryBox(secret, name),
 			warningAlert("This will not be shown again."),
+		),
+	)
+}
+
+// manualEntryRow renders one labeled value of the manual entry card with
+// its copy button. Overlong values wrap onto several lines instead of
+// truncating, so the full value is always visible.
+func manualEntryRow(label, value string) nodx.Node {
+	return nodx.Div(
+		nodx.Class(
+			"flex items-center justify-between gap-2 rounded-md",
+			"border border-base-400 bg-base-200 px-3 py-2",
+		),
+		nodx.Div(
+			nodx.Class("min-w-0"),
+			nodx.P(nodx.Class("text-xs text-content-muted"), nodx.Text(label)),
+			nodx.P(
+				nodx.Class("break-all font-mono text-sm text-content"),
+				nodx.Text(value),
+			),
+		),
+		copyButton(value),
+	)
+}
+
+// manualEntryBox renders the values needed to configure the authenticator
+// app manually instead of scanning the QR code: the shared secret and the
+// account profile values. Every value mirrors exactly what the QR code
+// encodes, so manual entry provisions the same account as scanning, and
+// every value has a copy button.
+func manualEntryBox(secret, name string) nodx.Node {
+	return nodx.Div(
+		nodx.Class("space-y-2 rounded-lg border border-base-400 bg-base-100 p-4"),
+		nodx.P(
+			nodx.Class("flex items-center gap-1.5 text-sm font-medium text-content"),
+			lucide.KeyRound(nodx.Class("size-4 text-content-muted")),
+			nodx.Text("Or configure manually"),
+		),
+		nodx.Div(
+			nodx.Class("space-y-1.5"),
+			manualEntryRow("Secret", secret),
+			manualEntryRow("Name", name),
+			manualEntryRow("Algorithm", totp.ProfileAlgorithm),
+			manualEntryRow("Digits", totp.ProfileDigits),
+			manualEntryRow("Period", totp.ProfilePeriod),
 		),
 	)
 }
