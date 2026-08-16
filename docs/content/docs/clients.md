@@ -108,6 +108,6 @@ See [Authentication](/docs/authentication/) for what the user experiences inside
 | Rotate a client secret  | Generate a new bundle, replace the hash in YAML, deploy, update the app.             |
 | Remove an application   | Delete the mapping and deploy. New logins for it stop immediately.                   |
 | Fix a redirect mismatch | Add the exact URI the application sends, deploy.                                     |
-| Rename the display name | Edit `name`. Protocol identity is the `id`, which stays.                             |
+| Rename the display name | Edit `name`. Protocol identity is the `id`, which stays the same.                    |
 
 Removing a client does not end sessions users already have in that application. The application decides its own session lifetime, and its local sign-out is the reliable way to end access there. What removal does guarantee is that the application can never complete a new login or exchange a new code.
