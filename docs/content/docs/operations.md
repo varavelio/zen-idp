@@ -71,7 +71,9 @@ Most of these you never call by hand. Applications discover what they need from 
 
 ## Behind a reverse proxy
 
-Production terminates TLS in front and forwards to the plain HTTP listener. The proxy must forward the original scheme in `X-Forwarded-Proto`, everything else is ordinary proxying. With Caddy:
+Production terminates TLS in front and forwards to the plain HTTP listener. The proxy must forward the original scheme in `X-Forwarded-Proto`, everything else is ordinary proxying.
+
+**With Caddy:**
 
 ```text
 auth.example.com {
@@ -79,7 +81,9 @@ auth.example.com {
 }
 ```
 
-Caddy sends the header by default and manages certificates for you. With nginx:
+Caddy sends the header by default and manages certificates for you.
+
+**With nginx:**
 
 ```nginx
 server {
@@ -98,7 +102,7 @@ server {
 }
 ```
 
-Keep the listener bound to loopback, or unpublished inside a shared Docker network, so the plain HTTP surface is not reachable from outside. If you add edge protections such as IP rate limits or a WAF, that is the right layer for them, see [Security](/docs/security/).
+Keep the listener bound to loopback, or unpublished inside a shared Docker network, so the plain HTTP surface is not reachable from outside. If you add edge protections such as IP rate limits, geo-blocking or a WAF, that is the right layer for them, see [Security](/docs/security/).
 
 ## The state database
 
@@ -131,11 +135,13 @@ Three losses cover almost every bad day:
 
 **Lost the YAML configuration.** The service fails closed, as it must: without valid configuration there is nothing to authenticate. Restore from version control, which is the reason identity lives in files under review. Session rows in SQLite can never substitute for the configuration.
 
-**Lost the root secret.** Not recoverable, by design. The signing identity and every TOTP credential are gone with it. The path forward is a new root secret and a full re-enrollment of every user, after which everything works again. This is why the secret lives in a secret manager, not in a notebook.
+**Lost the root secret.** Not recoverable, by design. The signing identity and every TOTP credential are gone with it. The path forward is a new root secret and a full re-enrollment of every user (as if you had rotated it on purpose), after which everything works again. This is why the secret lives in a secret manager, not in a notebook.
 
 ## Topology
 
 Run **one active instance per issuer**. The state file is embedded SQLite on a local filesystem, and the guarantees around sessions, locks, one-use tokens, and rate limits are the guarantees of one process and one file.
+
+Zen IdP is specifically designed to run on an always-on machine, so it cannot be deployed on serverless or horizontally scalable platforms; this is a deliberate decision, you can deploy it on Kubernetes or similar, but ensure only one replica and always maintain the state database.
 
 Running two replicas against separate state files does not produce a redundant deployment, it produces two identity providers that disagree about who is signed in and who is locked. If you need more availability than one instance, the supported shapes are a fast restarting single container, or a cold standby with the state directory preserved, restarting onto the same data.
 
@@ -145,10 +151,10 @@ Do not place the state file on network shared storage. SQLite over NFS and frien
 
 For a production deployment, the short version of everything above:
 
-1. Pin an exact image version and run `validate-config` against your configuration.
+1. Pin an exact image version (if using docker) and run `validate-config` against your configuration.
 2. Put TLS in front, forward `X-Forwarded-Proto`, keep the listener private to the proxy.
 3. Set an HTTPS issuer that matches the public URL users actually visit.
 4. Keep the root secret in a secret manager, never in YAML or images.
 5. Give the state directory to the service user and include it, or at least its host path, in your backup policy.
 6. Monitor `/health` and alert on anything other than `ok`.
-7. Test your recovery story once: replace the state file in a staging deployment and watch everyone sign in again with working codes.
+7. Test your recovery story at least once: replace the state file in a staging deployment and watch everyone sign in again with working codes.
