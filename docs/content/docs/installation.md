@@ -28,7 +28,7 @@ The installer accepts a few options through environment variables:
 
 ```console
 # Install a specific version
-curl -fsSL https://get.varavel.com/zen-idp | VERSION=v0.1.0-alpha.6 sh
+curl -fsSL https://get.varavel.com/zen-idp | VERSION=vx.x.x sh
 
 # Install into a user directory, without sudo
 curl -fsSL https://get.varavel.com/zen-idp | INSTALL_DIR=$HOME/.local/bin sh
@@ -98,7 +98,7 @@ ghcr.io/varavelio/zen-idp:<version>
 
 Both are multi-arch manifests covering `linux/amd64` and `linux/arm64`, so the same tag runs on an x86 server and on something like a Raspberry Pi or an ARM VPS without changes.
 
-Version tags follow the releases, for example `0.1.0-alpha.6`. The `latest` tag only tracks stable releases and never points at a pre-release, so pinning an exact version keeps your upgrades deliberate and your rollback obvious.
+Version tags follow the releases, for example `x.x.x`. The `latest` tag only tracks stable releases and never points at a pre-release, so pinning an exact version keeps your upgrades deliberate and your rollback obvious.
 
 ### What the image expects
 
@@ -129,7 +129,7 @@ docker run -d \
   -v ./config:/data/config \
   -v ./state:/data/db \
   -e ZEN_IDP_SECRET="your root secret, at least 32 characters" \
-  varavel/zen-idp:0.1.0-alpha.6
+  varavel/zen-idp
 ```
 
 To check that the service is up, hit the health endpoint:
@@ -153,7 +153,7 @@ A compose file makes the deployment reproducible, which is worth it even for a s
 ```yaml
 services:
   zen-idp:
-    image: varavel/zen-idp:0.1.0-alpha.6
+    image: varavel/zen-idp:x.x.x # Pin your version
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"

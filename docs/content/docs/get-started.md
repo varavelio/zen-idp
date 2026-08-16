@@ -11,22 +11,22 @@ This walkthrough takes you from an empty machine to a working Zen IdP with one u
 
 Every step below produces something you can see, so you always know where you are. Expect the whole thing to take about fifteen minutes.
 
-## 1. Pull the image
+## Pull the image
 
 Zen IdP publishes images for amd64 and arm64 on Docker Hub and GitHub Container Registry:
 
 ```console
-docker pull varavel/zen-idp:0.1.0-alpha.6
+docker pull varavel/zen-idp
 ```
 
 Pin the exact version you deploy. The `latest` tag only follows stable releases, so pinning keeps upgrades deliberate. See [Installation](/docs/installation/) for the full details, including the GHCR mirror and other installation methods.
 
-## 2. Generate your bootstrap credentials
+## Generate your bootstrap credentials
 
 One command produces everything a fresh deployment needs:
 
 ```console
-docker run --rm varavel/zen-idp:0.1.0-alpha.6 generate-secrets
+docker run --rm varavel/zen-idp generate-secrets
 ```
 
 The output looks like this, with real values instead of the placeholders:
@@ -70,7 +70,7 @@ Save the output now. You will paste parts of it into the configuration and the e
 
 You can run the command multiple times to get new credentials so you can add multiple clients to your config, never reuse the same client secret across apps.
 
-## 3. Write your configuration
+## Write your configuration
 
 Create a directory for your deployment and a configuration file inside it:
 
@@ -116,14 +116,14 @@ This is a complete, working configuration. A few things worth noticing:
 - The two hashes are the ones `generate-secrets` printed. The application's redirect URI must match exactly what the application will send later, character by character.
 - Every field beyond `sub` on a user is optional, including `name` and `email`. See [Users](/docs/users/) for the full model, including custom claims.
 
-## 4. Validate before you run
+## Validate before you run
 
 Make a habit of validating configuration before every deploy. It runs the exact same discovery and validation as startup, so if it passes, `serve` will start:
 
 ```console
 docker run --rm \
   -v ./config:/data/config \
-  varavel/zen-idp:0.1.0-alpha.6 \
+  varavel/zen-idp \
   validate-config
 ```
 
@@ -131,7 +131,7 @@ The image expects configuration in `/data/config` by default, which is why mount
 
 If validation fails, the error tells you the exact file and the exact problem. Fix it and repeat until you get a clean pass.
 
-## 5. Run the service
+## Run the service
 
 Run it with your configuration mounted, the state directory writable, and the root secret in the environment:
 
@@ -142,7 +142,7 @@ docker run -d \
   -v ./config:/data/config \
   -v ./state:/data/db \
   -e ZEN_IDP_SECRET="paste the generated root secret here" \
-  varavel/zen-idp:0.1.0-alpha.6
+  varavel/zen-idp
 ```
 
 <vara-alert
@@ -165,7 +165,7 @@ description="The container runs as an unprivileged user with UID 65532. Make sur
 color="info"
 />
 
-## 6. Enroll your first user
+## Enroll your first user
 
 Users cannot sign in until they have enrolled an authenticator app, and enrollment happens through a one-time link.
 
@@ -177,7 +177,7 @@ Users cannot sign in until they have enrolled an authenticator app, and enrollme
 
 The credentials never left your machine: the TOTP secret is derived from your root secret and Alice's subject, encoded into a standard enrollment QR, and shown once to exactly the right person. See [Authentication](/docs/authentication/) for the complete flow, including what to do when someone loses their device.
 
-## 7. Sign in through your application
+## Sign in through your application
 
 There is no standalone login page to visit by design. Signing in always happens as part of an application's OIDC flow, which is what makes it single sign-on.
 
@@ -193,7 +193,7 @@ Open your application, ask it to sign you in, and it will redirect to Zen IdP. E
 
 The next application you register gets the same treatment, and Alice signs in once for all of them until her session expires.
 
-## 8. What just happened
+## What just happened
 
 You now have a complete identity provider:
 
