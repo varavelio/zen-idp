@@ -5,12 +5,14 @@
 
   Project-specific hero for the docs landing page. The copy lives here on
   purpose: the component is the landing page's own, not a reusable building
-  block. The right panel presents the brand mark as a living composition:
-  pulse rings signal continuous verification, and three satellites (the
-  identity, its session, and the relying apps) orbit the provider while
-  staying upright through a synchronized counter-rotation. The mark floats
-  at the center. Every animated layer is decorative and still under
-  prefers-reduced-motion.
+  block. Under the pitch, an Alpine.js tab strip exposes the four install
+  methods (shell, PowerShell, Homebrew, Docker) with the exact command from
+  the installation docs, ready to copy. The right panel presents the brand
+  mark as a living composition: pulse rings signal continuous verification,
+  and three satellites (the identity, its session, and the relying apps)
+  orbit the provider while staying upright through a synchronized
+  counter-rotation. The mark floats at the center. Every animated layer is
+  decorative and still under prefers-reduced-motion.
 {% endcomment %}
 
 <section class="not-prose relative z-0 overflow-hidden bg-base-100 py-12 desk:py-24">
@@ -28,9 +30,137 @@
         <p class="mt-5 max-w-2xl text-base leading-7 text-content-muted desk:text-xl desk:leading-8">
           Zen IdP is a declarative OpenID Connect provider for small and medium teams. Your users, clients, and claims live in YAML, one root secret drives everything cryptographic, and a single binary handles the rest. No external database, no directory to sync, no passwords to reset.
         </p>
+
+        <div
+          class="mt-8 w-full max-w-xl"
+          x-data="{
+            tab: 'unix',
+            copied: false,
+            copyTimer: null,
+            order: ['unix', 'windows', 'brew', 'docker'],
+            install: {
+              unix: { label: 'Linux and macOS', command: 'curl -fsSL https://get.varavel.com/zen-idp | sh' },
+              windows: { label: 'Windows', command: 'irm https://get.varavel.com/zen-idp.ps1 | iex' },
+              brew: { label: 'Homebrew', command: 'brew install varavelio/tap/zen-idp' },
+              docker: { label: 'Docker', command: 'docker pull varavel/zen-idp' }
+            },
+            selectTab(next) {
+              this.tab = next;
+              this.copied = false;
+              clearTimeout(this.copyTimer);
+            },
+            focusTab(next) {
+              this.selectTab(next);
+              this.$nextTick(() => this.$refs['tab-' + next].focus());
+            },
+            copyCommand() {
+              navigator.clipboard?.writeText(this.install[this.tab].command);
+              this.copied = true;
+              clearTimeout(this.copyTimer);
+              this.copyTimer = setTimeout(() => { this.copied = false; }, 2000);
+            }
+          }"
+        >
+          <div class="overflow-hidden rounded-lg border border-base-400 bg-base-200">
+            <div
+              class="grid grid-cols-2 border-b border-base-400 desk:grid-cols-4"
+              role="tablist"
+              aria-label="Install Zen IdP"
+              x-on:keydown.arrow-right.prevent="focusTab(order[(order.indexOf(tab) + 1) % order.length])"
+              x-on:keydown.arrow-left.prevent="focusTab(order[(order.indexOf(tab) - 1 + order.length) % order.length])"
+              x-on:keydown.home.prevent="focusTab(order[0])"
+              x-on:keydown.end.prevent="focusTab(order[order.length - 1])"
+            >
+              <button
+                x-ref="tab-unix"
+                type="button"
+                role="tab"
+                id="hero-install-tab-unix"
+                aria-controls="hero-install-panel"
+                x-bind:aria-selected="(tab === 'unix').toString()"
+                x-bind:tabindex="tab === 'unix' ? '0' : '-1'"
+                x-on:click="selectTab('unix')"
+                class="flex cursor-pointer select-none items-center justify-center gap-2 -mb-px border-b-2 px-2 py-2.5 text-xs font-medium outline-content transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+                x-bind:class="tab === 'unix' ? 'border-content text-content' : 'border-transparent text-content-muted hover:text-content'"
+              >
+                <span class="shrink-0" aria-hidden="true">{{ vara_icon("terminal", "size-4")|safe }}</span>
+                <span>Linux &amp; macOS</span>
+              </button>
+              <button
+                x-ref="tab-windows"
+                type="button"
+                role="tab"
+                id="hero-install-tab-windows"
+                aria-controls="hero-install-panel"
+                x-bind:aria-selected="(tab === 'windows').toString()"
+                x-bind:tabindex="tab === 'windows' ? '0' : '-1'"
+                x-on:click="selectTab('windows')"
+                class="flex cursor-pointer select-none items-center justify-center gap-2 -mb-px border-b-2 px-2 py-2.5 text-xs font-medium outline-content transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+                x-bind:class="tab === 'windows' ? 'border-content text-content' : 'border-transparent text-content-muted hover:text-content'"
+              >
+                <span class="shrink-0" aria-hidden="true">{{ vara_icon("square-terminal", "size-4")|safe }}</span>
+                <span>Windows</span>
+              </button>
+              <button
+                x-ref="tab-brew"
+                type="button"
+                role="tab"
+                id="hero-install-tab-brew"
+                aria-controls="hero-install-panel"
+                x-bind:aria-selected="(tab === 'brew').toString()"
+                x-bind:tabindex="tab === 'brew' ? '0' : '-1'"
+                x-on:click="selectTab('brew')"
+                class="flex cursor-pointer select-none items-center justify-center gap-2 -mb-px border-b-2 px-2 py-2.5 text-xs font-medium outline-content transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+                x-bind:class="tab === 'brew' ? 'border-content text-content' : 'border-transparent text-content-muted hover:text-content'"
+              >
+                <span class="shrink-0" aria-hidden="true">{{ vara_icon("homebrew", "size-4")|safe }}</span>
+                <span>Homebrew</span>
+              </button>
+              <button
+                x-ref="tab-docker"
+                type="button"
+                role="tab"
+                id="hero-install-tab-docker"
+                aria-controls="hero-install-panel"
+                x-bind:aria-selected="(tab === 'docker').toString()"
+                x-bind:tabindex="tab === 'docker' ? '0' : '-1'"
+                x-on:click="selectTab('docker')"
+                class="flex cursor-pointer select-none items-center justify-center gap-2 -mb-px border-b-2 px-2 py-2.5 text-xs font-medium outline-content transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+                x-bind:class="tab === 'docker' ? 'border-content text-content' : 'border-transparent text-content-muted hover:text-content'"
+              >
+                <span class="shrink-0" aria-hidden="true">{{ vara_icon("docker", "size-4")|safe }}</span>
+                <span>Docker</span>
+              </button>
+            </div>
+
+            <div
+              id="hero-install-panel"
+              role="tabpanel"
+              tabindex="0"
+              aria-live="polite"
+              x-bind:aria-labelledby="'hero-install-tab-' + tab"
+              class="flex items-center gap-3 bg-base-100 px-4 py-3.5"
+            >
+              <code
+                class="min-w-0 flex-1 overflow-x-auto font-mono text-sm whitespace-nowrap text-content select-all"
+                x-text="install[tab].command"
+              >curl -fsSL https://get.varavel.com/zen-idp | sh</code>
+              <button
+                type="button"
+                class="shrink-0 cursor-pointer select-none rounded-md p-1.5 text-content-muted outline-content transition-colors hover:bg-base-200 hover:text-content focus-visible:outline-2"
+                x-on:click="copyCommand()"
+                x-bind:aria-label="copied ? 'Command copied' : 'Copy ' + install[tab].label + ' install command'"
+              >
+                <span x-show="!copied">{{ vara_icon("copy", "size-4")|safe }}</span>
+                <span x-show="copied" x-cloak>{{ vara_icon("check", "size-4 text-success")|safe }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="mt-8 flex w-full flex-col gap-3 desk:w-auto desk:flex-row">
           {{ button("Get Started", "/docs/get-started/", "", "", "", "lg", "md", "solid", "neutral", "true", "false", "button", "desk:w-auto") }}
-          {{ button("Installation", "/docs/installation/", "", "", "", "lg", "md", "outline", "neutral", "true", "false", "button", "desk:w-auto") }}
+          {{ button("GitHub", "https://github.com/varavelio/zen-idp", "_blank", "github", "", "lg", "md", "outline", "neutral", "true", "false", "button", "desk:w-auto") }}
         </div>
         <p class="mt-4 text-sm leading-6 text-content-muted">
           Written in Go, distributed as a single executable and docker image. Free and open source under the MIT license.
