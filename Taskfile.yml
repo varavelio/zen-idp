@@ -51,6 +51,10 @@ tasks:
       - codegen
     cmd: go build -o ./dist/zen-idp ./cmd/zen-idp/.
 
+  release:
+    desc: Build all release artifacts into dist
+    cmd: go run ./scripts/release
+
   codegen:
     desc: Run code generators (SQLC, TailwindCSS)
     cmds:
