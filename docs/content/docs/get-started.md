@@ -19,7 +19,7 @@ Zen IdP publishes images for amd64 and arm64 on Docker Hub and GitHub Container 
 docker pull varavel/zen-idp:0.1.0-alpha.6
 ```
 
-Pin the exact version you deploy. The `latest` tag only follows stable releases, so pinning keeps upgrades deliberate. See [Installation](/docs/installation/) for the full details, including the GHCR mirror.
+Pin the exact version you deploy. The `latest` tag only follows stable releases, so pinning keeps upgrades deliberate. See [Installation](/docs/installation/) for the full details, including the GHCR mirror and other installation methods.
 
 ## 2. Generate your bootstrap credentials
 
@@ -62,11 +62,13 @@ Three values matter right now:
 
 <vara-alert
 title="Treat the output as sensitive"
-description="It contains every plaintext credential of your new deployment. Copy it somewhere safe first, then clear it from your terminal history. Only the Argon2id hashes ever belong in YAML."
+description="It contains every plaintext credential of your new deployment. Copy it somewhere safe first (password manager / secret manager), then clear it from your terminal history. Only the Argon2id hashes ever belong in YAML."
 color="warning"
 />
 
 Save the output now. You will paste parts of it into the configuration and the environment in the next steps.
+
+You can run the command multiple times to get new credentials so you can add multiple clients to your config, never reuse the same client secret across apps.
 
 ## 3. Write your configuration
 
@@ -78,7 +80,7 @@ zen-idp/
     zen-idp.yaml
 ```
 
-Open `config/zen-idp.yaml` and start with this:
+Open `config/zen-idp.yaml` and start with this ([or explore all options](/docs/configuration/)):
 
 ```yaml
 config:
@@ -101,8 +103,8 @@ clients:
       - "http://localhost:3000/callback"
 
 users:
-  # The smallest valid user. This person signs in with "alice" and a TOTP
-  # code from their authenticator app.
+  # A small valid user. This person signs in with "alice" and a TOTP
+  # code from their authenticator app (only sub is required).
   - sub: "alice"
     name: "Alice"
     email: "alice@example.com"
@@ -143,6 +145,12 @@ docker run -d \
   varavel/zen-idp:0.1.0-alpha.6
 ```
 
+<vara-alert
+title="Store your ZEN_IDP_SECRET securely"
+description="Never share or store the contents of ZEN_IDP_SECRET in an unsafe location, and keep in mind that if you change it, all OTP codes for all users will change and they will have to repeat the onboarding process."
+color="warning"
+/>
+
 Then check that it is healthy:
 
 ```console
@@ -164,7 +172,7 @@ Users cannot sign in until they have enrolled an authenticator app, and enrollme
 1. Open `http://localhost:8080/admin` and sign in with the administrator plain password from step 2.
 2. Find your user `alice`, create an enrollment token, and give it a lifetime, for example one hour.
 3. The admin interface gives you a one-time enrollment link. Open it in the browser where you will set up the authenticator, or send it to Alice over a channel you trust.
-4. The enrollment page shows a QR code. Scan it with any authenticator app, such as Aegis, 1Password, Google Authenticator, or Bitwarden.
+4. The enrollment page shows a QR code. Scan it with any authenticator app, such as Google Authenticator, Authy, 1Password, Aegis, Bitwarden, etc.
 5. The link works exactly once. When the QR has been shown, the token is consumed.
 
 The credentials never left your machine: the TOTP secret is derived from your root secret and Alice's subject, encoded into a standard enrollment QR, and shown once to exactly the right person. See [Authentication](/docs/authentication/) for the complete flow, including what to do when someone loses their device.
@@ -180,10 +188,8 @@ Point your application at Zen IdP with the values it asks for:
 | Issuer, discovery URL, or authority | `http://localhost:8080`          |
 | Client ID                           | `my-app`                         |
 | Client secret                       | the generated client plain value |
-| Redirect / callback URL             | `http://localhost:3000/callback` |
-| Scopes                              | `openid` is enough               |
 
-Open your application, ask it to sign you in, and it will redirect to Zen IdP. Enter `alice` and the six digit code from the authenticator. You come back signed in, and the application has received an ID token with Alice's claims.
+Open your application, ask it to sign you in, and it will redirect to Zen IdP. Enter `alice` and the six digit code from your authenticator app. You come back signed in, and the application has received an ID token with Alice's claims.
 
 The next application you register gets the same treatment, and Alice signs in once for all of them until her session expires.
 
@@ -196,4 +202,4 @@ You now have a complete identity provider:
 - The state directory holds a SQLite file with Alice's session and nothing else of value.
 - The admin interface can issue enrollment tokens for new users, and the audit log records what you did in it.
 
-When you are ready for the real thing, with a domain and TLS, continue with [Installation](/docs/installation/) for deployment details and [Operations](/docs/operations/) for running behind a reverse proxy, upgrades, and backups.
+When you are ready for the real thing, with a domain and TLS, continue with [Installation](/docs/installation/) for deployment details and [Operations](/docs/operations/) for running behind a reverse proxy, upgrades, etc.
