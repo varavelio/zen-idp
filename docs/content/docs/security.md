@@ -11,7 +11,7 @@ This page explains how Zen IdP thinks about security, so your deployment decisio
 
 ## The trust model
 
-Zen IdP answers one question: **who is signing in**. It authenticates humans and asserts verified claims to your applications. What those people may do is answered by each application, using the claims it receives. Groups and roles travel in tokens, permissions stay where they belong, in the applications.
+Zen IdP answers one question: **who is signing in**. It authenticates humans and asserts verified claims to your applications. What those people may do is answered by each application, using the claims it receives. Groups, roles and other custom claims travel in tokens, permissions stay where they belong, in the applications (clients).
 
 Keeping that boundary is a design decision with consequences you can feel: no permission screens, no policy engine, no per-application claim filtering. Every client receives every custom claim of the signing-in user, which is why claims are perfect for `groups: [engineering]` and wrong for anything you would not hand to every app at once.
 
@@ -19,11 +19,11 @@ Keeping that boundary is a design decision with consequences you can feel: no pe
 
 Everything in the system lives in exactly one of three places, and knowing which is which is most of the security model:
 
-| Where                             | What lives there                                                      | If it leaks                                                                                                                                                                                |
-| --------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| YAML configuration                | Users, clients, claims, policy, and Argon2id hashes                   | Offline guessing of your administrator and client passwords becomes possible. Strong generated values and limited access to the repository are the answer.                                 |
-| The root secret, `ZEN_IDP_SECRET` | The input from which the signing key and every TOTP credential derive | Every identity can be impersonated. It never belongs in YAML, logs, or the database, and rotation is a major event, see below.                                                             |
-| The SQLite state file             | Sessions, one-use tokens, rate-limit counters, locks, audit records   | Sessions and outstanding enrollment links can be analyzed and, with the right tools, possibly abused. No credentials or private keys are inside, and a fresh state file ends the exposure. |
+| Where                             | What lives there                                                      | If it leaks                                                                                                                                                                                                                                                                                   |
+| --------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| YAML configuration                | Users, clients, claims, policy, and Argon2id hashes                   | Offline guessing of your administrator and client passwords becomes theoretically possible but [absurdly unfeasible](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#argon2id). Strong generated values and limited access to the repository are the answer. |
+| The root secret, `ZEN_IDP_SECRET` | The input from which the signing key and every TOTP credential derive | Every identity can be impersonated. It never belongs in YAML, logs, or the database, and rotation is a major event, see below.                                                                                                                                                                |
+| The SQLite state file             | Sessions, one-use tokens, rate-limit counters, locks, audit records   | Sessions and outstanding enrollment links can be analyzed and, with the right tools, possibly abused. No credentials or private keys are inside, and a fresh state file ends the exposure.                                                                                                    |
 
 The design goal of that split is that the most valuable thing, the root secret, exists in exactly one place you control, and everything else is either public by nature (the public signing key) or disposable (the state).
 
@@ -39,6 +39,12 @@ Derivation is domain separated and deterministic, which yields the two propertie
 With that power comes exactly one obligation: the secret must be **high entropy**. It must be at least 32 characters, and it must come from a generator, `generate-secrets` produces 256 bits of entropy. A human sentence as a root secret is a master key with a bad passphrase.
 
 Rotation of the root secret is a globally disruptive event by construction: the signing identity changes, every user's TOTP credential changes, all authenticators must re-enroll, and previously issued tokens stop validating against the new public key. That is not a flaw, it is what "one secret protects everything" means. Plan it, schedule it, and communicate it.
+
+<vara-alert
+title="Protect the root token"
+description="It is important that you never store the ZEN_IDP_SECRET in any insecure location. Use the primitives of your deployment platform (environment variables, secret managers, etc.), but it is vitally important that this key is not leaked; otherwise, you could consider the system compromised and have to start a new one from scratch with a different secret."
+color="warning"
+/>
 
 ## Token design
 
@@ -78,7 +84,7 @@ Zen IdP serves plain HTTP and expects TLS to terminate in front of it, which is 
 
 ## What is deliberately not there
 
-An honest boundary list is part of trusting a security tool, so here is what Zen IdP does not attempt in version 1:
+An honest boundary list is part of trusting a security tool, so here is what Zen IdP does not attempt:
 
 - **TOTP is not phishing resistant.** A convincing fake login page can relay a live code. TLS everywhere and user habit are the mitigations available today.
 - **A code is accepted for one step of skew in each direction**, and a captured code can be replayed inside that window. Rate limiting and short windows bound the practical risk.
