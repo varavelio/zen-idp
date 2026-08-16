@@ -24,7 +24,7 @@ Administrator sessions are separate from user single sign-on sessions, so signin
 
 The primary admin action. Select a user, choose an expiration, and the interface produces a one-time enrollment link:
 
-- The expiration can be given as a **duration from now**, such as one hour, or as an **absolute deadline**, whichever is more convenient. Both are normalized to one absolute expiry, which must be in the future.
+- The expiration can be given as a **duration from now**, such as one hour.
 - The token is **bound to the user and their current TOTP revision**. If you increment the revision after creating it, the link is dead, create a new one.
 - The link is **consumed exactly once**, at the moment the credential is revealed. Sending it again does nothing.
 
