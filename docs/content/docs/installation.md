@@ -207,6 +207,18 @@ cd zen-idp
 go build -o zen-idp ./cmd/zen-idp
 ```
 
+To install it straight into your `GOPATH/bin` (or `GOBIN`) with a single command, from any directory, use `go install`:
+
+```console
+go install github.com/varavelio/zen-idp/cmd/zen-idp@latest
+```
+
+Pin an exact version the same way you pin everything else:
+
+```console
+go install github.com/varavelio/zen-idp/cmd/zen-idp@vx.x.x
+```
+
 The project repository also defines a Taskfile with the same commands plus its development checks. Use the production task to get the same optimized binary the official artifacts ship:
 
 ```console
