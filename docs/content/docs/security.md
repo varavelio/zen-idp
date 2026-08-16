@@ -71,7 +71,13 @@ Failed attempts are limited per identifier, not per IP:
 - Unknown identifiers are limited too, with responses indistinguishable from other failures, so enumeration through error differences is impractical.
 - Administrator sign-in and client authentication have equivalent limits.
 
-IP based limits are deliberately absent from the service: behind proxies and NAT they punish shared users and barely slow distributed attackers. That control belongs at your edge, where the real client addresses are known. A CDN or reverse proxy with IP limits in front, plus Zen IdP's identifier limits behind it, is the intended combination.
+IP based limits are deliberately absent from the service: behind proxies and NAT they punish shared users and barely slow distributed attackers. That control belongs at your edge, where the real client addresses are known. A CDN or reverse proxy with IP (and maybe geographical restrictions) limits in front, plus Zen IdP's identifier limits behind it, is the intended combination.
+
+<vara-alert
+title="Tip: Increase the security of /admin"
+description="To improve Zen IdP security, in addition to configuring your edge to have rate limits, you can perform stricter checks on all paths starting with /admin, such as geo-blocking, more aggressive rate limits, VPN access, etc. Only you know what level of security your project require."
+color="info"
+/>
 
 ## Transport and browser security
 
