@@ -2,6 +2,8 @@ package totp
 
 import (
 	"crypto/sha256"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -21,6 +23,47 @@ var referenceRootSecret = func() (secret [sha256.Size]byte) {
 	}
 	return secret
 }()
+
+func TestOTPAuthLabel(t *testing.T) {
+	t.Run("joins the issuer and the account name with a colon", func(t *testing.T) {
+		require.Equal(t, "Example Auth:alice", OTPAuthLabel("Example Auth", "alice"))
+	})
+
+	t.Run("returns the account name alone when the issuer is empty", func(t *testing.T) {
+		require.Equal(t, "alice", OTPAuthLabel("", "alice"))
+	})
+
+	t.Run("matches the label encoded by the enrollment URI", func(t *testing.T) {
+		uri := OTPAuthURI(referenceDerivedSecret, "alice", "Example Auth")
+		parsed, err := url.Parse(uri)
+		require.NoError(t, err)
+		require.Equal(
+			t,
+			OTPAuthLabel("Example Auth", "alice"),
+			strings.TrimPrefix(parsed.Path, "/"),
+		)
+	})
+}
+
+func TestOTPAuthLabelPretty(t *testing.T) {
+	t.Run("spaces the issuer and the account name", func(t *testing.T) {
+		require.Equal(t, "Example Auth: alice", OTPAuthLabelPretty("Example Auth", "alice"))
+	})
+
+	t.Run("returns the account name alone when the issuer is empty", func(t *testing.T) {
+		require.Equal(t, "alice", OTPAuthLabelPretty("", "alice"))
+	})
+
+	t.Run("only adds the space to the human-readable form", func(t *testing.T) {
+		issuer, label := "Example Auth", "alice"
+		require.NotEqual(t, OTPAuthLabel(issuer, label), OTPAuthLabelPretty(issuer, label))
+		require.Contains(
+			t,
+			OTPAuthURI(referenceDerivedSecret, label, issuer),
+			"Example%20Auth:alice",
+		)
+	})
+}
 
 func TestOTPAuthURI(t *testing.T) {
 	t.Run("carries the full enrollment profile", func(t *testing.T) {

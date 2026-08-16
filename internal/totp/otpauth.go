@@ -9,27 +9,67 @@ import (
 // authenticator applications.
 const otpauthScheme = "otpauth://totp/"
 
+// Profile constants of the RFC 6238 authenticator profile carried by every
+// enrollment: HMAC-SHA-1, six-digit codes, and 30-second steps. The
+// enrollment page shows these same values for manual configuration, so the
+// QR code and the manual entry always describe the same profile.
+const (
+	// ProfileAlgorithm is the hash algorithm of the authenticator profile.
+	ProfileAlgorithm = "SHA1"
+	// ProfileDigits is the number of code digits of the authenticator
+	// profile.
+	ProfileDigits = "6"
+	// ProfilePeriod is the step duration in seconds of the authenticator
+	// profile.
+	ProfilePeriod = "30"
+)
+
+// OTPAuthLabel returns the account label of an otpauth enrollment URI for
+// the given issuer and account name: the issuer followed by a colon and the
+// account name, or the account name alone when the issuer is empty.
+// Authenticator applications display this label as the account name of the
+// enrollment.
+func OTPAuthLabel(issuer, label string) string {
+	return joinLabel(issuer, label, ":")
+}
+
+// OTPAuthLabelPretty returns the human-readable form of the account label
+// of an otpauth enrollment for the given issuer and account name: the
+// issuer followed by a colon, a space, and the account name, or the
+// account name alone when the issuer is empty. Enrollment pages present
+// this form when showing the account for manual configuration.
+func OTPAuthLabelPretty(issuer, label string) string {
+	return joinLabel(issuer, label, ": ")
+}
+
+// joinLabel composes the account label of an otpauth enrollment for the
+// given issuer and account name, separated by the given separator, or the
+// account name alone when the issuer is empty.
+func joinLabel(issuer, label, separator string) string {
+	if issuer == "" {
+		return label
+	}
+	return issuer + separator + label
+}
+
 // OTPAuthURI returns the standard otpauth:// enrollment URI that
 // authenticator applications scan to provision the given shared secret,
 // labeled with the account name label and the service name issuer. The URI
-// carries the RFC 6238 profile Zen IdP uses: HMAC-SHA-1, six digits, and
-// 30-second steps. issuer may be empty, in which case the URI carries no
-// issuer label.
+// carries the RFC 6238 profile declared by the Profile constants. issuer
+// may be empty, in which case the URI carries no issuer label.
 func OTPAuthURI(secret, label, issuer string) string {
 	var builder strings.Builder
 	builder.WriteString(otpauthScheme)
-	if issuer != "" {
-		builder.WriteString(escapeSegment(issuer))
-		builder.WriteString(":")
-	}
-	builder.WriteString(escapeSegment(label))
+	builder.WriteString(escapeSegment(OTPAuthLabel(issuer, label)))
 	builder.WriteString("?secret=")
 	builder.WriteString(escapeQuery(secret))
 	if issuer != "" {
 		builder.WriteString("&issuer=")
 		builder.WriteString(escapeQuery(issuer))
 	}
-	builder.WriteString("&algorithm=SHA1&digits=6&period=30")
+	builder.WriteString("&algorithm=" + ProfileAlgorithm)
+	builder.WriteString("&digits=" + ProfileDigits)
+	builder.WriteString("&period=" + ProfilePeriod)
 	return builder.String()
 }
 
