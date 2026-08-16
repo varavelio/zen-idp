@@ -7,7 +7,7 @@ weight: 2
 
 # Installation
 
-Zen IdP ships as OCI images on Docker Hub and GitHub Container Registry, as prebuilt binaries for Linux, macOS, and Windows installed with a one-line command, and as a Go module you can build from source. Everything the service needs at runtime is inside the single executable: the embedded SQLite engine and the static assets. There is no database server, no broker, and no frontend build.
+Zen IdP ships as OCI images on [Docker Hub](https://hub.docker.com/r/varavel/zen-idp) and [GitHub Container Registry](https://github.com/varavelio/zen-idp/pkgs/container/zen-idp), as prebuilt binaries for Linux, macOS, and Windows installed with a one-line command, and as a Go module you can build from source. Everything the service needs at runtime is inside the single executable: the embedded SQLite engine and the static assets. There is no database server, no broker, and no frontend build.
 
 Pick the flavor that fits your deployment:
 
