@@ -51,12 +51,25 @@ Most identity providers ask you to run several services, manage a database, and 
 
 ## Quick start
 
-You need to grab a release binary (other install methods coming soon).
+Install the `zen-idp` binary with the shell installer (Linux and macOS), Homebrew, or PowerShell (Windows):
+
+```console
+# Linux or macOS
+curl -fsSL https://get.varavel.com/zen-idp | sh
+
+# macOS or Linux with Homebrew
+brew install varavelio/tap/zen-idp
+
+# Windows
+irm https://get.varavel.com/zen-idp.ps1 | iex
+```
+
+The same executable also ships as multi-arch OCI images on `varavel/zen-idp` (Docker Hub) and `ghcr.io/varavelio/zen-idp` (GitHub container registry). See the [installation docs](https://zen-idp.varavel.com/docs/installation/) for every option.
 
 Generate your bootstrap credentials:
 
 ```console
-./dist/zen-idp generate-secrets
+zen-idp generate-secrets
 ```
 
 > [!WARNING]
@@ -73,8 +86,8 @@ ZEN_IDP_DB_PATH=./var/zen-idp.db
 Zen IdP never loads `.env` implicitly. Pass it explicitly when you want it:
 
 ```console
-./dist/zen-idp validate-config --env-file ./local.env
-./dist/zen-idp serve --env-file ./local.env
+zen-idp validate-config --env-file ./local.env
+zen-idp serve --env-file ./local.env
 ```
 
 `validate-config` runs the exact startup discovery, merge, parse, and validation path - a great habit before every deploy. `serve` then starts the HTTP listener on `0.0.0.0:8080` by default.
