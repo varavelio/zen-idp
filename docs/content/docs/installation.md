@@ -235,3 +235,29 @@ Upgrading is replacing the image tag or the binary, with one safety habit:
 3. Confirm the health endpoint returns `ok`.
 
 The state database carries forward. Ordinary upgrades and restarts preserve unexpired sessions, outstanding enrollment tokens, locks, and rate-limit counters, so nobody has to sign in again and nothing you revoked becomes valid again. If an upgrade ever changes the state schema, it is migrated automatically when the service starts.
+
+### How to update each installation
+
+Every method reduces to the three steps above: validate, replace, check health.
+
+- **Shell and PowerShell installers**: run the installer command again. Pinning `VERSION=vx.x.x` is recommended, so the target release is an explicit choice instead of whatever happens to be latest at the moment.
+- **Homebrew**: `brew update && brew upgrade zen-idp`, as shown earlier in this page.
+- **Docker**: change the image tag to the newer version and recreate the container. With Compose it is the same one-line tag change followed by `docker compose up -d`.
+- **Prebuilt binaries**: download the new archive, verify it against `checksums.txt`, and replace the executable.
+- **`go install`**: run it again with the new version suffix, `@vx.x.x`.
+
+<vara-alert
+title="State migrations only move forward"
+description="When a new version changes the state schema, the database is migrated automatically at startup and those migrations cannot be undone. Do not run an older version against a newer version database: Always move forward and never go backward without knowing the consequences."
+color="warning"
+/>
+
+### Rolling back
+
+If you ever must return to an older version, the only safe path is to stop the service, delete the SQLite state database, and let the old version start with a fresh file. Deleting it is safe because the database holds only disposable operational state: your identities, clients, and credentials are recovered from your YAML configuration or derived from your root secret. It does mean:
+
+- Every user has to sign in again.
+- Outstanding enrollment tokens stop working and must be reissued.
+- Temporary locks, rate-limit counters, and the audit log are cleared.
+
+Nothing vital is lost, but pick a moment when everyone being signed out is acceptable.

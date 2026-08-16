@@ -7,9 +7,30 @@ weight: 1
 
 # Get Started
 
-This walkthrough takes you from an empty machine to a working Zen IdP with one user who can sign in and one application that accepts that sign-in. It uses Docker, which is the quickest way to run a reliable deployment, and a local issuer URL so you can test without a domain or TLS.
+This walkthrough takes you from an empty machine to a working Zen IdP with one user who can sign in and one application that accepts that sign-in. It uses Docker ([see other installation methods](/docs/installation/)), which is the quickest way to run a reliable deployment, and a local issuer URL so you can test without a domain or TLS.
 
 Every step below produces something you can see, so you always know where you are. Expect the whole thing to take about fifteen minutes.
+
+## Is Zen IdP right for you?
+
+Zen IdP is small on purpose, and it is honest about what it is. Before you spend time on this guide, check the fit.
+
+It is a good fit when:
+
+- You run **internal tools** for a team and want one shared sign-in for all of them.
+- You maintain a **home lab** and want single sign-on without operating a database server, a complex identity platform or pay an external provider.
+- You deploy in an **offline or air-gapped** network where a cloud identity provider cannot reach.
+- You need to give **contractors, auditors, or collaborators** an OIDC identity for your stack without onboarding them into anything heavier.
+- You prefer **identity as code**: users, clients, and policy as reviewed YAML in your repository instead of rows in an admin panel.
+- You are **comfortable managing your users in YAML** files or automated scripts that write them for you
+
+It is the wrong tool when you need:
+
+- **Sign-in for the general public.** There is no self-service sign-up, no password reset, no social login, and no email delivery. Every identity is declared by an operator in YAML.
+- **The highest degree of security.** Authentication is TOTP, which real-time phishing can defeat (please always educate your users about this, regardless of which IdP you use). There are no passkeys, WebAuthn, adaptive policies, or hardware keys.
+- **A full identity platform.** There is no LDAP or Active Directory sync, no HR provisioning, no multi-tenancy, and no dynamic client registration. Established platforms such as Keycloak, or a commercial provider, are the better answer there.
+
+If your users can use an authenticator app, your applications speak OIDC, and you want an identity layer you can fully understand, version control and own, continue.
 
 ## Pull the image
 
