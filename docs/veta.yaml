@@ -20,4 +20,4 @@ tailwindcss:
   minify: true
 
 theme:
-  source: "varavelio/veta-theme-vara@v1.0.3"
+  source: "varavelio/veta-theme-vara@v1.0.4"
