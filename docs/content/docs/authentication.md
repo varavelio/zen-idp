@@ -16,7 +16,7 @@ Every user signs in with two things they have: an identifier and a six digit cod
 The interesting part is where the shared secret comes from. There is no table of secrets anywhere. Each user's secret is derived on demand from two inputs:
 
 - the root secret you keep in your environment, and
-- the user's `sub` and their current TOTP revision.
+- the user's `sub` and their current TOTP revision (`idp_totp_rev`).
 
 The same two inputs always produce the same secret, on every restart, forever. That is what makes recovery in this system so short: nothing to back up, nothing to migrate, nothing to restore. It also means the root secret is the one value that protects every credential, which is why [Security](/docs/security/) spends so much time on it.
 
