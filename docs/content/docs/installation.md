@@ -153,7 +153,8 @@ A compose file makes the deployment reproducible, which is worth it even for a s
 ```yaml
 services:
   zen-idp:
-    image: varavel/zen-idp:x.x.x # Pin your version
+    # Note: It's recommended to pin a version instead of latest
+    image: varavel/zen-idp:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
