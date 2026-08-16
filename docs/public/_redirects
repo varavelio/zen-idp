@@ -1,3 +1,6 @@
 /gh https://github.com/varavelio/zen-idp 301
 /git https://github.com/varavelio/zen-idp 301
 /github https://github.com/varavelio/zen-idp 301
+
+/install /docs/installation/ 301
+/installation /docs/installation/ 301
