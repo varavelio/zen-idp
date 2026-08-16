@@ -22,7 +22,7 @@ It is a good fit when:
 - You deploy in an **offline or air-gapped** network where a cloud identity provider cannot reach.
 - You need to give **contractors, auditors, or collaborators** an OIDC identity for your stack without onboarding them into anything heavier.
 - You prefer **identity as code**: users, clients, and policy as reviewed YAML in your repository instead of rows in an admin panel.
-- You are **comfortable managing your users in YAML** files or automated scripts that write them for you
+- You are **comfortable managing your users in YAML** files or automated scripts that write them for you.
 
 It is the wrong tool when you need:
 
