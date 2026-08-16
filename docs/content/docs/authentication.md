@@ -36,9 +36,9 @@ Enrollment links expire quickly on purpose. If a link goes stale, create a new o
 
 ## Signing in
 
-Sign-in always happens inside an application's login flow, which is what makes it single sign-on:
+Sign-in always happens inside an application's (client) login flow, which is what makes it single sign-on:
 
-1. The user clicks sign-in in any connected application and is redirected to Zen IdP.
+1. The user clicks sign-in in any connected application (client) and is redirected to Zen IdP.
 2. If they have a live session, they are sent straight back, signed in.
 3. Otherwise they enter their identifier, which is their `sub` or their `idp_login` when one is configured, and the current code from their authenticator.
 4. On success, a session is created and the browser returns to the application, carrying an authorization code it exchanges for tokens.
