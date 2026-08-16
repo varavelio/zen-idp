@@ -19,7 +19,7 @@ Three environment variables configure the runtime. They never belong in YAML:
 | `ZEN_IDP_SECRET`      | `serve`                              | The root secret, at least 32 characters, high entropy.                                   |
 | `ZEN_IDP_DB_PATH`     | `serve`                              | Path of the SQLite state file, created and migrated on start.                            |
 
-A relative config selector resolves from the working directory of the process. In the published image the defaults are already set to the conventional locations: configuration at `/data/config` and the database at `/data/db/zen-idp.sqlite3`.
+A relative config selector resolves from the working directory of the process. In the published docker image the defaults are already set to the conventional locations: configuration at `/data/config` and the database at `/data/db/zen-idp.sqlite3`.
 
 To load values from a file, pass it explicitly:
 
