@@ -27,7 +27,7 @@ A user cannot sign in until they have scanned their secret into an authenticator
 1. An administrator opens the admin interface, finds the user, and creates an enrollment token with a lifetime, for example one hour.
 2. The admin interface produces a single link, valid once, bound to that user and their current revision.
 3. The user opens the link and sees a QR code and the secret in text form.
-4. They scan it with their authenticator. The app now generates the right codes.
+4. They scan it with their authenticator app. The app now generates the right codes.
 5. The link is consumed the moment the secret is shown. Opening it again does not work.
 
 Two properties make this safe by default. The link works exactly once, so a copy circulating in a chat log is dead after first use. And the secret is only ever revealed to whoever holds the unexpired, unconsumed link, which is why you deliver it over a channel you trust for that person.
