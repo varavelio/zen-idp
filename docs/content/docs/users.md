@@ -20,7 +20,7 @@ users:
 
 `sub` is the stable OIDC subject, the identifier every application receives as the `sub` claim. It becomes the user's primary login identifier and the input from which their TOTP credential is derived, which gives it two properties worth internalizing:
 
-- **It is permanent in practice.** Changing a `sub` creates a new identity: a new login, a new TOTP secret, and a new `sub` claim in your applications. Never reuse a subject for a different person, and pick values that survive role changes. `alice` ages better than `alice-marketing`.
+- **It is permanent in practice.** Changing a `sub` creates a new identity: a new login, a new TOTP secret, and a new `sub` claim in your applications. Never reuse a subject for a different person, and pick values that survive role changes. `alice-{random}` ages better than `alice-marketing`.
 - **It follows rules.** One to 255 US-ASCII characters, case-sensitive, unique. It does not need to be an email address. Quoted YAML strings are required, since numbers and booleans are rejected rather than converted.
 
 ## The second identifier: `idp_login`
