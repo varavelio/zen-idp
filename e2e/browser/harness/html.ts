@@ -28,14 +28,15 @@ export function findToken(text: string): string | undefined {
   return text.match(tokenPattern)?.[0];
 }
 
-// otpauthSecretPattern matches the shared secret embedded in a rendered
-// otpauth enrollment URI.
-const otpauthSecretPattern = /secret=([A-Z2-7]{52})/;
+// manualSecretPattern matches the TOTP shared secret revealed by the
+// enrollment-ready page, carried by the copy button of the manual entry
+// code.
+const manualSecretPattern = /data-copy="([A-Z2-7]{52})"/;
 
 /**
- * Returns the TOTP shared secret embedded in the first rendered otpauth
- * enrollment URI of the given page, if any.
+ * Returns the TOTP shared secret revealed by the first enrollment-ready
+ * page of the given text, if any.
  */
 export function findOTPAuthSecret(text: string): string | undefined {
-  return text.match(otpauthSecretPattern)?.[1];
+  return text.match(manualSecretPattern)?.[1];
 }

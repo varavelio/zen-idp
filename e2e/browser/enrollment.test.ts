@@ -49,6 +49,13 @@ test("a user enrolls through the one-use token journey", async ({ page, browser 
     await expect(userPage.getByText("Scan the code with your authenticator app")).toBeVisible();
     await expect(userPage.locator("img[alt=\"TOTP enrollment QR code\"]")).toBeVisible();
     await expect(userPage.locator("img[src^=\"data:image/png;base64,\"]")).toBeVisible();
+
+    // The manual entry values mirror the QR code exactly: the account
+    // name and the RFC 6238 profile, without the raw otpauth URI.
+    await expect(userPage.getByText("Or configure manually")).toBeVisible();
+    await expect(userPage.getByText("E2E Browser Test: alice")).toBeVisible();
+    await expect(userPage.getByText("SHA1")).toBeVisible();
+    expect(await userPage.content()).not.toContain("otpauth://");
     expect(findOTPAuthSecret(await userPage.content())).toBe(
       await deriveTOTPSecret(testRootSecret, "alice", 0),
     );

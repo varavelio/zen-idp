@@ -43,15 +43,16 @@ func FindToken(body []byte) string {
 	return string(match)
 }
 
-// otpauthSecretPattern matches the shared secret embedded in a rendered
-// otpauth enrollment URI.
-var otpauthSecretPattern = regexp.MustCompile(`secret=([A-Z2-7]{52})`)
+// manualSecretPattern matches the TOTP shared secret revealed by the
+// enrollment-ready page, carried by the copy button of the manual entry
+// code.
+var manualSecretPattern = regexp.MustCompile(`data-copy="([A-Z2-7]{52})"`)
 
-// FindOTPAuthSecret returns the TOTP shared secret embedded in the first
-// rendered otpauth enrollment URI of the given page, or an empty string when
-// the page renders none.
+// FindOTPAuthSecret returns the TOTP shared secret revealed by the first
+// enrollment-ready page of the given body, or an empty string when the
+// page reveals none.
 func FindOTPAuthSecret(body []byte) string {
-	match := otpauthSecretPattern.FindSubmatch(body)
+	match := manualSecretPattern.FindSubmatch(body)
 	if len(match) != 2 {
 		return ""
 	}
