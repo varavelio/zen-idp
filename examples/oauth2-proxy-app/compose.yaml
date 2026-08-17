@@ -1,0 +1,56 @@
+# This example uses randomly generated host ports to minimize the
+# possibility of collisions when you run it.
+
+networks:
+  app_internal_network:
+    driver: bridge
+
+services:
+  my-zen-idp:
+    image: varavel/zen-idp
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:59115:8080"
+    environment:
+      # Replace this with a secret generated using zen-idp generate-secrets
+      ZEN_IDP_SECRET: "00000000000000000000000000000000" 
+    volumes:
+      - ./config.yaml:/data/config/config.yaml:ro
+      # Since this is an example, we dont need to persist the state db (sessions, tokens, etc)
+      # But in production you should
+      # - zen-idp-db:/data/db
+    networks:
+      - app_internal_network
+
+  my-app:
+    image: nginxdemos/hello:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:57687:80"
+    networks:
+      - app_internal_network
+
+  my-app-oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:37746:4180"
+    environment:
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_UPSTREAMS: "http://my-app:80"
+      OAUTH2_PROXY_PROVIDER: "oidc"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "http://my-zen-idp:8080"
+      OAUTH2_PROXY_CLIENT_ID: "my-app-oauth2-proxy"
+      OAUTH2_PROXY_CLIENT_SECRET: "AppClientSecret_732137_SecureKey"
+      OAUTH2_PROXY_COOKIE_SECRET: "0tVDQ69keWCoTbCBX7d2rvRPfEezsxgrsaLVwSve6FB"
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_PASS_HOST_HEADER: "true"
+      OAUTH2_PROXY_SKIP_AUTH_PREFLIGHT: "true"
+      OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
+      OAUTH2_PROXY_OIDC_EMAIL_CLAIM: "email"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+    depends_on:
+      - my-app
+      - my-zen-idp
+    networks:
+      - app_internal_network
