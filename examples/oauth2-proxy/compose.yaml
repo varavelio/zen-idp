@@ -2,7 +2,7 @@
 # with no changes to the application itself.
 #
 # Try it:
-#   1. docker compose up -d
+#   1. docker compose up
 #   2. Open http://localhost:37746 (the protected app)
 #   3. Sign in with alice + a TOTP code (alice's TOTP secret is in config.yaml)
 #
