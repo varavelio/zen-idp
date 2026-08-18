@@ -15,3 +15,6 @@ and explore.
 - [Protect any web app with Zen IdP + OAuth2 Proxy](./oauth2-proxy/) -
   put single sign-on in front of an existing web application, no code
   changes required.
+
+- [Sign in to Grafana with Zen IdP](./grafana/) -
+  OIDC single sign-on for Grafana through its generic OAuth provider.
