@@ -1,0 +1,69 @@
+# Zen IdP + OAuth2 Proxy: single sign-on in front of any web application,
+# with no changes to the application itself.
+#
+# Try it:
+#   1. docker compose up -d
+#   2. Open http://localhost:37746 (the protected app)
+#   3. Sign in with alice + a TOTP code (alice's TOTP secret is in config.yaml)
+#
+# DEMO ONLY: every secret is hardcoded and public so the stack runs as-is.
+# Never deploy it like this; generate real secrets with "zen-idp generate-secrets".
+#
+# The browser and OAuth2 Proxy must reach Zen IdP at the same URL, so
+# config.yaml declares the issuer http://localhost:59115: the browser reaches
+# it through the published port, and OAuth2 Proxy resolves "localhost" to Zen
+# IdP's fixed container IP through the extra_hosts entry below.
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.10.10.0/24
+
+services:
+  app:
+    # The application being protected. Swap this image for any web app;
+    # it has no published ports, the only way in is through the proxy.
+    image: nginxdemos/hello:latest
+
+  zen-idp:
+    image: varavel/zen-idp:latest
+    ports:
+      - "127.0.0.1:59115:59115"
+    environment:
+      # DEMO ONLY root secret; with it, alice's TOTP secret is the one in config.yaml
+      ZEN_IDP_SECRET: "00000000000000000000000000000000"
+    volumes:
+      - ./config.yaml:/data/config/config.yaml:ro
+    networks:
+      default:
+        ipv4_address: 10.10.10.10
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    depends_on:
+      zen-idp:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:37746:4180"
+    extra_hosts:
+      # Resolve the issuer http://localhost:59115 from inside the stack
+      - "localhost:10.10.10.10"
+    environment:
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_UPSTREAMS: "http://app:80"
+      OAUTH2_PROXY_PROVIDER: "oidc"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "http://localhost:59115"
+      # DEMO ONLY credentials, declared in config.yaml
+      OAUTH2_PROXY_CLIENT_ID: "oauth2-proxy"
+      OAUTH2_PROXY_CLIENT_SECRET: "87654321"
+      # DEMO ONLY: "*" allows any email; without it the proxy refuses to start
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      # DEMO ONLY cookie seed: any random 32-byte base64 value works
+      OAUTH2_PROXY_COOKIE_SECRET: "xVItBqCc6T9V_PFA2ES-LeZETPUv9cwjPkmQolOGEYQ"
+      # Plain HTTP demo; production uses HTTPS with secure cookies
+      OAUTH2_PROXY_COOKIE_SECURE: "false"
+      # PKCE on the authorization code flow (supported by Zen IdP)
+      OAUTH2_PROXY_CODE_CHALLENGE_METHOD: "S256"
+      # Forward the signed-in identity to the app as headers
+      OAUTH2_PROXY_PASS_USER_HEADERS: "true"
