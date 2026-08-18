@@ -80,6 +80,8 @@ Any OIDC-capable application connects the same way. Somewhere in its settings it
 
 Applications that discover their configuration from `/.well-known/openid-configuration` need only the issuer and their credentials, since endpoint URLs, signing algorithms, and capabilities are advertised automatically.
 
+Applications that cannot speak OIDC at all can still be protected: put [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) in front of them. [Look at the examples](/docs/examples/) to see how to configure it..
+
 Some applications ask whether to use PKCE. The answer is yes whenever it is offered, for both public and confidential clients. PKCE costs nothing and closes a class of interception attacks. If the application cannot keep a secret at all, register it as a public client and make sure it sends a PKCE challenge, because Zen IdP requires `S256` for public clients.
 
 ## What applications experience

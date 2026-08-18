@@ -24,6 +24,7 @@ The pages follow the natural order of a deployment. If you are new, read them to
 7. [Administration](/docs/administration/) covers the admin interface and the audit log.
 8. [Security](/docs/security/) explains the trust model and where every secret lives.
 9. [Operations](/docs/operations/) covers running, upgrading, rotating, and recovering.
+10. [Examples](/docs/examples/) are practical examples, such as protecting any web application with OAuth2 Proxy, in addition to other guides and examples.
 
 If you just want to see it work, start with [Get Started](/docs/get-started/) and come back to the rest when you need it.
 
