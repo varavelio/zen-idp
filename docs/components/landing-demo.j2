@@ -1,0 +1,42 @@
+{% comment %}
+  Zen IdP landing demo.
+
+  Project-specific showcase for the docs landing page, placed right after
+  the hero. The copy lives here on purpose: the component owns the landing
+  page's demo section, not a reusable building block. The Grafana example
+  plays inside a structural frame, full-bleed, so the media itself keeps the
+  sharp corners and only the frame carries the 8px card radius. Native
+  controls with preload="none" keep the section polite: nothing downloads
+  until the visitor presses play.
+{% endcomment %}
+
+<section class="not-prose bg-base-100 py-10 desk:py-20">
+  <div class="mx-auto w-full max-w-7xl px-4">
+    <div class="mx-auto flex max-w-3xl flex-col gap-3 text-center">
+      <p class="text-xs font-medium uppercase tracking-[0.24em] text-content-muted">
+        See it running
+      </p>
+      <h2 class="text-3xl font-semibold tracking-tight text-content desk:text-4xl">
+        A demo you can start in minutes
+      </h2>
+      <p class="text-base leading-7 text-content-muted desk:text-lg">
+        Watch the Grafana example end to end: Zen IdP signs the user in,
+        Grafana accepts the identity, and the whole stack starts with a
+        single <code>docker compose up</code>.
+      </p>
+    </div>
+
+    {% set demo_video_class = "mx-auto mt-8 w-full desk:mt-10" %}
+    {% include "./demo-grafana-video.j2" %}
+
+    <div class="mt-8 flex flex-col items-center gap-3 desk:mt-10">
+      <a
+        href="/docs/examples/"
+        class="inline-flex items-center gap-2 rounded-sm text-sm font-medium text-content no-underline outline-content transition-colors hover:text-info focus-visible:outline-2 focus-visible:outline-offset-4"
+      >
+        Run the examples yourself
+        <span class="shrink-0" aria-hidden="true">{{ vara_icon("arrow-right", "size-4")|safe }}</span>
+      </a>
+    </div>
+  </div>
+</section>

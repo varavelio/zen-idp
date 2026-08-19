@@ -27,14 +27,21 @@ description="Every secret in these examples is hardcoded and public so they run 
 color="warning"
 />
 
-## OAuth2 Proxy: Protect any web app
-
-<https://github.com/varavelio/zen-idp/tree/main/examples/oauth2-proxy>
-
-[OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy) sits in front of a web application and signs everyone in through Zen IdP before requests reach it. The application itself does not change, which is what makes this the right pattern for internal dashboards, home lab services, or any older tool that was never built with OIDC in mind. The example protects a small nginx demo page and prints the identity headers that OAuth2 Proxy forwards to it.
-
 ## Grafana: Sign in with Zen IdP
 
 <https://github.com/varavelio/zen-idp/tree/main/examples/grafana>
 
 [Grafana](https://github.com/grafana/grafana) is a dashboarding and metrics visualization tool that speaks OIDC natively. This example points its login at Zen IdP through Grafana's generic OAuth provider, so the Grafana sign-in page becomes the Zen IdP sign-in page, with the same identifier and TOTP flow as everywhere else.
+
+<figure class="not-prose my-8">
+  <demo-grafana-video />
+  <figcaption class="mt-3 text-center text-sm text-content-muted">
+    The Grafana example end to end: from <code>docker compose up</code> to a signed-in dashboard.
+  </figcaption>
+</figure>
+
+## OAuth2 Proxy: Protect any web app
+
+<https://github.com/varavelio/zen-idp/tree/main/examples/oauth2-proxy>
+
+[OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy) sits in front of a web application and signs everyone in through Zen IdP before requests reach it. The application itself does not change, which is what makes this the right pattern for internal dashboards, home lab services, or any older tool that was never built with OIDC in mind. The example protects a small nginx demo page and prints the identity headers that OAuth2 Proxy forwards to it.

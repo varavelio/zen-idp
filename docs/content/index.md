@@ -12,6 +12,8 @@ cta_href="/docs/get-started/"
 
 <landing-hero />
 
+<landing-demo />
+
 <vara-features
 container="lg"
 title="Why Zen IdP"

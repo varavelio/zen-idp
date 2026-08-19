@@ -1,0 +1,43 @@
+{% comment %}
+  Zen IdP demo video.
+
+  Reusable rendition of the Grafana walkthrough: a structural frame around a
+  full-bleed video with a poster miniature and an overlaid play control. The
+  poster image loads immediately, the video data waits until play, and
+  clicking anywhere on the miniature starts playback while the control fades
+  out, returning when the video ends. Alpine.js drives the per-instance
+  state, so the component can appear more than once per page. Layout hooks
+  come from the `class` prop, or the `demo_video_class` context variable when
+  the template is included from another component.
+{% endcomment %}
+
+{% set class = props.class|default:demo_video_class|default:"" %}
+<div
+  class="relative overflow-hidden rounded-lg border border-base-400 bg-base-200{% if class %} {{ class }}{% endif %}"
+  x-data="{ playing: false }"
+>
+  <video
+    class="block aspect-[2150/1034] w-full"
+    src="https://cdn.jsdelivr.net/gh/varavelio/zen-idp@57b8ff/assets/demo/grafana-demo.mp4"
+    poster="https://cdn.jsdelivr.net/gh/varavelio/zen-idp@57b8ff/assets/demo/grafana-demo.png"
+    controls
+    preload="none"
+    playsinline
+    x-ref="demo"
+    x-on:play="playing = true"
+    x-on:ended="playing = false"
+  ></video>
+
+  <button
+    type="button"
+    class="absolute inset-0 flex cursor-pointer items-center justify-center bg-base-100/40 transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:-outline-offset-2 outline-content"
+    x-show="!playing"
+    x-cloak
+    x-on:click="$refs.demo.play()"
+    aria-label="Play the demo video"
+  >
+    <span class="flex size-16 items-center justify-center rounded-full border border-base-400 bg-base-200 text-content shadow-sm transition-transform hover:scale-105">
+      <span class="ml-0.5 shrink-0" aria-hidden="true">{{ vara_icon("play", "size-7 fill-current")|safe }}</span>
+    </span>
+  </button>
+</div>
