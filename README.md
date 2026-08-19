@@ -30,6 +30,8 @@
 
 Zen IdP is a declarative, zero-maintenance OIDC Identity Provider. It is a single Go binary that turns a reviewable YAML file into a complete authentication service: sign-in with TOTP codes, OIDC Authorization Code Flow for your applications, and a small administration interface - no database server, no external services, nothing to babysit.
 
+### [Watch a 1-minute video demo (using Grafana as an example OIDC client)](https://cdn.jsdelivr.net/gh/varavelio/zen-idp@57b8ff/assets/demo/grafana-demo.mp4)
+
 ## The idea
 
 Most identity providers ask you to run several services, manage a database, and click through an admin panel to keep identity data in sync. Zen IdP takes the opposite road:
