@@ -45,3 +45,9 @@ color="warning"
 <https://github.com/varavelio/zen-idp/tree/main/examples/oauth2-proxy>
 
 [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy) sits in front of a web application and signs everyone in through Zen IdP before requests reach it. The application itself does not change, which is what makes this the right pattern for internal dashboards, home lab services, or any older tool that was never built with OIDC in mind. The example protects a small nginx demo page and prints the identity headers that OAuth2 Proxy forwards to it.
+
+## Gatus: Monitor any service uptime
+
+<https://github.com/varavelio/zen-idp/tree/main/examples/gatus>
+
+[Gatus](https://github.com/TwiN/gatus) is a lightweight health dashboard that checks services on an interval and shows their status at a glance. In this example it watches three public websites — GitHub, Google and Wikipedia — enough to see the checks going green. The dashboard itself is locked behind a Zen IdP sign-in: Gatus speaks OIDC through its own provider, so only the demo user alice can open it. The health checks live in `gatus.yaml` and the OIDC settings in `config.yaml`, next to the registered `gatus` client.

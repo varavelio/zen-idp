@@ -1,0 +1,51 @@
+# Zen IdP + Gatus: a health dashboard that checks that github.com, google.com
+# and wikipedia.com are up, signed in through Zen IdP.
+#
+# Try it:
+#   1. docker compose up -d
+#   2. Open http://localhost:37748
+#   3. Click "Sign in" and sign in with alice + a TOTP code
+#      (alice's TOTP secret is in config.yaml)
+#
+# DEMO ONLY: every secret is hardcoded and public so the stack runs as-is.
+# Never deploy it like this; generate real secrets with "zen-idp generate-secrets".
+#
+# Same pattern as other examples: config.yaml declares the issuer
+# http://localhost:59115, the browser reaches it through the published port,
+# and Gatus resolves "localhost" to Zen IdP's fixed container IP through the
+# extra_hosts entry below (Gatus reads the issuer's discovery document and
+# exchanges tokens from inside the stack).
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.10.10.0/24
+
+services:
+  zen-idp:
+    image: varavel/zen-idp:latest
+    ports:
+      - "127.0.0.1:59115:59115"
+    environment:
+      # DEMO ONLY root secret; with it, alice's TOTP secret is the one in config.yaml
+      ZEN_IDP_SECRET: "00000000000000000000000000000000"
+    volumes:
+      - ./config.yaml:/data/config/config.yaml:ro
+    networks:
+      default:
+        ipv4_address: 10.10.10.10
+
+  gatus:
+    image: ghcr.io/twin/gatus:stable
+    depends_on:
+      zen-idp:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:37748:8080"
+    extra_hosts:
+      # Resolve the issuer http://localhost:59115 from inside the stack
+      - "localhost:10.10.10.10"
+    volumes:
+      # The endpoints and OIDC settings Gatus runs with
+      - ./gatus.yaml:/config/config.yaml:ro

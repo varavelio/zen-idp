@@ -1,0 +1,35 @@
+# Zen IdP configuration for the Gatus example.
+# DEMO ONLY: every credential is hardcoded and public so the stack runs as-is.
+
+config:
+  issuer: "http://localhost:59115"
+  server:
+    port: 59115
+  ui:
+    name: "Zen IdP Demo"
+  security:
+    # Plain text: "12345678"
+    admin_password_hash: "$argon2id$v=19$m=65536,t=2,p=2$UcMrn9v/Zuwswibp0AWrfw$mxMe1rsYeXTs5nvqaYSm28bGbejCWl+OBZwTedBepYw"
+
+clients:
+  # Gatus authenticates to Zen IdP as this confidential client.
+  - id: "gatus"
+    name: "Gatus"
+    # Plain text: "87654321" (same demo value as the other examples)
+    secret_hash: "$argon2id$v=19$m=65536,t=2,p=2$gycf23HGtGKna6vPaJfOqA$9lsXZNyp1ZOeOI39pSnTW0qAd8tJE/iX1p4bJCcumF0"
+    redirect_uris:
+      # Gatus's OIDC callback, matching gatus.yaml
+      - "http://localhost:37748/authorization-code/callback"
+      - "http://127.0.0.1:37748/authorization-code/callback"
+
+users:
+  # No enrollment needed in this demo: the pinned root secret from
+  # compose.yaml makes alice's TOTP secret deterministic:
+  #
+  #   FRZJVCJOS5ZKYPWG5EBTTTVEDCHBKWNDCCZOCHR5YA4CY5X7KR6Q
+  #
+  # Add it to any authenticator app, or generate codes with
+  # https://soar.github.io/totp-generator
+  - sub: "alice"
+    name: "Alice Demo"
+    email: "alice@example.com"

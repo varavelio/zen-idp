@@ -18,3 +18,7 @@ and explore.
 
 - [Sign in to Grafana with Zen IdP](./grafana/) -
   OIDC single sign-on for Grafana through its generic OAuth provider.
+
+- [Monitor services with Gatus](./gatus/) -
+  a health dashboard signed in through Zen IdP, watching GitHub, Google
+  and Wikipedia.

@@ -1,0 +1,39 @@
+# Gatus configuration for the Zen IdP example.
+#
+# Gatus is a health dashboard: it checks the endpoints below on an interval
+# and shows their status on http://localhost:37748. The dashboard is locked
+# behind a Zen IdP sign-in through the OIDC block at the top.
+#
+# DEMO ONLY: the client secret is hardcoded and public so the stack runs as-is.
+
+security:
+  oidc:
+    issuer-url: "http://localhost:59115"
+    # Must end with /authorization-code/callback and match a redirect URI in config.yaml
+    redirect-url: "http://localhost:37748/authorization-code/callback"
+    # DEMO ONLY credentials, declared in config.yaml
+    client-id: "gatus"
+    client-secret: "87654321"
+    scopes: ["openid"]
+    # Only the demo user alice may open the dashboard
+    allowed-subjects: ["alice"]
+
+endpoints:
+  # Three public websites are enough to see the dashboard working.
+  - name: GitHub
+    url: "https://github.com"
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Google
+    url: "https://google.com"
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Wikipedia
+    url: "https://wikipedia.com"
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"
