@@ -57,3 +57,9 @@ color="warning"
 <https://github.com/varavelio/zen-idp/tree/main/examples/olivetin>
 
 [OliveTin](https://github.com/OliveTin/OliveTin) is a web dashboard of one-click actions that run shell commands. In this example it shows three ping buttons (against GitHub, Google and Wikipedia) and the whole dashboard is locked behind a Zen IdP sign-in, so guests are bounced to the login before they see anything.
+
+## Zot: Run a private container registry
+
+<https://github.com/varavelio/zen-idp/tree/main/examples/zot>
+
+[Zot](https://zotregistry.dev) is a self-hosted OCI container registry. In this example its web UI is locked behind a Zen IdP sign-in through zot's generic OpenID provider, and only the demo user can browse and push to it. After signing in, create an API key in the UI and use it as the password for `docker login`.

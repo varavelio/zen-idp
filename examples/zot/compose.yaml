@@ -1,0 +1,61 @@
+# Zen IdP + zot: a private container registry, signed in through Zen IdP.
+#
+# Try it:
+#   1. docker compose up -d
+#   2. Open http://localhost:37750 (the zot web UI)
+#   3. Click "Login" and sign in with alice + a TOTP code
+#      (alice's TOTP secret is in config.yaml)
+#   4. Browse the registry; to push or pull with docker, create an API key
+#      in the UI and use it as the docker login password.
+#
+# DEMO ONLY: every secret is hardcoded and public so the stack runs as-is.
+# Never deploy it like this; generate real secrets with "zen-idp generate-secrets".
+#
+# Same pattern as the other examples: config.yaml declares the issuer
+# http://localhost:59115, the browser reaches it through the published port,
+# and zot resolves "localhost" to Zen IdP's fixed container IP through the
+# extra_hosts entry below (zot reads the issuer's discovery document and
+# exchanges tokens from inside the stack). zot.json sets externalUrl to the
+# browser-facing address so the OIDC redirect returns to your machine.
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.10.10.0/24
+
+services:
+  zen-idp:
+    image: varavel/zen-idp:latest
+    ports:
+      - "127.0.0.1:59115:59115"
+    environment:
+      # DEMO ONLY root secret; with it, alice's TOTP secret is the one in config.yaml
+      ZEN_IDP_SECRET: "00000000000000000000000000000000"
+    volumes:
+      - ./config.yaml:/data/config/config.yaml:ro
+    networks:
+      default:
+        ipv4_address: 10.10.10.10
+
+  zot:
+    image: ghcr.io/project-zot/zot:latest
+    depends_on:
+      zen-idp:
+        condition: service_healthy
+    ports:
+      # The registry API and the web UI share this one port
+      - "127.0.0.1:37750:5000"
+    extra_hosts:
+      # Resolve the issuer http://localhost:59115 from inside the stack
+      - "localhost:10.10.10.10"
+    volumes:
+      # zot reads its config from /etc/zot/config.json (the image default).
+      # The key settings for this demo: "externalUrl" http://localhost:37750
+      # (the browser-facing URL the OIDC callback is built from, registered as
+      # a redirect URI in config.yaml), the "oidc" provider with the
+      # credentialsFile below, and accessControl, which grants the registry
+      # to alice@example.com — the email claim zot reads from /userinfo.
+      - ./zot.json:/etc/zot/config.json:ro
+      # The OIDC client id and secret zot.json points to
+      - ./oidc-credentials.json:/etc/zot/oidc-credentials.json:ro

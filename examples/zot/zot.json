@@ -1,0 +1,43 @@
+{
+  "storage": {
+    "rootDirectory": "/var/lib/registry"
+  },
+  "http": {
+    "address": "0.0.0.0",
+    "port": "5000",
+    "externalUrl": "http://localhost:37750",
+    "auth": {
+      "openid": {
+        "providers": {
+          "oidc": {
+            "name": "Zen IdP",
+            "credentialsFile": "/etc/zot/oidc-credentials.json",
+            "issuer": "http://localhost:59115",
+            "scopes": ["openid", "profile", "email"]
+          }
+        }
+      }
+    },
+    "accessControl": {
+      "repositories": {
+        "**": {
+          "policies": [
+            {
+              "users": ["alice@example.com"],
+              "actions": ["read", "create", "update", "delete"]
+            }
+          ],
+          "defaultPolicy": ["read"]
+        }
+      }
+    }
+  },
+  "extensions": {
+    "search": {
+      "enable": true
+    },
+    "ui": {
+      "enable": true
+    }
+  }
+}
