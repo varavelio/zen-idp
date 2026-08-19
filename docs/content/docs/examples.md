@@ -50,4 +50,10 @@ color="warning"
 
 <https://github.com/varavelio/zen-idp/tree/main/examples/gatus>
 
-[Gatus](https://github.com/TwiN/gatus) is a lightweight health dashboard that checks services on an interval and shows their status at a glance. In this example it watches three public websites — GitHub, Google and Wikipedia — enough to see the checks going green. The dashboard itself is locked behind a Zen IdP sign-in: Gatus speaks OIDC through its own provider, so only the demo user alice can open it. The health checks live in `gatus.yaml` and the OIDC settings in `config.yaml`, next to the registered `gatus` client.
+[Gatus](https://github.com/TwiN/gatus) is a lightweight health dashboard that checks services on an interval and shows their status at a glance. In this example it watches three public websites (GitHub, Google and Wikipedia) enough to see the checks going green. The dashboard itself is locked behind a Zen IdP sign-in.
+
+## OliveTin: One-click actions
+
+<https://github.com/varavelio/zen-idp/tree/main/examples/olivetin>
+
+[OliveTin](https://github.com/OliveTin/OliveTin) is a web dashboard of one-click actions that run shell commands. In this example it shows three ping buttons (against GitHub, Google and Wikipedia) and the whole dashboard is locked behind a Zen IdP sign-in, so guests are bounced to the login before they see anything.

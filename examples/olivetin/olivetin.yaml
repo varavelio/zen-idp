@@ -1,0 +1,62 @@
+# OliveTin configuration for the Zen IdP example.
+#
+# OliveTin shows a dashboard of one-click actions. Sign in with alice through
+# Zen IdP (OAuth2) and run a ping against three public websites.
+#
+# DEMO ONLY: the client secret is hardcoded and public so the stack runs as-is.
+
+# Every guest is prompted to sign in before seeing the dashboard
+authRequireGuestsToLogin: true
+
+# Do not phone home about new OliveTin releases
+checkForUpdates: false
+
+pageTitle: "Zen IdP Demo"
+
+# Where OliveTin receives the authorization code after the Zen IdP sign-in;
+# must match a redirect URI in config.yaml
+authOAuth2RedirectUrl: "http://localhost:37749/oauth/callback"
+
+authOAuth2Providers:
+  zen-idp:
+    title: "Zen IdP"
+    # DEMO ONLY credentials, declared in config.yaml
+    clientId: "olivetin"
+    clientSecret: "87654321"
+    authUrl: "http://localhost:59115/authorize"
+    tokenUrl: "http://localhost:59115/token"
+    whoamiUrl: "http://localhost:59115/userinfo"
+    # The /userinfo field that names the signed-in user (alice's sub)
+    usernameField: "sub"
+    scopes: ["openid"]
+    # Everyone signed in through Zen IdP gets this group, matched below
+    addToUsergroup: "users"
+
+accessControlLists:
+  - name: "Zen IdP users"
+    matchUsergroups:
+      - "users"
+    permissions:
+      view: true
+      exec: true
+      logs: true
+    addToEveryAction: true
+
+actions:
+  - title: "Ping google.com"
+    id: "pingGoogle"
+    shell: "ping -c 3 google.com"
+    icon: "ping"
+    timeout: 15
+
+  - title: "Ping github.com"
+    id: "pingGithub"
+    shell: "ping -c 3 github.com"
+    icon: "ping"
+    timeout: 15
+
+  - title: "Ping wikipedia.com"
+    id: "pingWikipedia"
+    shell: "ping -c 3 wikipedia.com"
+    icon: "ping"
+    timeout: 15

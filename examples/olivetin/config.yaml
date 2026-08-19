@@ -1,4 +1,4 @@
-# Zen IdP configuration for the Grafana example.
+# Zen IdP configuration for the OliveTin example.
 # DEMO ONLY: every credential is hardcoded and public so the stack runs as-is.
 
 config:
@@ -12,16 +12,15 @@ config:
     admin_password_hash: "$argon2id$v=19$m=65536,t=2,p=2$UcMrn9v/Zuwswibp0AWrfw$mxMe1rsYeXTs5nvqaYSm28bGbejCWl+OBZwTedBepYw"
 
 clients:
-  # Grafana authenticates to Zen IdP as this confidential client.
-  - id: "grafana"
-    name: "Grafana"
-    # Plain text: "87654321"
+  # OliveTin authenticates to Zen IdP as this confidential client.
+  - id: "olivetin"
+    name: "OliveTin"
+    # Plain text: "87654321" (same demo value as the other examples)
     secret_hash: "$argon2id$v=19$m=65536,t=2,p=2$gycf23HGtGKna6vPaJfOqA$9lsXZNyp1ZOeOI39pSnTW0qAd8tJE/iX1p4bJCcumF0"
     redirect_uris:
-      # Grafana's callback path for the generic OAuth provider, matching
-      # GF_SERVER_ROOT_URL in compose.yaml
-      - "http://localhost:37747/login/generic_oauth"
-      - "http://127.0.0.1:37747/login/generic_oauth"
+      # OliveTin's OAuth2 callback, matching olivetin.yaml
+      - "http://localhost:37749/oauth/callback"
+      - "http://127.0.0.1:37749/oauth/callback"
 
 users:
   # No enrollment needed in this demo: the pinned root secret from
